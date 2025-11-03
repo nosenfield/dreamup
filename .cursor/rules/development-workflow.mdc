@@ -11,6 +11,20 @@ Every session:
 - [ ] Check current task in _docs/task-list.md
 - [ ] Ask about any blockers
 
+## Memory Bank Management
+
+For complete Memory Bank procedures, see @memory-bank-management.mdc
+
+**Quick Reference:**
+- Read activeContext.md and progress.md FIRST every session
+- Update progress.md after completing tasks
+- Update activeContext.md after significant changes
+- Run "update memory bank" command for full review
+
+**Integration with Workflow:**
+Memory Bank updates are part of task completion (Step 4 - Report Completion).
+Don't mark task complete without updating Memory Bank.
+
 ## Task Execution Flow
 
 ### 1. Understand Requirements
