@@ -48,10 +48,11 @@
 1. Read this file (activeContext.md)
 2. Read progress.md for task status
 3. Read projectbrief.md for MVP scope reminder
-4. Check _docs/030-task-list.md for detailed task breakdown
+4. Check _docs/task-list.md for detailed task breakdown
 
 ### Key Files to Reference
-- `_docs/020-architecture.md`: Complete system design and file structure
-- `_docs/030-task-list.md`: Phase-by-phase task breakdown with estimates
-- `_docs/010-technical-concerns.md`: Known risks and mitigation strategies
+- `_docs/architecture.md`: Complete system design and file structure
+- `_docs/task-list.md`: Phase-by-phase task breakdown with estimates
+- `_docs/technical-concerns.md`: Known risks and mitigation strategies
+- `_docs/required-reading.md`: Learning resources and documentation
 - `memory-bank/systemPatterns.md`: Design patterns and invariants
