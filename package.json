@@ -1,12 +1,28 @@
 {
   "name": "dreamup",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "description": "Autonomous AI agent for automated QA testing of browser-based games",
+  "module": "src/main.ts",
   "type": "module",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "scripts": {
+    "qa": "bun run src/main.ts",
+    "test": "bun test",
+    "build": "bun build src/main.ts --outdir dist --target node",
+    "dev": "bun --watch src/main.ts"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "dependencies": {
+    "@browserbasehq/sdk": "^1.0.0",
+    "@browserbasehq/stagehand": "^1.0.0",
+    "ai": "^3.4.0",
+    "@ai-sdk/openai": "^0.0.66",
+    "zod": "^3.22.4",
+    "nanoid": "^5.0.7",
+    "p-timeout": "^6.1.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
   }
 }
