@@ -18,13 +18,13 @@
 ## Phase Status
 
 ### Phase 0: Project Setup & Configuration
-**Status**: In Progress
-**Progress**: 3/4 tasks
+**Status**: ✅ Complete
+**Progress**: 4/4 tasks
 
 - [x] P0.1: Initialize Project Structure
 - [x] P0.2: Install Dependencies
 - [x] P0.3: Configure TypeScript
-- [ ] P0.4: Environment Configuration
+- [x] P0.4: Environment Configuration
 
 ---
 
@@ -51,20 +51,25 @@
   - Tested TypeScript compilation with `bun build src/main.ts` - successful
   - Verified TypeScript type checking with `tsc --noEmit` - no errors
   - Existing config includes additional strict checks and path mappings
+- [x] P0.4: Environment Configuration
+  - Verified `.env.example` is tracked in git (already exists and committed)
+  - Verified `.env` exists locally with credentials (user confirmed)
+  - Updated `README.md` with comprehensive setup instructions
+  - Documented environment variables, API key setup, and Bun's automatic .env loading
 
 ---
 
 ## In Progress
 
-**Current Task**: P0.4: Environment Configuration
+**Current Task**: P1.1: Define Core Types
 
 ---
 
 ## Upcoming Tasks (Next 3)
 
-1. **P0.4: Environment Configuration**
-2. **P1.1: Define Core Types**
-3. **P1.2: Create Configuration Constants**
+1. **P1.1: Define Core Types**
+2. **P1.2: Create Configuration Constants**
+3. **P2.1: Create Browser Manager**
 
 ---
 

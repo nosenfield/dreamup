@@ -1,25 +1,38 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 3, 2025
-**Session**: Phase 0 - P0.3 Complete
+**Session**: Phase 0 Complete
 
 ---
 
 ## Current Focus
 
 ### What We're Working On
-**P0.3: Configure TypeScript** - ✅ Complete. TypeScript configuration verified and tested. All required settings present, compilation successful with `bun build` and `tsc --noEmit`.
+**Phase 0: Project Setup & Configuration** - ✅ Complete! All setup tasks finished:
+- P0.1: Project structure initialized
+- P0.2: Dependencies installed
+- P0.3: TypeScript configured
+- P0.4: Environment configuration documented
 
 ### Next Immediate Tasks
-1. **P0.4: Environment Configuration** - Create `.env.example` and document setup
-2. Begin Phase 1: Type Definitions & Configuration
-3. Continue with Phase 0 completion
+1. **Begin Phase 1: Type Definitions & Configuration**
+   - P1.1: Define Core Types
+   - P1.2: Create Configuration Constants
+2. Continue with foundation development
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session
+- ✅ P0.4: Environment Configuration
+  - Verified `.env.example` is tracked in git (already exists and committed)
+  - Verified `.env` exists locally with credentials (user confirmed)
+  - Updated `README.md` with comprehensive setup instructions
+  - Documented environment variables, API key setup, and Bun's automatic .env loading
+  - **Phase 0 Complete!** All 4 tasks finished
+
+### Previous Tasks
 - ✅ P0.3: Configure TypeScript
   - Verified `tsconfig.json` meets all task requirements (target ES2022, module ESNext, strict mode, etc.)
   - Tested TypeScript compilation with `bun build src/main.ts` - successful
