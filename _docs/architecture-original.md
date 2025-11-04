@@ -348,14 +348,6 @@ export interface GameTestRequest {
   gameUrl: string;
   sessionId?: string;              // Optional: for tracking
   config?: Partial<TestConfig>;    // Optional: override defaults
-  inputSchema?: InputSchema;       // Optional: game-specific input info (NEW)
-}
-
-export interface InputSchema {
-  type: 'javascript' | 'semantic'; // JS snippet or description
-  content: string;                 // Input schema content
-  actions?: string[];              // Discrete events (Jump, Shoot)
-  axes?: string[];                 // Continuous inputs (MoveHorizontal)
 }
 
 export interface TestConfig {

@@ -1,31 +1,66 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 3, 2025
-**Session**: Ad-hoc enhancement - InputSchema support added
+**Session**: Strategic Pivot to Iterative Development + InputSchema Support
 
 ---
 
 ## Current Focus
 
+### 🔄 MAJOR STRATEGIC PIVOT
+**Adopting Iterative Development** based on expert recommendation and game engine context.
+
+**Why the change?**
+- De-risk Browserbase integration early (validate in 2-3 hours, not 30+)
+- Test with real games after each iteration
+- Build working software incrementally
+- Expert recommendation: "Create minimal agent → add one interaction at a time"
+
+**What changed?**
+- Task list reorganized from linear phases (P3-P7) to 5 iterations
+- Original detailed plan archived in `task-list-waterfall-original.md`
+- New iteration-based plan in `task-list.md`
+- Same work, different execution order
+
 ### What We're Working On
-**Ad-hoc Enhancement**: InputSchema support for game controls
-- Added InputSchema interface to support game-specific input information
-- Updated GameTestRequest to accept optional inputSchema
-- Added comprehensive tests for InputSchema validation
+✅ **Foundation Complete** (Phases 0-2):
+- Phase 0: Project Setup (4/4 tasks)
+- Phase 1: Types & Config (3/3 tasks) + InputSchema enhancement
+- Phase 2: Utilities (3/3 tasks)
+
+✅ **InputSchema Support Added** (enhances Iteration 5):
+- New InputSchema interface for game-specific control definitions
+- Supports JavaScript snippets (first-party) and semantic descriptions (third-party)
+- Actions (discrete: Jump, Shoot) and Axes (continuous: MoveHorizontal -1 to 1)
 
 ### Next Immediate Tasks
-1. **Begin Phase 3: Core Browser Automation**
-   - P3.1: Implement Browser Manager
-   - P3.2: Implement Game Detector
-   - P3.3: Implement Error Monitor
-2. Implement InputSchema usage in game interaction logic (P3.5)
+1. **Iteration 1: Minimal Working Agent** (2-3 hours)
+   - I1.1: Implement Browser Manager
+   - I1.2: Implement Minimal Main Orchestration
+   - Goal: Load game in Browserbase, take screenshot, validate it works
+2. Test with real game to verify Browserbase integration
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
-- ✅ Enhanced Type Definitions: Added InputSchema support
+- ✅ **Strategic Pivot to Iterative Development**
+  - Received expert recommendation: build minimal agent first, test early and often
+  - Received game engine context (scene stack, input system with actions/axes)
+  - Reorganized Phases 3-7 into 5 iterations
+  - Archived original detailed waterfall plan in `task-list-waterfall-original.md`
+  - Created new iteration-based `task-list.md`:
+    - Iteration 1: Minimal Working Agent (validate Browserbase)
+    - Iteration 2: Basic Interaction (keyboard inputs)
+    - Iteration 3: Detection & Monitoring (game type, console errors)
+    - Iteration 4: Vision Analysis (GPT-4V integration)
+    - Iteration 5: Input Schema & Polish (production ready)
+  - Each iteration ends with real game testing
+  - De-risks assumptions early (Browserbase works in 2-3 hrs, not 30+)
+  - Produces working software incrementally
+
+- ✅ **Enhanced Type Definitions: Added InputSchema support**
   - Added `InputSchema` interface to `src/types/game-test.types.ts`
     - Supports `type: 'javascript' | 'semantic'` for first-party vs third-party games
     - Includes `content` field for JS snippets or semantic descriptions
@@ -164,11 +199,20 @@
 6. **Screenshots**: Keep all screenshots, no cleanup in MVP
 7. **Caching**: Disabled for MVP, stub implementation for future
 8. **Environment Variables**: Bun automatically loads `.env` files, so `dotenv` package is not needed
-9. **Input Schema Support**: Added InputSchema interface to support game-specific control information
+
+### Strategic Decisions Made
+9. **Development Approach**: Iterative (not waterfall/linear phases)
+   - Build minimal working agent first (Iteration 1: 2-3 hours)
+   - Test with real games after each iteration
+   - Add one feature at a time (keyboard → detection → vision → polish)
+   - Expert recommendation: validates assumptions early, reduces risk
+   - Original waterfall plan preserved in `task-list-waterfall-original.md`
+10. **Input Schema Support**: Added InputSchema interface to support game-specific control information
    - First-party games provide JavaScript snippets ('javascript' type)
    - Third-party games provide semantic descriptions ('semantic' type)
    - Supports both discrete actions (Jump, Shoot) and continuous axes (MoveHorizontal)
    - Optional field in GameTestRequest to maintain backward compatibility
+   - Enables targeted testing based on game engine's input system
 
 ---
 

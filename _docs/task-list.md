@@ -1,314 +1,67 @@
-# Task List: Game QA Agent (0 to 1)
+# Task List: DreamUp QA Agent (Iterative Development)
 
-## Purpose
-This document provides a complete task breakdown for building the autonomous game testing agent from initial setup to production deployment. Tasks are organized by phase with clear dependencies, acceptance criteria, and effort estimates.
+**Development Approach**: Iterative (build → test → iterate)
 
----
-
-## Task Organization
-
-### Symbols
-- `[ ]` = Not started
-- `[→]` = In progress
-- `[✓]` = Complete
-- `[!]` = Blocked
-
-### Effort Estimates
-- **XS**: < 1 hour
-- **S**: 1-2 hours
-- **M**: 2-4 hours
-- **L**: 4-8 hours
-- **XL**: 8+ hours
+**Original Detailed Plan**: See `task-list-waterfall-original.md` for comprehensive acceptance criteria, test plans, and detailed specifications.
 
 ---
 
-## Phase 0: Project Setup & Configuration
+## Why Iterative?
 
-### P0.1: Initialize Project Structure
-**Effort**: S (1-2 hours)  
-**Dependencies**: None  
+Based on expert recommendation and game engine context:
+1. **De-risk early**: Validate Browserbase works in 2-3 hours (not 30+ hours)
+2. **Real game feedback**: Test with actual games at each iteration
+3. **Incremental complexity**: Add one feature at a time
+4. **Working software faster**: Iteration 1 gives working (basic) agent in 2-3 hours
+
+**Key Insight**: The game engine provides InputSchema (JavaScript snippets or semantic descriptions) that inform what controls to test. Start simple, add complexity incrementally.
+
+---
+
+## Completed Foundation (Phases 0-2)
+
+✅ **Phase 0**: Project Setup (4/4 tasks)
+✅ **Phase 1**: Type Definitions & Configuration (3/3 tasks)
+✅ **Phase 2**: Utility Modules (3/3 tasks)
+
+**Status**: Foundation complete. Ready for iterative feature development.
+
+---
+
+## Iteration Roadmap
+
+| Iteration | Focus | Time | Status |
+|-----------|-------|------|--------|
+| **Iteration 1** | Minimal Working Agent | 2-3 hrs | 🔜 Next |
+| **Iteration 2** | Basic Interaction | 3-4 hrs | ⏳ Pending |
+| **Iteration 3** | Detection & Monitoring | 4-5 hrs | ⏳ Pending |
+| **Iteration 4** | Vision Analysis | 5-7 hrs | ⏳ Pending |
+| **Iteration 5** | Input Schema & Polish | 6-8 hrs | ⏳ Pending |
+
+**Total Estimated Time**: 20-27 hours (remaining)
+
+---
+
+## Iteration 1: Minimal Working Agent
+
+**Goal**: Validate Browserbase integration, load a game, take screenshot
+
+**Time**: 2-3 hours
+
+### Tasks
+
+#### I1.1: Implement Browser Manager
+**Effort**: M (2-3 hours)
 **Status**: `[ ]`
+**Original Reference**: P3.1 in `task-list-waterfall-original.md`
 
-**Tasks**:
-- [ ] Create project directory: `mkdir game-qa-agent && cd game-qa-agent`
-- [ ] Initialize Bun project: `bun init`
-- [ ] Create directory structure as per architecture.md
-  ```bash
-  mkdir -p src/{core,vision,utils,config,types}
-  mkdir -p tests/{fixtures,integration,unit}
-  mkdir -p output/screenshots output/reports
-  ```
-- [ ] Create `.gitignore` with:
-  - `node_modules/`
-  - `output/`
-  - `.env`
-  - `*.log`
-  - `.DS_Store`
-- [ ] Create `output/.gitkeep` to preserve directory in git
-
-**Acceptance Criteria**:
-- [ ] All directories created
-- [ ] `package.json` exists with correct name
-- [ ] `.gitignore` properly excludes sensitive files
-
----
-
-### P0.2: Install Dependencies
-**Effort**: XS (30 min)  
-**Dependencies**: P0.1  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Install core dependencies:
-  ```bash
-  bun add @browserbasehq/sdk @browserbasehq/stagehand
-  bun add ai @ai-sdk/openai
-  bun add zod dotenv nanoid p-timeout
-  ```
-- [ ] Install dev dependencies:
-  ```bash
-  bun add -d @types/bun @types/node typescript
-  ```
-  **Note**: Bun has a built-in test runner, so no additional testing framework (Jest, Vitest) is needed. Use `bun:test` for test imports.
-- [ ] Verify installations: `bun install`
-
-**Acceptance Criteria**:
-- [ ] All packages in `package.json`
-- [ ] No installation errors
-- [ ] `bun run` command available
-
----
-
-### P0.3: Configure TypeScript
-**Effort**: XS (30 min)  
-**Dependencies**: P0.2  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `tsconfig.json`:
-  ```json
-  {
-    "compilerOptions": {
-      "target": "ES2022",
-      "module": "ESNext",
-      "lib": ["ES2022"],
-      "moduleResolution": "bundler",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true,
-      "resolveJsonModule": true,
-      "isolatedModules": true,
-      "outDir": "./dist",
-      "rootDir": "./src",
-      "types": ["bun-types"]
-    },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules", "dist", "tests"]
-  }
-  ```
-- [ ] Test TypeScript compilation: `bun build src/main.ts`
-
-**Acceptance Criteria**:
-- [ ] TypeScript compiles without errors
-- [ ] Type checking enabled in IDE
-
----
-
-### P0.4: Environment Configuration
-**Effort**: XS (30 min)  
-**Dependencies**: P0.3  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `.env.example`:
-  ```bash
-  BROWSERBASE_API_KEY=bb_live_xxxxx
-  BROWSERBASE_PROJECT_ID=xxxxx
-  OPENAI_API_KEY=sk-xxxxx
-  DEBUG=false
-  ENABLE_CACHING=false
-  ENABLE_PROGRESS_UPDATES=false
-  ENABLE_ERROR_RECOVERY=false
-  ENABLE_SCREENSHOT_CLEANUP=false
-  MAX_TEST_DURATION=240000
-  GAME_LOAD_TIMEOUT=60000
-  INTERACTION_TIMEOUT=90000
-  ```
-- [ ] Create `.env` with actual credentials (gitignored)
-- [ ] Document setup in README.md
-
-**Acceptance Criteria**:
-- [ ] `.env.example` committed to git
-- [ ] `.env` exists locally with real credentials
-- [ ] Can load environment variables with `dotenv`
-
----
-
-## Phase 1: Type Definitions & Configuration
-
-### P1.1: Define Core Types
-**Effort**: M (2-3 hours)  
-**Dependencies**: P0.4  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `src/types/game-test.types.ts`
-  - [ ] Define `GameTestRequest` interface
-  - [ ] Define `GameTestResult` interface
-  - [ ] Define `TestConfig` interface
-  - [ ] Define `Issue` interface
-  - [ ] Define `TestMetadata` interface
-  - [ ] Define `ClickableElement` interface
-  - [ ] Define `Screenshot` interface
-  - [ ] Define `ConsoleError` interface
-- [ ] Create `src/types/config.types.ts`
-  - [ ] Define `FeatureFlags` interface
-  - [ ] Define `Timeouts` interface
-  - [ ] Define `Thresholds` interface
-- [ ] Export all types from `src/types/index.ts`
-
-**Acceptance Criteria**:
-- [ ] All types defined with JSDoc comments
-- [ ] Types compile without errors
-- [ ] Can import types in other modules
-
----
-
-### P1.2: Create Configuration Constants
-**Effort**: S (1 hour)  
-**Dependencies**: P1.1  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `src/config/constants.ts`
-  - [ ] Define `TIMEOUTS` object
-  - [ ] Define `THRESHOLDS` object
-  - [ ] Define `PATHS` object
-  - [ ] Add environment variable overrides
-- [ ] Create `src/config/feature-flags.ts`
-  - [ ] Define `DEFAULT_FLAGS` constant
-  - [ ] Implement `getFeatureFlags()` function
-  - [ ] Add environment variable parsing
-- [ ] Export all from `src/config/index.ts`
-
-**Acceptance Criteria**:
-- [ ] Constants can be imported and used
-- [ ] Feature flags load from environment
-- [ ] Timeouts can be overridden via env vars
-
----
-
-### P1.3: Create Zod Schemas
-**Effort**: M (2 hours)  
-**Dependencies**: P1.1  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `src/vision/schema.ts`
-  - [ ] Define `issueSchema` with Zod
-  - [ ] Define `gameTestResultSchema` with Zod
-  - [ ] Export TypeScript types via `z.infer<>`
-  - [ ] Add schema validation helpers
-- [ ] Write unit tests for schema validation
-  - [ ] Test valid inputs pass
-  - [ ] Test invalid inputs fail with clear errors
-
-**Acceptance Criteria**:
-- [ ] Schemas validate correctly
-- [ ] TypeScript types match runtime schemas
-- [ ] Tests pass for valid/invalid data
-
----
-
-## Phase 2: Utility Modules
-
-### P2.1: Create Logger Utility
-**Effort**: S (1-2 hours)  
-**Dependencies**: P1.2  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `src/utils/logger.ts`
-  - [ ] Define `LogLevel` enum
-  - [ ] Implement `Logger` class
-  - [ ] Add methods: `info()`, `warn()`, `error()`, `debug()`
-  - [ ] Format logs as JSON for CloudWatch
-  - [ ] Add context object support
-  - [ ] Respect DEBUG flag from feature flags
-- [ ] Write unit tests for logger
-
-**Acceptance Criteria**:
-- [ ] Logs output structured JSON
-- [ ] Debug logs only show when enabled
-- [ ] Logger can be instantiated with context
-
----
-
-### P2.2: Create Timeout Utility
-**Effort**: S (1 hour)  
-**Dependencies**: P1.2  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `src/utils/timeout.ts`
-  - [ ] Wrap `p-timeout` with typed helpers
-  - [ ] Add `withTimeout()` function
-  - [ ] Add custom timeout error messages
-  - [ ] Export timeout constants
-- [ ] Write unit tests for timeout utility
-
-**Acceptance Criteria**:
-- [ ] Timeouts work correctly
-- [ ] Custom error messages appear
-- [ ] Tests verify timeout behavior
-
----
-
-### P2.3: Create File Manager Utility
-**Effort**: M (2-3 hours)  
-**Dependencies**: P1.2  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `src/utils/file-manager.ts`
-  - [ ] Implement `FileManager` class
-  - [ ] Add `ensureOutputDirectory()` method
-  - [ ] Add `saveScreenshot()` method (save PNG to /tmp)
-  - [ ] Add `saveReport()` method (save JSON to /tmp)
-  - [ ] Add `getScreenshotPath()` method
-  - [ ] Add `cleanup()` method (stub for future)
-- [ ] Write unit tests for file operations
-
-**Acceptance Criteria**:
-- [ ] Can create output directories
-- [ ] Screenshots save correctly as PNG files
-- [ ] Reports save correctly as JSON files
-- [ ] Paths are correctly generated
-
----
-
-## Phase 3: Core Browser Automation
-
-### P3.1: Implement Browser Manager
-**Effort**: M (3-4 hours)  
-**Dependencies**: P2.1, P2.2  
-**Status**: `[ ]`
-
-**Tasks**:
+**Implementation**:
 - [ ] Create `src/core/browser-manager.ts`
-  - [ ] Implement `BrowserManager` class
-  - [ ] Add `initialize()` method
-    - [ ] Create Browserbase session
-    - [ ] Connect Stagehand to session
-    - [ ] Return Stagehand page instance
-  - [ ] Add `navigate(url)` method
-    - [ ] Navigate to URL with timeout
-    - [ ] Wait for networkidle
-  - [ ] Add `cleanup()` method
-    - [ ] Close browser session
-    - [ ] Clean up resources
-  - [ ] Add error handling for all methods
+- [ ] Implement `BrowserManager` class
+  - [ ] `initialize()` - Create Browserbase session, connect Stagehand
+  - [ ] `navigate(url)` - Navigate to URL with timeout and networkidle
+  - [ ] `cleanup()` - Close browser session
+- [ ] Add error handling and logging
 - [ ] Write integration tests with mock Browserbase
 
 **Acceptance Criteria**:
@@ -319,57 +72,192 @@ This document provides a complete task breakdown for building the autonomous gam
 
 ---
 
-### P3.2: Implement Game Detector
-**Effort**: L (5-6 hours)  
-**Dependencies**: P3.1  
+#### I1.2: Implement Minimal Main Orchestration
+**Effort**: S (1 hour)
+**Status**: `[ ]`
+**Original Reference**: P5.1 (simplified version) in `task-list-waterfall-original.md`
+
+**Implementation**:
+- [ ] Create `src/main.ts` with minimal `runQA()` function
+  - [ ] Generate session ID (nanoid)
+  - [ ] Initialize BrowserManager
+  - [ ] Navigate to game URL
+  - [ ] Take single screenshot
+  - [ ] Cleanup browser
+  - [ ] Return minimal result (status: 'pass', placeholder score)
+- [ ] Add CLI entry point (`if (import.meta.main)`)
+- [ ] Add comprehensive error handling
+- [ ] Add logging at each step
+
+**Acceptance Criteria**:
+- [ ] Can run: `bun run src/main.ts <game-url>`
+- [ ] Successfully loads game in Browserbase
+- [ ] Captures screenshot to output directory
+- [ ] Returns without errors
+- [ ] Logs structured JSON
+
+**Test with Real Game**:
+```bash
+bun run src/main.ts https://example-game-url.com
+# Expected: Screenshot saved to output/screenshots/
+# Validate: Browserbase session works, game loads
+```
+
+---
+
+### Iteration 1 Complete When:
+- [ ] Real game loads in Browserbase
+- [ ] Screenshot captured and saved
+- [ ] No errors in execution
+- [ ] Structured logs show each step
+- [ ] Can run multiple games in sequence
+
+**Next**: Iteration 2 (add keyboard interaction)
+
+---
+
+## Iteration 2: Basic Interaction
+
+**Goal**: Add keyboard input simulation, capture before/after screenshots
+
+**Time**: 3-4 hours
+
+### Tasks
+
+#### I2.1: Implement Basic Game Interactor
+**Effort**: M (2-3 hours)
+**Status**: `[ ]`
+**Original Reference**: P3.5 (partial - 60%) in `task-list-waterfall-original.md`
+
+**Implementation**:
+- [ ] Create `src/core/game-interactor.ts`
+- [ ] Implement `GameInteractor` class
+  - [ ] `simulateKeyboardInput(page, duration)` - Send WASD, arrows, space
+  - [ ] `clickAtCoordinates(page, x, y)` - Helper for mouse clicks
+- [ ] Add error handling for interaction failures
+- [ ] Write unit tests with mock page
+
+**Scope for Iteration 2** (simplified):
+- ✅ Keyboard simulation (WASD, arrows, space, enter)
+- ✅ Mouse clicks at coordinates
+- ❌ Vision-based element detection (add in Iteration 4)
+- ❌ InputSchema parsing (add in Iteration 5)
+
+**Acceptance Criteria**:
+- [ ] Can send keyboard inputs
+- [ ] Can click at specific coordinates
+- [ ] Interactions don't crash browser
+- [ ] Errors handled gracefully
+
+---
+
+#### I2.2: Implement Basic Screenshot Capturer
+**Effort**: S (1 hour)
+**Status**: `[ ]`
+**Original Reference**: P3.4 (partial - 40%) in `task-list-waterfall-original.md`
+
+**Implementation**:
+- [ ] Create `src/core/screenshot-capturer.ts`
+- [ ] Implement `ScreenshotCapturer` class
+  - [ ] `capture(page, stage)` - Take screenshot, save to file
+  - [ ] Return Screenshot object with id, path, timestamp
+
+**Scope for Iteration 2** (simplified):
+- ✅ Capture single screenshot at specific stage
+- ❌ Parallel capture (add in Iteration 5)
+- ❌ Screenshot organization/cleanup (add in Iteration 5)
+
+**Acceptance Criteria**:
+- [ ] Screenshots save correctly with unique IDs
+- [ ] Stage information tracked (initial_load, after_interaction, final_state)
+- [ ] Errors handled gracefully
+
+---
+
+#### I2.3: Expand Main Orchestration
+**Effort**: S (30 min)
 **Status**: `[ ]`
 
-**Tasks**:
+**Implementation**:
+- [ ] Update `src/main.ts` to use GameInteractor and ScreenshotCapturer
+  - [ ] Capture screenshot before interaction
+  - [ ] Simulate keyboard inputs (30 seconds)
+  - [ ] Capture screenshot after interaction
+  - [ ] Return result with screenshot paths
+
+**Acceptance Criteria**:
+- [ ] Three screenshots captured (initial, after interaction, final)
+- [ ] Keyboard inputs sent to game
+- [ ] No errors during interaction
+
+**Test with Real Game**:
+```bash
+bun run src/main.ts https://example-platformer-game.com
+# Expected: 3 screenshots showing game state changes
+# Validate: Keyboard inputs affect game (character moves, etc.)
+```
+
+---
+
+### Iteration 2 Complete When:
+- [ ] Keyboard inputs sent to real game
+- [ ] Game responds to inputs (visible in screenshots)
+- [ ] Before/after screenshots captured
+- [ ] No interaction errors
+
+**Next**: Iteration 3 (add detection and monitoring)
+
+---
+
+## Iteration 3: Detection & Monitoring
+
+**Goal**: Detect game type, monitor console errors
+
+**Time**: 4-5 hours
+
+### Tasks
+
+#### I3.1: Implement Game Detector
+**Effort**: L (3-4 hours)
+**Status**: `[ ]`
+**Original Reference**: P3.2 (full implementation) in `task-list-waterfall-original.md`
+
+**Implementation**:
 - [ ] Create `src/core/game-detector.ts`
-  - [ ] Define `GameType` enum (CANVAS, IFRAME, DOM, UNKNOWN)
-  - [ ] Implement `GameDetector` class
-  - [ ] Add `detectType(page)` method
-    - [ ] Check for canvas elements
-    - [ ] Check for iframes
-    - [ ] Check for game-related DOM patterns
-    - [ ] Return detected type
-  - [ ] Add `waitForGameReady(page, timeout)` method
-    - [ ] Multi-signal detection:
-      - [ ] Canvas exists
-      - [ ] Canvas is rendering (not blank)
-      - [ ] Network is idle
-      - [ ] No loading text visible
-    - [ ] Poll signals with 1s interval
-    - [ ] Return true if 3/4 signals pass
-  - [ ] Add `isCanvasRendering(page)` helper
-  - [ ] Add `detectIframe(page)` helper
+- [ ] Define `GameType` enum (CANVAS, IFRAME, DOM, UNKNOWN)
+- [ ] Implement `GameDetector` class
+  - [ ] `detectType(page)` - Check for canvas, iframe, DOM patterns
+  - [ ] `waitForGameReady(page, timeout)` - Multi-signal detection
+    - [ ] Canvas exists
+    - [ ] Canvas rendering (not blank)
+    - [ ] Network idle
+    - [ ] No loading text
+  - [ ] `isCanvasRendering(page)` - Helper to check canvas has pixels
+  - [ ] `detectIframe(page)` - Helper to detect iframes
 - [ ] Write unit tests with mocked pages
 
 **Acceptance Criteria**:
 - [ ] Correctly detects canvas games
 - [ ] Correctly detects iframe games
-- [ ] Waits for game ready state
+- [ ] Waits for game ready state (3/4 signals)
 - [ ] Timeouts work correctly
 - [ ] Tests cover all game types
 
 ---
 
-### P3.3: Implement Error Monitor
-**Effort**: M (2-3 hours)  
-**Dependencies**: P3.1  
+#### I3.2: Implement Error Monitor
+**Effort**: M (2-3 hours)
 **Status**: `[ ]`
+**Original Reference**: P3.3 (full implementation) in `task-list-waterfall-original.md`
 
-**Tasks**:
+**Implementation**:
 - [ ] Create `src/core/error-monitor.ts`
-  - [ ] Implement `ErrorMonitor` class
-  - [ ] Add `startMonitoring(page)` method
-    - [ ] Listen to console errors
-    - [ ] Listen to console warnings
-    - [ ] Store errors in array
-  - [ ] Add `getErrors()` method
-  - [ ] Add `hasErrors()` method
-  - [ ] Add `hasCriticalError()` method (JS errors, crashes)
-  - [ ] Add `stopMonitoring()` method
+- [ ] Implement `ErrorMonitor` class
+  - [ ] `startMonitoring(page)` - Listen to console errors/warnings
+  - [ ] `getErrors()` - Retrieve all captured errors
+  - [ ] `hasErrors()` - Check if any errors occurred
+  - [ ] `hasCriticalError()` - Check for JS errors/crashes
+  - [ ] `stopMonitoring()` - Clean up listeners
 - [ ] Write unit tests with mock console events
 
 **Acceptance Criteria**:
@@ -381,139 +269,91 @@ This document provides a complete task breakdown for building the autonomous gam
 
 ---
 
-### P3.4: Implement Screenshot Capturer
-**Effort**: M (2-3 hours)  
-**Dependencies**: P2.3, P3.1  
+#### I3.3: Expand Main Orchestration
+**Effort**: XS (30 min)
 **Status**: `[ ]`
 
-**Tasks**:
-- [ ] Create `src/core/screenshot-capturer.ts`
-  - [ ] Implement `ScreenshotCapturer` class
-  - [ ] Add `capture(page, stage)` method
-    - [ ] Take full-page screenshot
-    - [ ] Generate unique ID (nanoid)
-    - [ ] Save to output directory
-    - [ ] Return Screenshot object
-  - [ ] Add `captureAll(page, stages)` method
-    - [ ] Capture multiple screenshots in parallel
-    - [ ] Return array of Screenshot objects
-  - [ ] Add error handling for screenshot failures
-- [ ] Write unit tests
+**Implementation**:
+- [ ] Update `src/main.ts` to use GameDetector and ErrorMonitor
+  - [ ] Detect game type after navigation
+  - [ ] Wait for game ready before interaction
+  - [ ] Start error monitoring
+  - [ ] Include game type and errors in result metadata
 
 **Acceptance Criteria**:
-- [ ] Screenshots save correctly
-- [ ] Unique IDs generated
-- [ ] Parallel capture works
-- [ ] Errors handled gracefully
-- [ ] Tests verify screenshot creation
+- [ ] Game type detected correctly
+- [ ] Waits for game to be ready before interaction
+- [ ] Console errors captured in result
+- [ ] Metadata includes game type and error count
+
+**Test with Real Game**:
+```bash
+bun run src/main.ts https://example-canvas-game.com
+# Expected: Detects game type as "canvas", waits for ready, captures any errors
+# Validate: Game type is correct, ready detection works
+```
 
 ---
 
-### P3.5: Implement Game Interactor
-**Effort**: L (6-8 hours)  
-**Dependencies**: P3.2, P3.4  
-**Status**: `[ ]`
+### Iteration 3 Complete When:
+- [ ] Game type detected accurately on real games
+- [ ] Ready detection prevents premature interaction
+- [ ] Console errors captured during test
+- [ ] Metadata enriched with detection results
 
-**Tasks**:
-- [ ] Create `src/core/game-interactor.ts`
-  - [ ] Implement `GameInteractor` class
-  - [ ] Add `findAndClickStart(page)` method
-    - [ ] Strategy 1: Try Stagehand natural language
-      - [ ] `page.act("click the start button")`
-      - [ ] `page.act("click the play button")`
-    - [ ] Strategy 2: Fallback to vision-based detection
-      - [ ] Take screenshot
-      - [ ] Ask GPT-4V to find start button
-      - [ ] Click at returned coordinates
-    - [ ] Return success boolean
-  - [ ] Add `simulateGameplay(page, duration)` method
-    - [ ] Detect game type (canvas vs DOM)
-    - [ ] For canvas: simulate keyboard/mouse events
-      - [ ] Arrow keys (up, down, left, right)
-      - [ ] Spacebar
-      - [ ] Mouse clicks at random coordinates
-    - [ ] For DOM: use Stagehand to interact
-    - [ ] Run for specified duration
-  - [ ] Add `clickAtCoordinates(page, x, y)` helper
-  - [ ] Add error handling for interaction failures
-- [ ] Write integration tests with test games
-
-**Acceptance Criteria**:
-- [ ] Can find and click start buttons
-- [ ] Can simulate keyboard inputs
-- [ ] Can simulate mouse inputs
-- [ ] Works with both canvas and DOM games
-- [ ] Errors handled gracefully
-- [ ] Tests verify interactions
+**Next**: Iteration 4 (add vision analysis)
 
 ---
 
-## Phase 4: Vision Analysis Integration
+## Iteration 4: Vision Analysis
 
-### P4.1: Create Vision Prompts
-**Effort**: M (2-3 hours)  
-**Dependencies**: P1.3  
+**Goal**: Integrate GPT-4 Vision for playability scoring and element detection
+
+**Time**: 5-7 hours
+
+### Tasks
+
+#### I4.1: Create Vision Prompts
+**Effort**: M (2-3 hours)
 **Status**: `[ ]`
+**Original Reference**: P4.1 (full implementation) in `task-list-waterfall-original.md`
 
-**Tasks**:
+**Implementation**:
 - [ ] Create `src/vision/prompts.ts`
-  - [ ] Define `GAME_ANALYSIS` prompt
-    ```typescript
-    You are analyzing a sequence of screenshots from a browser game test.
-    
-    Screenshot 1: Initial game load
-    Screenshot 2: After user interaction
-    Screenshot 3: Final game state
-    
-    Evaluate:
-    1. Did the game load successfully? (no error screens, no blank canvas)
-    2. Are controls responsive? (did the game respond to interactions?)
-    3. Did the game run without crashes? (no frozen screens, error messages)
-    4. Overall playability score (0-100)
-    
-    Identify any issues with severity levels:
-    - critical: Game doesn't load, crashes immediately, unplayable
-    - major: Significant bugs, poor performance, broken features
-    - minor: Small UI issues, cosmetic problems
-    
-    Return structured data matching the schema.
-    ```
-  - [ ] Define `FIND_START_BUTTON` prompt
-  - [ ] Define `DETECT_CRASH` prompt
-  - [ ] Add prompt versioning/tracking
+- [ ] Define `GAME_ANALYSIS` prompt (analyze screenshots for playability)
+- [ ] Define `FIND_CLICKABLE_ELEMENTS` prompt (detect UI elements)
+- [ ] Define `DETECT_CRASH` prompt (identify error screens)
+- [ ] Add prompt versioning/tracking
+- [ ] Include examples (few-shot learning)
 
 **Acceptance Criteria**:
 - [ ] Prompts are clear and specific
-- [ ] Prompts reference the schema
-- [ ] Prompts include examples (few-shot)
+- [ ] Prompts reference the Zod schemas
+- [ ] Prompts include examples
 - [ ] Prompts are exported and reusable
 
 ---
 
-### P4.2: Implement Vision Analyzer
-**Effort**: L (4-6 hours)  
-**Dependencies**: P4.1, P1.3  
+#### I4.2: Implement Vision Analyzer
+**Effort**: L (4-5 hours)
 **Status**: `[ ]`
+**Original Reference**: P4.2 (full implementation) in `task-list-waterfall-original.md`
 
-**Tasks**:
+**Implementation**:
 - [ ] Create `src/vision/analyzer.ts`
-  - [ ] Implement `VisionAnalyzer` class
-  - [ ] Add `constructor()` - initialize OpenAI client
-  - [ ] Add `analyzeScreenshots(screenshots)` method
+- [ ] Implement `VisionAnalyzer` class
+  - [ ] `constructor()` - Initialize OpenAI client
+  - [ ] `analyzeScreenshots(screenshots)` - Analyze playability
     - [ ] Load screenshots from disk
     - [ ] Convert to base64
     - [ ] Build multi-modal prompt
-    - [ ] Call `generateObject()` with schema
+    - [ ] Call `generateObject()` with gameTestResultSchema
     - [ ] Return parsed GameTestResult
-  - [ ] Add `findClickableElements(screenshot)` method
-    - [ ] Use FIND_START_BUTTON prompt
-    - [ ] Return array of ClickableElement objects
-  - [ ] Add `detectCrash(screenshot)` method
-    - [ ] Use DETECT_CRASH prompt
-    - [ ] Return boolean
+  - [ ] `findClickableElements(screenshot)` - Detect elements
+  - [ ] `detectCrash(screenshot)` - Check for crashes
   - [ ] Add error handling for API failures
   - [ ] Add token counting/logging
-- [ ] Write integration tests with OpenAI API (or mocks)
+- [ ] Write integration tests with OpenAI API
 
 **Acceptance Criteria**:
 - [ ] Can analyze multiple screenshots
@@ -525,434 +365,292 @@ This document provides a complete task breakdown for building the autonomous gam
 
 ---
 
-## Phase 5: Main Orchestration
-
-### P5.1: Implement Main QA Function
-**Effort**: L (5-7 hours)  
-**Dependencies**: P3.5, P4.2  
+#### I4.3: Complete Game Interactor with Vision
+**Effort**: M (2 hours)
 **Status**: `[ ]`
+**Original Reference**: P3.5 (remaining 40%) in `task-list-waterfall-original.md`
 
-**Tasks**:
-- [ ] Create `src/main.ts`
-  - [ ] Import all core modules
-  - [ ] Implement `runQA(gameUrl, config?)` function
-    - [ ] Generate session ID
-    - [ ] Initialize browser manager
-    - [ ] Setup error monitor
-    - [ ] Navigate to game URL
-    - [ ] Detect game type
-    - [ ] Wait for game ready
-    - [ ] Capture initial screenshot
-    - [ ] Find and click start button
-    - [ ] Simulate gameplay
-    - [ ] Capture interaction screenshots
-    - [ ] Analyze with vision
-    - [ ] Enrich result with metadata
-    - [ ] Save report to /tmp
-    - [ ] Cleanup browser
-    - [ ] Return result
-  - [ ] Add comprehensive error handling
-  - [ ] Add timeout wrapper for entire test
-  - [ ] Add logging at each step
-- [ ] Write integration tests with real games
+**Implementation**:
+- [ ] Update `src/core/game-interactor.ts`
+- [ ] Add `findAndClickStart(page)` method
+  - [ ] Strategy 1: Try Stagehand natural language (`page.act("click start button")`)
+  - [ ] Strategy 2: Fallback to vision-based detection
+    - [ ] Take screenshot
+    - [ ] Use VisionAnalyzer to find start button
+    - [ ] Click at returned coordinates
+- [ ] Add error handling for vision fallback
 
 **Acceptance Criteria**:
-- [ ] Full end-to-end test works
-- [ ] Returns valid GameTestResult
-- [ ] Saves screenshots and report
-- [ ] Completes within timeout
-- [ ] Handles errors gracefully
-- [ ] Tests verify full flow
+- [ ] Can find start button with natural language
+- [ ] Falls back to vision if natural language fails
+- [ ] Clicks at correct coordinates
+- [ ] Works with both canvas and DOM games
 
 ---
 
-### P5.2: Implement CLI Interface
-**Effort**: M (2-3 hours)  
-**Dependencies**: P5.1  
+#### I4.4: Expand Main Orchestration
+**Effort**: M (1-2 hours)
 **Status**: `[ ]`
 
-**Tasks**:
-- [ ] Add CLI entry point to `src/main.ts`
-  - [ ] Check if running as CLI (`if (import.meta.main)`)
+**Implementation**:
+- [ ] Update `src/main.ts` to use VisionAnalyzer
+  - [ ] Find and click start button before interaction
+  - [ ] Analyze screenshots with vision after test
+  - [ ] Use vision result for playability score
+  - [ ] Determine pass/fail based on score (>= 50 = pass)
+  - [ ] Include vision analysis in result
+
+**Acceptance Criteria**:
+- [ ] Start button found and clicked automatically
+- [ ] Vision analysis provides playability score
+- [ ] Pass/fail determined correctly
+- [ ] Result includes issues from vision analysis
+
+**Test with Real Game**:
+```bash
+bun run src/main.ts https://example-game.com
+# Expected: Finds start button, interacts, scores playability (0-100)
+# Validate: Score reflects actual game state, issues identified
+```
+
+---
+
+### Iteration 4 Complete When:
+- [ ] Vision accurately scores playability on real games
+- [ ] Start button detection works (natural language or vision)
+- [ ] Issues identified by vision are relevant
+- [ ] Pass/fail threshold working correctly
+
+**Next**: Iteration 5 (input schema and polish)
+
+---
+
+## Iteration 5: Input Schema & Polish
+
+**Goal**: Parse InputSchema, polish features, prepare for production
+
+**Time**: 6-8 hours
+
+### Tasks
+
+#### I5.1: Implement Input Schema Parser
+**Effort**: M (2-3 hours)
+**Status**: `[ ]`
+**New Feature**: Not in original waterfall plan
+
+**Implementation**:
+- [ ] Create `src/core/input-schema-parser.ts`
+- [ ] Implement `InputSchemaParser` class
+  - [ ] `parse(inputSchema)` - Extract actions and axes
+  - [ ] `getActionsToTest()` - Return list of actions (e.g., ['Jump', 'Shoot'])
+  - [ ] `getAxesToTest()` - Return list of axes (e.g., ['MoveHorizontal'])
+  - [ ] `inferKeybindings()` - Parse JavaScript snippets for key bindings
+  - [ ] `parseSemanticDescription()` - Extract controls from text
+- [ ] Write unit tests with example input schemas
+
+**Acceptance Criteria**:
+- [ ] Can parse JavaScript input schemas
+- [ ] Can parse semantic descriptions
+- [ ] Returns testable actions and axes
+- [ ] Handles missing or malformed schemas gracefully
+
+---
+
+#### I5.2: Integrate Input Schema into Interactor
+**Effort**: M (2 hours)
+**Status**: `[ ]`
+
+**Implementation**:
+- [ ] Update `src/core/game-interactor.ts`
+- [ ] Add `simulateGameplayWithSchema(page, inputSchema, duration)` method
+  - [ ] Parse inputSchema to get expected controls
+  - [ ] Test specific actions (send key bindings)
+  - [ ] Test specific axes (send directional inputs)
+  - [ ] Fallback to generic inputs if no schema provided
+- [ ] Update vision prompts to include input schema context
+
+**Acceptance Criteria**:
+- [ ] Tests actions from input schema
+- [ ] Tests axes from input schema
+- [ ] Gracefully handles missing schema
+- [ ] Vision prompts reference expected controls
+
+---
+
+#### I5.3: Complete Screenshot Capturer
+**Effort**: S (1-2 hours)
+**Status**: `[ ]`
+**Original Reference**: P3.4 (remaining 60%) in `task-list-waterfall-original.md`
+
+**Implementation**:
+- [ ] Update `src/core/screenshot-capturer.ts`
+- [ ] Add `captureAll(page, stages)` method for parallel capture
+- [ ] Add screenshot organization (group by session)
+- [ ] Implement cleanup logic (respect ENABLE_SCREENSHOT_CLEANUP flag)
+
+**Acceptance Criteria**:
+- [ ] Can capture multiple screenshots in parallel
+- [ ] Screenshots organized by session
+- [ ] Cleanup works when flag enabled
+
+---
+
+#### I5.4: Implement CLI and Lambda Interfaces
+**Effort**: M (2-3 hours)
+**Status**: `[ ]`
+**Original Reference**: P5.2, P5.3 (full implementation) in `task-list-waterfall-original.md`
+
+**Implementation**:
+- [ ] Add CLI interface to `src/main.ts`
   - [ ] Parse command line arguments
-    - [ ] `bun run src/main.ts <game-url>`
-  - [ ] Call `runQA()` with URL
+  - [ ] Support: `bun run src/main.ts <game-url> [--input-schema <path>]`
   - [ ] Print formatted results to console
   - [ ] Exit with appropriate code (0 = pass, 1 = fail/error)
-- [ ] Add package.json scripts:
-  ```json
-  {
-    "scripts": {
-      "qa": "bun run src/main.ts",
-      "test": "bun test"
-    }
-  }
-  ```
-- [ ] Test CLI with sample games
-
-**Acceptance Criteria**:
-- [ ] Can run: `bun run qa https://example.com/game`
-- [ ] Prints readable output
-- [ ] Exit codes work correctly
-- [ ] Help text available
-
----
-
-### P5.3: Implement Lambda Handler
-**Effort**: M (2-3 hours)  
-**Dependencies**: P5.1  
-**Status**: `[ ]`
-
-**Tasks**:
 - [ ] Add Lambda handler to `src/main.ts`
   - [ ] Export `handler` function
-  - [ ] Parse Lambda event
-    ```typescript
-    interface LambdaEvent {
-      gameUrl: string;
-      config?: Partial<TestConfig>;
-    }
-    ```
-  - [ ] Call `runQA()` with event data
-  - [ ] Return formatted response
-    ```typescript
-    {
-      statusCode: 200,
-      body: JSON.stringify(result)
-    }
-    ```
-  - [ ] Add error handling for Lambda context
-- [ ] Create Lambda deployment package script
-- [ ] Test locally with Lambda emulator (if available)
+  - [ ] Parse Lambda event (gameUrl, inputSchema, config)
+  - [ ] Return formatted Lambda response
+- [ ] Add package.json scripts
 
 **Acceptance Criteria**:
+- [ ] CLI runs from command line
 - [ ] Lambda handler exports correctly
-- [ ] Handles Lambda events
-- [ ] Returns proper Lambda response
-- [ ] Can be packaged for deployment
+- [ ] Input schema can be passed via CLI or Lambda event
+- [ ] Exit codes work correctly
 
 ---
 
-## Phase 6: Testing & Validation
-
-### P6.1: Create Test Fixtures
-**Effort**: S (1-2 hours)  
-**Dependencies**: None  
+#### I5.5: Comprehensive Testing & Validation
+**Effort**: L (4-6 hours)
 **Status**: `[ ]`
+**Original Reference**: P6 (full implementation) in `task-list-waterfall-original.md`
 
-**Tasks**:
-- [ ] Create `tests/fixtures/sample-games.ts`
-  - [ ] Add URLs for test games:
-    - [ ] Simple puzzle game (tic-tac-toe, etc.)
-    - [ ] Simple platformer (if available)
-    - [ ] Canvas-based game
-    - [ ] iFrame-embedded game
-  - [ ] Add expected test results for each
-- [ ] Document test games in README
-
-**Acceptance Criteria**:
-- [ ] At least 3 test game URLs
-- [ ] Games are publicly accessible
-- [ ] Expected results documented
-
----
-
-### P6.2: Write Unit Tests
-**Effort**: L (6-8 hours)  
-**Dependencies**: All implementation tasks  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Write unit tests for all utilities
-  - [ ] Logger tests
-  - [ ] Timeout tests
-  - [ ] File manager tests
-- [ ] Write unit tests for core modules
-  - [ ] Game detector tests
-  - [ ] Error monitor tests
-  - [ ] Screenshot capturer tests
-- [ ] Write unit tests for vision module
-  - [ ] Schema validation tests
-  - [ ] Prompt tests
-- [ ] Achieve >70% code coverage
-
-**Acceptance Criteria**:
-- [ ] All unit tests pass
-- [ ] Coverage >70%
-- [ ] Tests run with `bun test`
-
----
-
-### P6.3: Write Integration Tests
-**Effort**: L (6-8 hours)  
-**Dependencies**: P6.1, P5.1  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create `tests/integration/qa-agent.test.ts`
+**Implementation**:
+- [ ] Create test fixtures (`tests/fixtures/sample-games.ts`)
+  - [ ] Add 5+ test game URLs (canvas, iframe, DOM)
+  - [ ] Add expected results for each
+- [ ] Write comprehensive unit tests (target 70%+ coverage)
+- [ ] Write integration tests (`tests/integration/qa-agent.test.ts`)
   - [ ] Test full flow with simple game
   - [ ] Test canvas game detection
   - [ ] Test iframe game detection
   - [ ] Test error handling (invalid URL)
   - [ ] Test timeout scenarios
   - [ ] Test vision analysis accuracy
-- [ ] Run integration tests against real Browserbase/OpenAI
-- [ ] Document test environment setup
+- [ ] Manual testing with 10+ real games
+  - [ ] Verify screenshot quality
+  - [ ] Verify vision analysis accuracy
+  - [ ] Test edge cases (slow loading, crashes, etc.)
 
 **Acceptance Criteria**:
+- [ ] All unit tests pass
 - [ ] All integration tests pass
-- [ ] Tests complete within reasonable time
-- [ ] Tests verify end-to-end functionality
-
----
-
-### P6.4: Manual Testing & Validation
-**Effort**: M (3-4 hours)  
-**Dependencies**: P6.3  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Test with 10+ different games manually
-- [ ] Verify screenshot quality
-- [ ] Verify vision analysis accuracy
-- [ ] Test edge cases:
-  - [ ] Very slow loading games
-  - [ ] Games with splash screens
-  - [ ] Games with multiple start buttons
-  - [ ] Games that crash intentionally
-- [ ] Document any issues found
-
-**Acceptance Criteria**:
+- [ ] 70%+ code coverage
 - [ ] 80%+ accuracy on test games
 - [ ] No false positives (passing broken games)
 - [ ] Edge cases handled correctly
 
 ---
 
-## Phase 7: Documentation & Deployment
-
-### P7.1: Write Documentation
-**Effort**: M (3-4 hours)  
-**Dependencies**: P6.4  
+#### I5.6: Documentation & Deployment Prep
+**Effort**: M (3-4 hours)
 **Status**: `[ ]`
+**Original Reference**: P7 (full implementation) in `task-list-waterfall-original.md`
 
-**Tasks**:
-- [ ] Update README.md with:
-  - [ ] Project overview
-  - [ ] Installation instructions
+**Implementation**:
+- [ ] Update README.md
   - [ ] Usage examples (CLI and Lambda)
+  - [ ] InputSchema examples
   - [ ] Configuration guide
-  - [ ] Architecture overview (link to architecture.md)
   - [ ] Troubleshooting section
-- [ ] Create CONTRIBUTING.md
 - [ ] Create API.md documenting interfaces
 - [ ] Add inline JSDoc comments to all public APIs
+- [ ] Create Lambda deployment script
+- [ ] Create Lambda configuration template
+- [ ] Document deployment process
+- [ ] Performance optimization
+  - [ ] Profile execution times
+  - [ ] Optimize screenshot resolution
+  - [ ] Optimize vision prompts
+  - [ ] Document performance characteristics
 
 **Acceptance Criteria**:
 - [ ] README is comprehensive
 - [ ] All setup steps documented
 - [ ] Code has JSDoc comments
-
----
-
-### P7.2: Prepare Lambda Deployment
-**Effort**: M (3-4 hours)  
-**Dependencies**: P5.3  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Create deployment package script
-  - [ ] Bundle code with dependencies
-  - [ ] Include Bun runtime layer
-  - [ ] Create ZIP for Lambda upload
-- [ ] Create Lambda configuration template
-  - [ ] IAM roles and permissions
-  - [ ] Environment variables
-  - [ ] Timeout and memory settings
-- [ ] Document deployment process
-- [ ] Test deployment to AWS (if access available)
-
-**Acceptance Criteria**:
-- [ ] Deployment package builds successfully
-- [ ] Lambda configuration documented
-- [ ] Deployment process documented
-
----
-
-### P7.3: Performance Optimization
-**Effort**: M (2-4 hours)  
-**Dependencies**: P6.4  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Profile test execution times
-- [ ] Optimize screenshot capture (resolution, format)
-- [ ] Optimize vision prompts (reduce tokens)
-- [ ] Implement parallel operations where possible
-- [ ] Tune timeout values based on real data
-- [ ] Document performance characteristics
-
-**Acceptance Criteria**:
+- [ ] Lambda deployment documented
 - [ ] Tests complete in <4 minutes average
 - [ ] Vision API costs <$0.05 per test
-- [ ] No unnecessary delays
 
 ---
 
-### P7.4: Security Review
-**Effort**: S (1-2 hours)  
-**Dependencies**: P7.2  
-**Status**: `[ ]`
-
-**Tasks**:
-- [ ] Review environment variable handling
-- [ ] Ensure credentials never logged
-- [ ] Review screenshot data (PII concerns)
-- [ ] Add input validation for game URLs
-- [ ] Review Lambda permissions (least privilege)
-- [ ] Document security considerations
-
-**Acceptance Criteria**:
-- [ ] No credentials in logs
-- [ ] URL validation prevents SSRF
-- [ ] Lambda has minimal permissions
-
----
-
-## Phase 8: Future Enhancements (Post-MVP)
-
-### P8.1: Implement Caching System
-**Effort**: L (6-8 hours)  
-**Status**: `[ ]` (Future)
-
-**Tasks**:
-- [ ] Design cache key strategy (URL + version hash)
-- [ ] Implement cache storage (DynamoDB or Redis)
-- [ ] Add cache lookup in main flow
-- [ ] Add TTL configuration
-- [ ] Add cache invalidation endpoint
-
----
-
-### P8.2: Implement Progress Streaming
-**Effort**: M (4-6 hours)  
-**Status**: `[ ]` (Future)
-
-**Tasks**:
-- [ ] Design progress event schema
-- [ ] Implement EventBridge/WebSocket publisher
-- [ ] Add progress updates throughout test flow
-- [ ] Create client example for receiving updates
-
----
-
-### P8.3: Implement Error Recovery
-**Effort**: L (6-8 hours)  
-**Status**: `[ ]` (Future)
-
-**Tasks**:
-- [ ] Design retry strategy (exponential backoff)
-- [ ] Implement page reload on errors
-- [ ] Add retry limit configuration
-- [ ] Add telemetry for retry effectiveness
-
----
-
-### P8.4: Implement Screenshot Cleanup
-**Effort**: S (1-2 hours)  
-**Status**: `[ ]` (Future)
-
-**Tasks**:
-- [ ] Add cleanup logic to FileManager
-- [ ] Implement conditional cleanup based on flag
-- [ ] Optionally upload to S3 before deletion
-- [ ] Add cleanup to Lambda lifecycle
-
----
-
-## Summary
-
-### Total Effort Estimate
-- **Phase 0**: 3-4 hours (Setup)
-- **Phase 1**: 5-6 hours (Types & Config)
-- **Phase 2**: 4-6 hours (Utilities)
-- **Phase 3**: 15-20 hours (Core Automation)
-- **Phase 4**: 6-9 hours (Vision Integration)
-- **Phase 5**: 9-13 hours (Orchestration)
-- **Phase 6**: 16-22 hours (Testing)
-- **Phase 7**: 9-14 hours (Documentation & Deployment)
-
-**Total MVP**: 67-94 hours (~2-3 weeks for 1 developer)
-
-### Critical Path
-```
-P0 (Setup) → P1 (Types) → P2 (Utils) → P3 (Browser) → P4 (Vision) → P5 (Main) → P6 (Testing) → P7 (Deploy)
-```
-
-### Milestone Checkpoints
-
-**Milestone 1: Foundation Complete** (After P2)
-- [ ] Project structure ready
-- [ ] All types defined
-- [ ] Utilities working
-
-**Milestone 2: Core Features Complete** (After P4)
-- [ ] Browser automation working
-- [ ] Vision analysis working
-- [ ] Can detect and interact with games
-
-**Milestone 3: MVP Complete** (After P6)
-- [ ] Full end-to-end flow working
-- [ ] Tests passing
-- [ ] Ready for manual testing
-
-**Milestone 4: Production Ready** (After P7)
+### Iteration 5 Complete When:
+- [ ] Input schema parsing works for JavaScript and semantic formats
+- [ ] CLI and Lambda interfaces working
+- [ ] All tests passing (unit + integration)
 - [ ] Documentation complete
 - [ ] Lambda deployment ready
-- [ ] Performance optimized
+- [ ] Performance targets met
+
+**Status**: MVP COMPLETE 🎉
 
 ---
 
-## Development Tips
+## Success Metrics
 
-### Getting Started
-1. Complete Phase 0 in one sitting (setup)
-2. Implement types before any logic (Phase 1)
-3. Build utilities first (Phase 2)
-4. Test each module in isolation before integration
-
-### Testing Strategy
-- Write unit tests alongside implementation
-- Use TDD for complex logic (game detection, vision analysis)
-- Test with real games early and often
-- Keep integration tests fast (use mocks where possible)
-
-### Common Pitfalls
-- Don't skip type definitions - they save time later
-- Test timeout logic thoroughly - Lambda has hard limits
-- Vision prompts require iteration - start simple
-- Screenshot quality affects analysis - don't over-compress
-
-### When Stuck
-1. Check architecture.md for design patterns
-2. Review technical-concerns.md for known issues
-3. Reference required-reading.md for documentation
-4. Test with simplified games first
+| Metric | Baseline (Manual) | Target (DreamUp) | Status |
+|--------|------------------|------------------|--------|
+| Time per test | 15-30 min | <4 min | TBD |
+| Cost per test | $5-10 | <$0.05 | TBD |
+| False positive rate | N/A | <1% | TBD |
+| False negative rate | N/A | <20% | TBD |
+| Critical bug detection | Variable | 80%+ | TBD |
 
 ---
 
-## AI Agent Consumption Notes
+## Testing Strategy
 
-This task list is designed for:
-- **Sequential execution** - tasks build on previous tasks
-- **Clear acceptance criteria** - know when task is done
-- **Effort estimates** - plan time allocation
-- **Dependency tracking** - understand blockers
-- **Incremental validation** - test as you build
+### After Each Iteration
+- Run with at least 1 real game
+- Verify new feature works as expected
+- Check for regressions in previous features
+- Update Memory Bank with learnings
 
-When implementing:
-1. Follow phases in order (don't skip ahead)
-2. Mark tasks complete as you go
-3. Run tests after each phase
-4. Update effort estimates based on actual time
-5. Document any deviations from plan
+### Continuous Testing
+- Unit tests run on every file change
+- Integration tests run before committing
+- Manual smoke tests with real games
+
+### Edge Cases to Test
+- [ ] Very slow loading games (60s+)
+- [ ] Games with splash screens
+- [ ] Games with multiple start buttons
+- [ ] Games that crash intentionally
+- [ ] Games with no visible UI
+- [ ] Canvas games vs iframe games vs DOM games
+
+---
+
+## Notes
+
+### Game Engine Context
+- **Scene Stack**: Canvas2D/3D (ECS runtime), UI (DOM), Composite (layers)
+- **Input System**: Actions (discrete events), Axes (continuous -1 to 1)
+- **Input Schema**: First-party games provide JS snippets, third-party games provide semantic descriptions
+
+### Development Principles
+1. **Test early, test often**: Real games after every iteration
+2. **Fail fast**: Discover issues in hours, not weeks
+3. **Incremental complexity**: Add one feature at a time
+4. **Working software**: Every iteration produces a working agent
+
+### Reference Documents
+- **Original detailed plan**: `task-list-waterfall-original.md`
+- **Architecture**: `architecture.md`
+- **Technical concerns**: `technical-concerns.md`
+- **System patterns**: `memory-bank/systemPatterns.md`
+
+---
+
+**Current Status**: Ready to begin Iteration 1
+**Next Action**: Implement Browser Manager (I1.1)

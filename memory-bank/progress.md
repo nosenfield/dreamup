@@ -1,21 +1,90 @@
 # Progress Tracker: DreamUp
 
 **Last Updated**: November 3, 2025
+**Development Approach**: Iterative (5 iterations)
+
+---
+
+## 🔄 Strategic Pivot to Iterative Development
+
+**Switched from waterfall phases to iterative development** based on expert recommendation and game engine context.
+
+**Why**: De-risk early (validate Browserbase in 2-3 hours, not 30+), test with real games after each iteration, build working software incrementally.
+
+**Original plan**: Archived in `_docs/task-list-waterfall-original.md` (full details preserved)
+**Current plan**: `_docs/task-list.md` (iteration-based, same work, different order)
 
 ---
 
 ## Project Milestones
 
-- [ ] **Milestone 1: Foundation Complete** (Phase 0-2) - 12-16 hours
-- [ ] **Milestone 2: Core Features Complete** (Phase 3-4) - 21-29 hours
-- [ ] **Milestone 3: MVP Complete** (Phase 5-6) - 34-42 hours
-- [ ] **Milestone 4: Production Ready** (Phase 7) - 9-14 hours
+- [x] **Milestone 1: Foundation Complete** (Phase 0-2) - ✅ COMPLETE
+- [ ] **Milestone 2: Iteration 1-2 Complete** (Minimal agent + interaction) - 5-7 hours
+- [ ] **Milestone 3: Iteration 3-4 Complete** (Detection + vision) - 9-12 hours
+- [ ] **Milestone 4: MVP Complete** (Iteration 5 + polish) - 6-8 hours
 
-**Current Milestone**: Milestone 1 (Foundation Complete)
+**Current Milestone**: Milestone 2 (Iteration 1-2)
 
 ---
 
-## Phase Status
+## Iteration Status
+
+### Iteration 1: Minimal Working Agent
+**Goal**: Validate Browserbase integration, load game, take screenshot
+**Status**: 🔜 Next
+**Progress**: 0/2 tasks
+
+- [ ] I1.1: Implement Browser Manager (2-3 hours)
+- [ ] I1.2: Implement Minimal Main Orchestration (1 hour)
+
+**Completion Criteria**:
+- [ ] Real game loads in Browserbase
+- [ ] Screenshot captured and saved
+- [ ] No errors in execution
+
+### Iteration 2: Basic Interaction
+**Goal**: Add keyboard input simulation
+**Status**: ⏳ Pending
+**Progress**: 0/3 tasks
+
+- [ ] I2.1: Implement Basic Game Interactor (2-3 hours)
+- [ ] I2.2: Implement Basic Screenshot Capturer (1 hour)
+- [ ] I2.3: Expand Main Orchestration (30 min)
+
+### Iteration 3: Detection & Monitoring
+**Goal**: Detect game type, monitor console errors
+**Status**: ⏳ Pending
+**Progress**: 0/3 tasks
+
+- [ ] I3.1: Implement Game Detector (3-4 hours)
+- [ ] I3.2: Implement Error Monitor (2-3 hours)
+- [ ] I3.3: Expand Main Orchestration (30 min)
+
+### Iteration 4: Vision Analysis
+**Goal**: Integrate GPT-4 Vision for playability scoring
+**Status**: ⏳ Pending
+**Progress**: 0/4 tasks
+
+- [ ] I4.1: Create Vision Prompts (2-3 hours)
+- [ ] I4.2: Implement Vision Analyzer (4-5 hours)
+- [ ] I4.3: Complete Game Interactor with Vision (2 hours)
+- [ ] I4.4: Expand Main Orchestration (1-2 hours)
+
+### Iteration 5: Input Schema & Polish
+**Goal**: Parse InputSchema, polish features, prepare for production
+**Status**: ⏳ Pending
+**Progress**: 0/6 tasks
+
+- [ ] I5.1: Implement Input Schema Parser (2-3 hours)
+- [ ] I5.2: Integrate Input Schema into Interactor (2 hours)
+- [ ] I5.3: Complete Screenshot Capturer (1-2 hours)
+- [ ] I5.4: Implement CLI and Lambda Interfaces (2-3 hours)
+- [ ] I5.5: Comprehensive Testing & Validation (4-6 hours)
+- [ ] I5.6: Documentation & Deployment Prep (3-4 hours)
+
+---
+
+## Completed Foundation (Phases 0-2)
 
 ### Phase 0: Project Setup & Configuration
 **Status**: ✅ Complete
@@ -44,7 +113,7 @@
 
 ---
 
-## Completed Tasks
+## Completed Tasks Details
 
 ### Template Overlay (Pre-Phase 0)
 - [x] Copy ai-project-template structure into dreamup directory
@@ -148,20 +217,24 @@
   - FileManager matches architecture.md specifications
   - **Phase 2 Complete!** All 3 utility tasks finished
 
+### Strategic Enhancements
+- [x] InputSchema Support Added (Nov 3, 2025)
+  - Added InputSchema interface to src/types/game-test.types.ts
+  - Updated GameTestRequest with optional inputSchema field
+  - Added Pattern 6 to memory-bank/systemPatterns.md
+  - 3 new unit tests (all passing)
+  - Enables game-specific control information for better testing
+- [x] Strategic Pivot to Iterative Development (Nov 3, 2025)
+  - Reorganized Phases 3-7 into 5 iterations
+  - Archived original plan in task-list-waterfall-original.md
+  - Created new iteration-based task-list.md
+  - Updated Memory Bank documentation
+
 ---
 
 ## In Progress
 
-**Current Task**: Ad-hoc enhancement complete - InputSchema support added
-
----
-
-## Upcoming Tasks (Next 3)
-
-1. **P3.1: Implement Browser Manager**
-2. **P3.2: Implement Game Detector**
-3. **P3.3: Implement Error Monitor**
-4. **P3.5: Implement Game Interactor** (will use InputSchema when provided)
+**Current Task**: Iteration 1 (I1.1: Implement Browser Manager)
 
 ---
 
@@ -183,20 +256,39 @@
 - 5 type definition tests passing (including InputSchema)
 - **Total: 104 tests passing**
 
+---
+
 ## Known Issues
 
 None - all tests passing, TypeScript compilation clean
+
+---
 
 ## Technical Debt
 
 None identified at this time
 
+---
+
 ## Time Tracking
 
-| Phase | Estimated | Actual | Variance |
-|-------|-----------|--------|----------|
+| Phase/Iteration | Estimated | Actual | Variance |
+|-----------------|-----------|--------|----------|
+| **Foundation (Phases 0-2)** | **12-16 hours** | **TBD** | **-** |
 | Phase 0 | 3-4 hours | TBD | - |
 | Phase 1 | 5-6 hours | TBD | - |
 | Phase 2 | 4-6 hours | TBD | - |
-| Ad-hoc: InputSchema | <1 hour | <1 hour | - |
-| **Total** | **67-94 hours** | **TBD** | **-** |
+| **Iterations (1-5)** | **20-27 hours** | **TBD** | **-** |
+| Iteration 1 | 2-3 hours | TBD | - |
+| Iteration 2 | 3-4 hours | TBD | - |
+| Iteration 3 | 4-5 hours | TBD | - |
+| Iteration 4 | 5-7 hours | TBD | - |
+| Iteration 5 | 6-8 hours | TBD | - |
+| **Ad-hoc Enhancements** | **<1 hour** | **<1 hour** | **-** |
+| InputSchema Support | <1 hour | <1 hour | - |
+| **Total MVP** | **32-44 hours** | **TBD** | **-** |
+
+**Note**: Original waterfall estimate was 67-94 hours. Iterative approach reduces time through:
+- Earlier testing (fewer rework cycles)
+- Incremental complexity (simpler debugging)
+- Focused iterations (clear scope per iteration)
