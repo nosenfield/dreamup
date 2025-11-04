@@ -20,7 +20,10 @@ const mockPage = {
 
 const mockStagehand = {
   init: mock(() => Promise.resolve()),
-  page: mockPage,
+  context: {
+    pages: mock(() => [mockPage]),
+    activePage: mock(() => mockPage),
+  },
 };
 
 // Mock Stagehand module

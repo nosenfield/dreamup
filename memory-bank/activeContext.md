@@ -52,6 +52,18 @@
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **Stagehand v3 Upgrade** (Nov 4, 2025)
+  - Upgraded from Stagehand v1.x to v3.0.1
+  - Resolved critical Playwright/Bun incompatibility bug
+  - Updated `BrowserManager` to use v3 API (`context.pages()[0]`)
+  - Changed Page type to `AnyPage` from Stagehand v3
+  - Updated integration tests with v3 mock structure
+  - All 151 tests passing
+  - TypeScript compilation passes
+  - **Iteration 1 unblocked** - ready for real game testing
+  - Updated `architecture.md` to reflect v3.0.1 version
+  - Updated `task-list.md` to mark I1.1 as complete
+
 - ✅ **I1.2: Implement Minimal Main Orchestration**
   - Updated `src/main.ts` with `runQA()` function
   - Generate session ID using nanoid

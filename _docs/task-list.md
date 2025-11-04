@@ -32,7 +32,7 @@ Based on expert recommendation and game engine context:
 
 | Iteration | Focus | Time | Status |
 |-----------|-------|------|--------|
-| **Iteration 1** | Minimal Working Agent | 2-3 hrs | 🔜 Next |
+| **Iteration 1** | Minimal Working Agent | 2-3 hrs | ✅ Complete |
 | **Iteration 2** | Basic Interaction | 3-4 hrs | ⏳ Pending |
 | **Iteration 3** | Detection & Monitoring | 4-5 hrs | ⏳ Pending |
 | **Iteration 4** | Vision Analysis | 5-7 hrs | ⏳ Pending |
@@ -52,10 +52,8 @@ Based on expert recommendation and game engine context:
 
 #### I1.1: Implement Browser Manager
 **Effort**: M (2-3 hours)
-**Status**: `[⚠️]` - **RUNTIME BUG: Requires Stagehand v3 upgrade**
+**Status**: `[x]` - ✅ COMPLETE
 **Original Reference**: P3.1 in `task-list-waterfall-original.md`
-
-**⚠️ CRITICAL NOTE**: Initial implementation with Stagehand v1.x discovered runtime bug - Playwright incompatibility with Bun. **Requires upgrade to Stagehand v3.0.1** (see `_docs/stagehand-v3-upgrade-guide.md`).
 
 **Implementation**:
 - [x] Create `src/core/browser-manager.ts`
@@ -65,14 +63,14 @@ Based on expert recommendation and game engine context:
   - [x] `cleanup()` - Close browser session
 - [x] Add error handling and logging
 - [x] Write integration tests with mock Browserbase
-- [ ] **BUG FIX**: Upgrade to Stagehand v3.0.1 (15-20 min)
+- [x] **BUG FIX**: Upgrade to Stagehand v3.0.1 ✅ COMPLETE
 
 **Acceptance Criteria**:
 - [x] Browser initializes successfully (with mocks)
 - [x] Can navigate to URLs (with mocks)
 - [x] Cleanup releases resources (with mocks)
 - [x] Errors are caught and logged
-- [ ] **Real game test passes** (blocked by Playwright/Bun bug)
+- [x] **Real game test passes** ✅ Stagehand v3 upgrade complete - Bun-compatible
 
 ---
 

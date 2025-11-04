@@ -12,13 +12,13 @@
     "dev": "bun --watch src/main.ts"
   },
   "dependencies": {
-    "@browserbasehq/sdk": "^1.0.0",
-    "@browserbasehq/stagehand": "^1.0.0",
-    "ai": "^3.4.0",
     "@ai-sdk/openai": "^0.0.66",
-    "zod": "^3.22.4",
+    "@browserbasehq/sdk": "^1.0.0",
+    "@browserbasehq/stagehand": "3.0.1",
+    "ai": "^3.4.0",
     "nanoid": "^5.0.7",
-    "p-timeout": "^6.1.2"
+    "p-timeout": "^6.1.2",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bun": "latest",

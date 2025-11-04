@@ -71,7 +71,7 @@ This document defines the technical architecture, tech stack, directory structur
 ```json
 {
   "browserbase": "^1.0.0",
-  "stagehand": "^1.0.0"
+  "stagehand": "^3.0.1"
 }
 ```
 

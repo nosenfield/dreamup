@@ -8,8 +8,7 @@
  * @module core.browser-manager
  */
 
-import { Stagehand } from '@browserbasehq/stagehand';
-import type { Page } from '@browserbasehq/stagehand';
+import { Stagehand, type AnyPage } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
@@ -64,7 +63,7 @@ export class BrowserManager {
   private readonly navigateTimeout: number;
   
   private stagehand: Stagehand | null = null;
-  private page: Page | null = null;
+  private page: AnyPage | null = null;
   private isInitialized: boolean = false;
 
   /**
@@ -97,7 +96,7 @@ export class BrowserManager {
    * // Now you can use page for automation
    * ```
    */
-  async initialize(): Promise<Page> {
+  async initialize(): Promise<AnyPage> {
     if (this.isInitialized && this.page) {
       this.logger.warn('Browser already initialized', {});
       return this.page;
@@ -123,8 +122,18 @@ export class BrowserManager {
         `Browser initialization timed out after ${this.initTimeout}ms`
       );
 
-      // Get page object from Stagehand
-      this.page = this.stagehand.page;
+      // Get page object from Stagehand v3 context
+      // v3 uses context API - get active page or first page from context
+      const activePage = this.stagehand.context.activePage();
+      if (!activePage) {
+        const pages = this.stagehand.context.pages();
+        if (pages.length === 0) {
+          throw new Error('No pages available after initialization');
+        }
+        this.page = pages[0];
+      } else {
+        this.page = activePage;
+      }
       this.isInitialized = true;
 
       this.logger.info('Browser session initialized successfully', {
@@ -171,8 +180,10 @@ export class BrowserManager {
     this.logger.info('Navigating to URL', { url });
 
     try {
+      // Stagehand v3 Page type - use type assertion since we know Browserbase uses Stagehand Page
+      const page = this.page as any;
       await withTimeout(
-        this.page.goto(url, { waitUntil: 'networkidle' }),
+        page.goto(url, { waitUntil: 'networkidle' }),
         this.navigateTimeout,
         `Navigation to ${url} timed out after ${this.navigateTimeout}ms`
       );
@@ -249,7 +260,7 @@ export class BrowserManager {
    * 
    * @returns Page object or null
    */
-  getPage(): Page | null {
+  getPage(): AnyPage | null {
     return this.page;
   }
 
