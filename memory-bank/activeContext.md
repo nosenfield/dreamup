@@ -38,24 +38,39 @@
 - ✅ I2.3: Expand Main Orchestration - COMPLETE
 
 ### Next Immediate Tasks
-1. **I3.2: Implement Error Monitor** (Iteration 3)
-   - Create ErrorMonitor class
-   - Listen to console errors/warnings
-   - Capture and categorize errors
-2. **I3.3: Expand Main Orchestration** (Iteration 3)
+1. **I3.3: Expand Main Orchestration** (Iteration 3)
    - Integrate GameDetector and ErrorMonitor into main.ts
    - Detect game type after navigation
    - Wait for game ready before interaction
-   - Include metadata in result
-3. **Test with Real Game** (Iteration 3 validation)
+   - Start error monitoring
+   - Include game type and errors in result metadata
+2. **Test with Real Game** (Iteration 3 validation)
    - Verify game type detection works
    - Verify ready detection prevents premature interaction
+   - Verify console errors are captured
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I3.2: Implement Error Monitor** (Nov 4, 2025)
+  - Created `src/core/error-monitor.ts` with ErrorMonitor class
+  - Implemented `startMonitoring()` - Overrides console.error() and console.warn() in browser context
+  - Implemented `getErrors()` - Retrieves all captured ConsoleError objects
+  - Implemented `hasErrors()` - Checks if any errors/warnings exist
+  - Implemented `hasCriticalError()` - Distinguishes errors from warnings
+  - Implemented `stopMonitoring()` - Restores original console methods and cleans up listeners
+  - Also listens to window.onerror and window.onunhandledrejection for unhandled errors
+  - Errors stored in window.__qaErrors array accessible from Node context
+  - Comprehensive error handling with structured logging
+  - Created `tests/unit/error-monitor.test.ts` - 21 tests, all passing
+  - Updated `src/core/index.ts` to export ErrorMonitor
+  - TypeScript compilation passes (note: intentional @ts-ignore for browser context code)
+  - Follows dependency injection pattern (logger in constructor)
+  - Uses existing ConsoleError interface from types
+  - **Acceptance Criteria Met**: ✅ Captures console errors, ✅ Captures console warnings, ✅ Can retrieve all errors, ✅ Correctly identifies critical errors, ✅ Tests verify error capture
+
 - ✅ **I3.1: Implement Game Detector** (Nov 4, 2025)
   - Created `src/core/game-detector.ts` with GameDetector class
   - Implemented `detectType()` - Detects CANVAS, IFRAME, DOM, or UNKNOWN game types

@@ -16,3 +16,6 @@ export type { ScreenshotCapturerConfig } from './screenshot-capturer';
 export { GameDetector, GameType } from './game-detector';
 export type { GameDetectorConfig } from './game-detector';
 
+export { ErrorMonitor } from './error-monitor';
+export type { ErrorMonitorConfig } from './error-monitor';
+
