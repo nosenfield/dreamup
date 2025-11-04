@@ -10,20 +10,32 @@
 ### What We're Working On
 **Phase 1: Type Definitions & Configuration** - In Progress:
 - ✅ P1.1: Define Core Types - Complete!
-- Next: P1.2: Create Configuration Constants
+- ✅ P1.2: Create Configuration Constants - Complete!
+- Next: P1.3: Create Zod Schemas
 
 ### Next Immediate Tasks
-1. **P1.2: Create Configuration Constants**
-   - Create constants for timeouts, thresholds, paths
-   - Create feature flags configuration
-2. **P1.3: Create Zod Schemas** (after P1.2)
-3. Continue with Phase 2 utilities
+1. **P1.3: Create Zod Schemas**
+   - Create Zod validation schemas for vision analysis results
+   - Export TypeScript types via z.infer<>
+2. Continue with Phase 2 utilities
+3. Continue with foundation development
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session
+- ✅ P1.2: Create Configuration Constants
+  - Created `src/config/constants.ts` with TIMEOUTS, THRESHOLDS, and PATHS objects
+  - Created `src/config/feature-flags.ts` with DEFAULT_FLAGS and getFeatureFlags() function
+  - Created `src/config/index.ts` to export all configuration
+  - All constants support environment variable overrides
+  - Feature flags load from environment variables (DEBUG, ENABLE_*)
+  - All constants have comprehensive JSDoc comments
+  - TypeScript compilation passes with no errors
+  - Unit tests created and passing (15 tests, all passing)
+  - Constants match architecture.md specifications
+
 - ✅ P1.1: Define Core Types
   - Created `src/types/game-test.types.ts` with 8 interfaces (GameTestRequest, GameTestResult, TestConfig, Issue, TestMetadata, ClickableElement, Screenshot, ConsoleError)
   - Created `src/types/config.types.ts` with 3 interfaces (FeatureFlags, Timeouts, Thresholds)

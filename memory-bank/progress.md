@@ -28,10 +28,10 @@
 
 ### Phase 1: Type Definitions & Configuration
 **Status**: 🚧 In Progress
-**Progress**: 1/3 tasks
+**Progress**: 2/3 tasks
 
 - [x] P1.1: Define Core Types
-- [ ] P1.2: Create Configuration Constants
+- [x] P1.2: Create Configuration Constants
 - [ ] P1.3: Create Zod Schemas
 
 ---
@@ -74,20 +74,30 @@
   - TypeScript compilation passes with no errors (`tsc --noEmit`)
   - Unit tests created and passing to verify type imports work
   - Types match architecture.md specifications
+- [x] P1.2: Create Configuration Constants
+  - Created `src/config/constants.ts` with TIMEOUTS, THRESHOLDS, and PATHS objects
+  - Created `src/config/feature-flags.ts` with DEFAULT_FLAGS and getFeatureFlags() function
+  - Created `src/config/index.ts` to export all configuration
+  - All constants support environment variable overrides
+  - Feature flags load from environment variables (DEBUG, ENABLE_*)
+  - All constants have comprehensive JSDoc comments
+  - TypeScript compilation passes with no errors (`tsc --noEmit`)
+  - Unit tests created and passing (15 tests, all passing)
+  - Constants match architecture.md specifications
 
 ---
 
 ## In Progress
 
-**Current Task**: P1.2: Create Configuration Constants
+**Current Task**: P1.3: Create Zod Schemas
 
 ---
 
 ## Upcoming Tasks (Next 3)
 
-1. **P1.2: Create Configuration Constants**
-2. **P1.3: Create Zod Schemas**
-3. **P2.1: Create Logger Utility**
+1. **P1.3: Create Zod Schemas**
+2. **P2.1: Create Logger Utility**
+3. **P2.2: Create Timeout Utility**
 
 ---
 
