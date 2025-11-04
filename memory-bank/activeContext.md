@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 4, 2025
-**Session**: Critical Bug Fix - Stagehand v3 Upgrade Required (Playwright/Bun incompatibility)
+**Session**: Iteration 2 - Basic Interaction (I2.1 Complete)
 
 ---
 
@@ -28,30 +28,49 @@
 - Phase 1: Types & Config (3/3 tasks) + InputSchema enhancement
 - Phase 2: Utilities (3/3 tasks)
 
-🔴 **Iteration 1: BLOCKED** - Critical Runtime Bug Discovered
-- ⚠️ I1.1: Implement Browser Manager - RUNTIME BUG (Stagehand v1 uses Playwright, incompatible with Bun)
+✅ **Iteration 1: Complete**
+- ✅ I1.1: Implement Browser Manager - COMPLETE (including Stagehand v3 upgrade)
 - ✅ I1.2: Implement Minimal Main Orchestration - COMPLETE
-- 🔧 **Bug Fix In Progress**: Upgrade to Stagehand v3.0.1
 
-**Critical Issue**: Runtime test failed with error: "Playwright does not currently support the Bun runtime environment"
+🔄 **Iteration 2: Basic Interaction** - In Progress
+- ✅ I2.1: Implement Basic Game Interactor - COMPLETE
+- ⏳ I2.2: Implement Basic Screenshot Capturer - Next
+- ⏳ I2.3: Expand Main Orchestration - Pending
 
 ### Next Immediate Tasks
-1. **CRITICAL: Fix I1.1 - Upgrade Stagehand v1 → v3** (15-20 minutes)
-   - Upgrade package: `bun add @browserbasehq/stagehand@3.0.1`
-   - Update `src/core/browser-manager.ts`: Change page access pattern
-   - Update integration tests for v3 API
-   - Test with real game to verify fix
-2. **Complete Iteration 1 Testing**
-   - Verify real game loads in Browserbase
-   - Verify screenshot captured and saved
-   - Verify no runtime errors
-3. **Iteration 2**: Basic Interaction
+1. **I2.2: Implement Basic Screenshot Capturer** (1 hour)
+   - Create `src/core/screenshot-capturer.ts`
+   - Implement `capture()` method with stage tracking
+   - Save screenshots with unique IDs
+2. **I2.3: Expand Main Orchestration** (30 min)
+   - Integrate GameInteractor and ScreenshotCapturer into `main.ts`
+   - Capture before/after screenshots
+   - Simulate keyboard inputs for 30 seconds
+3. **Test with Real Game**
+   - Verify keyboard inputs affect game state
+   - Verify multiple screenshots captured correctly
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I2.1: Implement Basic Game Interactor** (Nov 4, 2025)
+  - Created `src/core/game-interactor.ts` with GameInteractor class
+  - Implemented `simulateKeyboardInput()` - Sends WASD, arrows, space, enter keys
+  - Implemented `clickAtCoordinates()` - Mouse click at pixel coordinates
+  - Added comprehensive error handling with structured logging
+  - All operations wrapped with timeout utilities (INTERACTION_TIMEOUT)
+  - Validates coordinates are non-negative integers
+  - Cycles through available keys over specified duration with delays
+  - Created `src/core/index.ts` to export GameInteractor
+  - Unit tests: 18 tests, all passing
+  - TypeScript compilation passes
+  - Follows dependency injection pattern (logger/config in constructor)
+  - Uses existing Logger and timeout utilities
+  - **Acceptance Criteria Met**: ✅ Can send keyboard inputs, ✅ Can click at coordinates, ✅ Interactions don't crash browser, ✅ Errors handled gracefully
+  - **Iteration 2 Progress**: 1/3 tasks complete
+
 - ✅ **Stagehand v3 Upgrade** (Nov 4, 2025)
   - Upgraded from Stagehand v1.x to v3.0.1
   - Resolved critical Playwright/Bun incompatibility bug
@@ -282,8 +301,10 @@
 - `memory-bank/systemPatterns.md`: Design patterns and invariants
 
 ### Key Files Currently Being Modified
-- `src/main.ts`: Minimal orchestration ✅ COMPLETE (I1.2)
-- `tests/integration/main.test.ts`: Main orchestration tests ✅ COMPLETE
+- `src/core/game-interactor.ts`: GameInteractor implementation ✅ COMPLETE (I2.1)
+- `tests/unit/game-interactor.test.ts`: GameInteractor unit tests ✅ COMPLETE (I2.1)
+- `src/core/index.ts`: Core module exports (includes GameInteractor) ✅ COMPLETE (I2.1)
+- `src/main.ts`: Minimal orchestration ✅ COMPLETE (I1.2) - Will be updated in I2.3
+- `tests/integration/main.test.ts`: Main orchestration tests ✅ COMPLETE - Will be updated in I2.3
 - `src/core/browser-manager.ts`: BrowserManager implementation ✅ COMPLETE
-- `src/core/index.ts`: Core module exports ✅ COMPLETE
 - `tests/integration/browser-manager.test.ts`: BrowserManager integration tests ✅ COMPLETE

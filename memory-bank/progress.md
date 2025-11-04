@@ -50,10 +50,10 @@
 
 ### Iteration 2: Basic Interaction
 **Goal**: Add keyboard input simulation
-**Status**: ⏳ Pending
-**Progress**: 0/3 tasks
+**Status**: 🔄 In Progress
+**Progress**: 1/3 tasks complete
 
-- [ ] I2.1: Implement Basic Game Interactor (2-3 hours)
+- [x] I2.1: Implement Basic Game Interactor (2-3 hours) ✅ COMPLETE (Nov 4, 2025)
 - [ ] I2.2: Implement Basic Screenshot Capturer (1 hour)
 - [ ] I2.3: Expand Main Orchestration (30 min)
 
@@ -225,6 +225,26 @@
 
 ### Iteration 1: Minimal Working Agent
 - [x] I1.1: Implement Browser Manager (Nov 4, 2025) ✅ COMPLETE
+- [x] I1.2: Implement Minimal Main Orchestration (Nov 4, 2025) ✅ COMPLETE
+
+### Iteration 2: Basic Interaction
+- [x] I2.1: Implement Basic Game Interactor (Nov 4, 2025) ✅ COMPLETE
+  - Created `src/core/game-interactor.ts` with GameInteractor class
+  - Implemented `simulateKeyboardInput()` - Sends WASD, arrows, space, enter keys over duration
+  - Implemented `clickAtCoordinates()` - Mouse click at pixel coordinates
+  - Added comprehensive error handling with structured logging
+  - All operations wrapped with timeout utilities (INTERACTION_TIMEOUT)
+  - Validates coordinates are non-negative integers
+  - Cycles through available keys over specified duration with 150ms delays
+  - Created `src/core/index.ts` to export GameInteractor
+  - Unit tests: 18 tests, all passing
+  - TypeScript compilation passes
+  - Follows dependency injection pattern (logger/config in constructor)
+  - Uses existing Logger and timeout utilities
+  - **Acceptance Criteria Met**: ✅ Can send keyboard inputs, ✅ Can click at coordinates, ✅ Interactions don't crash browser, ✅ Errors handled gracefully
+
+### Iteration 1: Minimal Working Agent
+- [x] I1.1: Implement Browser Manager (Nov 4, 2025) ✅ COMPLETE
   - Created `src/core/browser-manager.ts` with BrowserManager class
   - Implemented `initialize()` - Creates Browserbase session, connects Stagehand
   - Implemented `navigate(url)` - Navigates to URL with networkidle wait
@@ -277,9 +297,9 @@
 
 ## In Progress
 
-**Current Task**: Iteration 2 (I2.1: Implement Basic Game Interactor)
-**Status**: Ready to begin - Iteration 1 complete and tested
-**Previous Task**: ✅ Stagehand v3 upgrade complete - Iteration 1 fully functional
+**Current Task**: Iteration 2 (I2.2: Implement Basic Screenshot Capturer)
+**Status**: Ready to begin - I2.1 complete and tested
+**Previous Task**: ✅ I2.1: Implement Basic Game Interactor complete - Keyboard and mouse interaction working
 
 ---
 
@@ -299,9 +319,10 @@
 - 25 schema validation tests passing
 - 15 config tests passing
 - 5 type definition tests passing (including InputSchema)
+- 18 game-interactor unit tests passing (NEW)
 - 11 browser-manager integration tests passing
 - 10 main orchestration integration tests passing
-- **Total: 125 tests passing**
+- **Total: 143 tests passing** (18 new tests added)
 
 ---
 
