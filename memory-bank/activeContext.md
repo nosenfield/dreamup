@@ -72,9 +72,10 @@
 
 ### Previous Tasks
 - ✅ P0.2: Install Dependencies
-  - Installed missing dev dependencies: `@types/jest@30.0.0`, `jest@30.2.0`, `ts-jest@29.4.5`
+  - Installed dev dependencies: `@types/bun`, `@types/node`, `typescript`
   - Verified all packages installed successfully with `bun install`
   - Confirmed `bun run` command works correctly
+  - Note: Bun has built-in test runner, so no Jest/Vitest needed. Use `bun:test` for test imports.
   - Note: Skipped `dotenv` as Bun automatically loads `.env` files (confirmed via Context7 docs)
 
 ### Previous Tasks

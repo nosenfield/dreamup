@@ -50,9 +50,10 @@
   - Created `.gitkeep` files for output directories
   - Verified `package.json` has correct name "dreamup"
 - [x] P0.2: Install Dependencies
-  - Installed dev dependencies: `@types/jest@30.0.0`, `jest@30.2.0`, `ts-jest@29.4.5`
+  - Installed dev dependencies: `@types/bun`, `@types/node`, `typescript`
   - Verified all packages installed successfully with `bun install`
   - Confirmed `bun run` command works correctly
+  - Note: Bun has built-in test runner (`bun:test`), so no Jest/Vitest needed
   - Note: Skipped `dotenv` as Bun automatically loads `.env` files
 - [x] P0.3: Configure TypeScript
   - Verified `tsconfig.json` meets all task requirements

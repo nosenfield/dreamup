@@ -68,8 +68,8 @@ This document provides a complete task breakdown for building the autonomous gam
 - [ ] Install dev dependencies:
   ```bash
   bun add -d @types/bun @types/node typescript
-  bun add -d @types/jest jest ts-jest
   ```
+  **Note**: Bun has a built-in test runner, so no additional testing framework (Jest, Vitest) is needed. Use `bun:test` for test imports.
 - [ ] Verify installations: `bun install`
 
 **Acceptance Criteria**:
