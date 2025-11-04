@@ -10,3 +10,6 @@ export type { BrowserManagerConfig } from './browser-manager';
 export { GameInteractor } from './game-interactor';
 export type { GameInteractorConfig } from './game-interactor';
 
+export { ScreenshotCapturer } from './screenshot-capturer';
+export type { ScreenshotCapturerConfig } from './screenshot-capturer';
+

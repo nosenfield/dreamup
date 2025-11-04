@@ -19,11 +19,11 @@
 ## Project Milestones
 
 - [x] **Milestone 1: Foundation Complete** (Phase 0-2) - ✅ COMPLETE
-- [ ] **Milestone 2: Iteration 1-2 Complete** (Minimal agent + interaction) - 5-7 hours
+- [x] **Milestone 2: Iteration 1-2 Complete** (Minimal agent + interaction) - ✅ COMPLETE
 - [ ] **Milestone 3: Iteration 3-4 Complete** (Detection + vision) - 9-12 hours
 - [ ] **Milestone 4: MVP Complete** (Iteration 5 + polish) - 6-8 hours
 
-**Current Milestone**: Milestone 2 (Iteration 1-2)
+**Current Milestone**: Milestone 3 (Iteration 3-4)
 
 ---
 
@@ -50,12 +50,12 @@
 
 ### Iteration 2: Basic Interaction
 **Goal**: Add keyboard input simulation
-**Status**: 🔄 In Progress
-**Progress**: 1/3 tasks complete
+**Status**: ✅ COMPLETE
+**Progress**: 3/3 tasks complete
 
 - [x] I2.1: Implement Basic Game Interactor (2-3 hours) ✅ COMPLETE (Nov 4, 2025)
-- [ ] I2.2: Implement Basic Screenshot Capturer (1 hour)
-- [ ] I2.3: Expand Main Orchestration (30 min)
+- [x] I2.2: Implement Basic Screenshot Capturer (1 hour) ✅ COMPLETE (Nov 4, 2025)
+- [x] I2.3: Expand Main Orchestration (30 min) ✅ COMPLETE (Nov 4, 2025)
 
 ### Iteration 3: Detection & Monitoring
 **Goal**: Detect game type, monitor console errors
@@ -243,6 +243,28 @@
   - Uses existing Logger and timeout utilities
   - **Acceptance Criteria Met**: ✅ Can send keyboard inputs, ✅ Can click at coordinates, ✅ Interactions don't crash browser, ✅ Errors handled gracefully
 
+- [x] I2.2: Implement Basic Screenshot Capturer (Nov 4, 2025) ✅ COMPLETE
+  - Created `src/core/screenshot-capturer.ts` with ScreenshotCapturer class
+  - Implemented `capture()` method - Takes screenshot from page, saves via FileManager
+  - Supports all stage types (initial_load, after_interaction, final_state)
+  - Wraps operations with timeout (SCREENSHOT_TIMEOUT)
+  - Added comprehensive error handling with structured logging
+  - Created `src/core/index.ts` to export ScreenshotCapturer
+  - Unit tests: 9 tests, all passing
+  - TypeScript compilation passes
+  - Follows dependency injection pattern (logger/fileManager in constructor)
+  - Uses existing Logger, FileManager, and timeout utilities
+  - **Acceptance Criteria Met**: ✅ Screenshots save correctly with unique IDs, ✅ Stage information tracked, ✅ Errors handled gracefully
+
+- [x] I2.3: Expand Main Orchestration (Nov 4, 2025) ✅ COMPLETE
+  - Updated `src/main.ts` to use GameInteractor and ScreenshotCapturer
+  - Integrated keyboard input simulation (30 seconds duration)
+  - Captures 3 screenshots: initial_load, after_interaction, final_state
+  - Returns result with all screenshot paths
+  - Updated integration tests for new flow (11 tests, all passing)
+  - **Acceptance Criteria Met**: ✅ Three screenshots captured, ✅ Keyboard inputs sent, ✅ No errors during interaction
+  - **Iteration 2 Complete!** Ready for real game testing
+
 ### Iteration 1: Minimal Working Agent
 - [x] I1.1: Implement Browser Manager (Nov 4, 2025) ✅ COMPLETE
   - Created `src/core/browser-manager.ts` with BrowserManager class
@@ -297,9 +319,9 @@
 
 ## In Progress
 
-**Current Task**: Iteration 2 (I2.2: Implement Basic Screenshot Capturer)
-**Status**: Ready to begin - I2.1 complete and tested
-**Previous Task**: ✅ I2.1: Implement Basic Game Interactor complete - Keyboard and mouse interaction working
+**Current Task**: Iteration 3 (I3.1: Implement Game Detector)
+**Status**: Ready to begin - Iteration 2 complete and tested
+**Previous Task**: ✅ I2.3: Expand Main Orchestration complete - 3 screenshots captured, keyboard simulation working
 
 ---
 
@@ -319,10 +341,11 @@
 - 25 schema validation tests passing
 - 15 config tests passing
 - 5 type definition tests passing (including InputSchema)
-- 18 game-interactor unit tests passing (NEW)
+- 18 game-interactor unit tests passing
+- 9 screenshot-capturer unit tests passing (NEW)
 - 11 browser-manager integration tests passing
-- 10 main orchestration integration tests passing
-- **Total: 143 tests passing** (18 new tests added)
+- 11 main orchestration integration tests passing (updated for I2.3)
+- **Total: 152 tests passing** (9 new tests added)
 
 ---
 

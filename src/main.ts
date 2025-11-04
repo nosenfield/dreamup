@@ -10,7 +10,7 @@
  */
 
 import { nanoid } from 'nanoid';
-import { BrowserManager } from './core/browser-manager';
+import { BrowserManager, GameInteractor, ScreenshotCapturer } from './core';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
 import type { GameTestResult, Issue } from './types/game-test.types';
@@ -70,25 +70,49 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
     await browserManager.navigate(gameUrl);
     logger.info('Navigation completed', {});
 
-    // Take screenshot
-    logger.info('Capturing screenshot', {});
-    const screenshotBuffer = await page.screenshot();
-    logger.info('Screenshot captured', { bufferSize: screenshotBuffer.length });
+    // Initialize screenshot capturer and game interactor
+    const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
+    const gameInteractor = new GameInteractor({ logger });
 
-    // Save screenshot
-    logger.info('Saving screenshot', {});
-    const screenshot = await fileManager.saveScreenshot(screenshotBuffer, 'initial_load');
-    logger.info('Screenshot saved', { 
-      screenshotId: screenshot.id,
-      screenshotPath: screenshot.path,
+    // Capture initial screenshot
+    logger.info('Capturing initial screenshot', {});
+    const initialScreenshot = await screenshotCapturer.capture(page, 'initial_load');
+    logger.info('Initial screenshot captured', {
+      screenshotId: initialScreenshot.id,
+      screenshotPath: initialScreenshot.path,
     });
 
-    // Create result
+    // Simulate keyboard inputs for 30 seconds
+    logger.info('Starting keyboard input simulation', { duration: 30000 });
+    await gameInteractor.simulateKeyboardInput(page, 30000);
+    logger.info('Keyboard input simulation completed', {});
+
+    // Capture screenshot after interaction
+    logger.info('Capturing screenshot after interaction', {});
+    const afterInteractionScreenshot = await screenshotCapturer.capture(page, 'after_interaction');
+    logger.info('Screenshot after interaction captured', {
+      screenshotId: afterInteractionScreenshot.id,
+      screenshotPath: afterInteractionScreenshot.path,
+    });
+
+    // Capture final screenshot
+    logger.info('Capturing final screenshot', {});
+    const finalScreenshot = await screenshotCapturer.capture(page, 'final_state');
+    logger.info('Final screenshot captured', {
+      screenshotId: finalScreenshot.id,
+      screenshotPath: finalScreenshot.path,
+    });
+
+    // Create result with all screenshots
     const result: GameTestResult = {
       status: 'pass',
-      playability_score: 50, // Placeholder score for I1.2
+      playability_score: 50, // Placeholder score for I2.3
       issues: [],
-      screenshots: [screenshot.path],
+      screenshots: [
+        initialScreenshot.path,
+        afterInteractionScreenshot.path,
+        finalScreenshot.path,
+      ],
       timestamp: new Date().toISOString(),
     };
 

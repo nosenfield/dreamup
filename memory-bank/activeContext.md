@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 4, 2025
-**Session**: Iteration 2 - Basic Interaction (I2.1 Complete)
+**Session**: Iteration 2 - Basic Interaction (COMPLETE)
 
 ---
 
@@ -32,29 +32,48 @@
 - ✅ I1.1: Implement Browser Manager - COMPLETE (including Stagehand v3 upgrade)
 - ✅ I1.2: Implement Minimal Main Orchestration - COMPLETE
 
-🔄 **Iteration 2: Basic Interaction** - In Progress
+✅ **Iteration 2: Basic Interaction** - COMPLETE
 - ✅ I2.1: Implement Basic Game Interactor - COMPLETE
-- ⏳ I2.2: Implement Basic Screenshot Capturer - Next
-- ⏳ I2.3: Expand Main Orchestration - Pending
+- ✅ I2.2: Implement Basic Screenshot Capturer - COMPLETE
+- ✅ I2.3: Expand Main Orchestration - COMPLETE
 
 ### Next Immediate Tasks
-1. **I2.2: Implement Basic Screenshot Capturer** (1 hour)
-   - Create `src/core/screenshot-capturer.ts`
-   - Implement `capture()` method with stage tracking
-   - Save screenshots with unique IDs
-2. **I2.3: Expand Main Orchestration** (30 min)
-   - Integrate GameInteractor and ScreenshotCapturer into `main.ts`
-   - Capture before/after screenshots
-   - Simulate keyboard inputs for 30 seconds
-3. **Test with Real Game**
+1. **Test with Real Game** (Iteration 2 validation)
    - Verify keyboard inputs affect game state
-   - Verify multiple screenshots captured correctly
+   - Verify 3 screenshots captured correctly (initial, after interaction, final)
+   - Verify game responds to inputs (visible in screenshots)
+2. **Iteration 3: Detection & Monitoring**
+   - I3.1: Implement Game Detector
+   - I3.2: Implement Error Monitor
+   - I3.3: Expand Main Orchestration
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I2.3: Expand Main Orchestration** (Nov 4, 2025)
+  - Updated `src/main.ts` to use GameInteractor and ScreenshotCapturer
+  - Integrated keyboard input simulation (30 seconds duration)
+  - Captures 3 screenshots: initial_load, after_interaction, final_state
+  - Returns result with all screenshot paths
+  - Updated integration tests for new flow (11 tests, all passing)
+  - **Acceptance Criteria Met**: ✅ Three screenshots captured, ✅ Keyboard inputs sent, ✅ No errors during interaction
+  - **Iteration 2 Complete!** Ready for real game testing
+
+- ✅ **I2.2: Implement Basic Screenshot Capturer** (Nov 4, 2025)
+  - Created `src/core/screenshot-capturer.ts` with ScreenshotCapturer class
+  - Implemented `capture()` method - Takes screenshot, saves via FileManager
+  - Supports all stage types (initial_load, after_interaction, final_state)
+  - Wraps operations with timeout (SCREENSHOT_TIMEOUT)
+  - Added comprehensive error handling with structured logging
+  - Created `src/core/index.ts` to export ScreenshotCapturer
+  - Unit tests: 9 tests, all passing
+  - TypeScript compilation passes
+  - Follows dependency injection pattern (logger/fileManager in constructor)
+  - Uses existing Logger, FileManager, and timeout utilities
+  - **Acceptance Criteria Met**: ✅ Screenshots save correctly with unique IDs, ✅ Stage information tracked, ✅ Errors handled gracefully
+
 - ✅ **I2.1: Implement Basic Game Interactor** (Nov 4, 2025)
   - Created `src/core/game-interactor.ts` with GameInteractor class
   - Implemented `simulateKeyboardInput()` - Sends WASD, arrows, space, enter keys
@@ -301,10 +320,12 @@
 - `memory-bank/systemPatterns.md`: Design patterns and invariants
 
 ### Key Files Currently Being Modified
+- `src/main.ts`: Main orchestration ✅ COMPLETE (I2.3) - Now captures 3 screenshots and simulates keyboard input
+- `tests/integration/main.test.ts`: Main orchestration tests ✅ COMPLETE (I2.3) - Updated for 3 screenshots and keyboard simulation
+- `src/core/screenshot-capturer.ts`: ScreenshotCapturer implementation ✅ COMPLETE (I2.2)
+- `tests/unit/screenshot-capturer.test.ts`: ScreenshotCapturer unit tests ✅ COMPLETE (I2.2)
 - `src/core/game-interactor.ts`: GameInteractor implementation ✅ COMPLETE (I2.1)
 - `tests/unit/game-interactor.test.ts`: GameInteractor unit tests ✅ COMPLETE (I2.1)
-- `src/core/index.ts`: Core module exports (includes GameInteractor) ✅ COMPLETE (I2.1)
-- `src/main.ts`: Minimal orchestration ✅ COMPLETE (I1.2) - Will be updated in I2.3
-- `tests/integration/main.test.ts`: Main orchestration tests ✅ COMPLETE - Will be updated in I2.3
+- `src/core/index.ts`: Core module exports ✅ COMPLETE - Includes BrowserManager, GameInteractor, ScreenshotCapturer
 - `src/core/browser-manager.ts`: BrowserManager implementation ✅ COMPLETE
 - `tests/integration/browser-manager.test.ts`: BrowserManager integration tests ✅ COMPLETE

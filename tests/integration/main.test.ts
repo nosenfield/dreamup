@@ -1,7 +1,7 @@
 /**
- * Integration tests for minimal main orchestration (I1.2).
+ * Integration tests for main orchestration (I2.3).
  * 
- * Tests the runQA() function and CLI entry point with mocked dependencies.
+ * Tests the runQA() function with GameInteractor and ScreenshotCapturer integration.
  */
 
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
@@ -12,11 +12,20 @@ const mockPage = {
   close: mock(() => Promise.resolve()),
   screenshot: mock(() => Promise.resolve(Buffer.from('fake-png-data'))),
   url: mock(() => 'https://example.com/game'),
+  keyboard: {
+    press: mock(() => Promise.resolve()),
+  },
+  mouse: {
+    click: mock(() => Promise.resolve()),
+  },
 };
 
 const mockStagehand = {
   init: mock(() => Promise.resolve()),
-  page: mockPage,
+  context: {
+    pages: mock(() => [mockPage]),
+    activePage: mock(() => mockPage),
+  },
 };
 
 const mockBrowserManagerInstance = {
@@ -29,14 +38,28 @@ const mockBrowserManagerInstance = {
 
 const mockFileManagerInstance = {
   ensureOutputDirectory: mock(() => Promise.resolve()),
-  saveScreenshot: mock(() => Promise.resolve({
-    id: 'test-screenshot-id',
-    path: '/tmp/game-qa-output/screenshots/test-session/test-screenshot-id.png',
+  saveScreenshot: mock((buffer: Buffer, stage: string) => Promise.resolve({
+    id: `test-screenshot-${stage}`,
+    path: `/tmp/game-qa-output/screenshots/test-session/test-screenshot-${stage}.png`,
     timestamp: Date.now(),
-    stage: 'initial_load' as const,
+    stage: stage as any,
   })),
   saveReport: mock(() => Promise.resolve('/tmp/game-qa-output/reports/test-session/report.json')),
   getSessionId: mock(() => 'test-session'),
+};
+
+const mockScreenshotCapturerInstance = {
+  capture: mock((page: any, stage: string) => Promise.resolve({
+    id: `test-screenshot-${stage}`,
+    path: `/tmp/game-qa-output/screenshots/test-session/test-screenshot-${stage}.png`,
+    timestamp: Date.now(),
+    stage: stage as any,
+  })),
+};
+
+const mockGameInteractorInstance = {
+  simulateKeyboardInput: mock(() => Promise.resolve()),
+  clickAtCoordinates: mock(() => Promise.resolve()),
 };
 
 // Mock modules
@@ -47,6 +70,18 @@ mock.module('@browserbasehq/stagehand', () => ({
 mock.module('../../src/core/browser-manager', () => ({
   BrowserManager: mock(function(config: any) {
     return mockBrowserManagerInstance;
+  }),
+}));
+
+mock.module('../../src/core/screenshot-capturer', () => ({
+  ScreenshotCapturer: mock(function(config: any) {
+    return mockScreenshotCapturerInstance;
+  }),
+}));
+
+mock.module('../../src/core/game-interactor', () => ({
+  GameInteractor: mock(function(config: any) {
+    return mockGameInteractorInstance;
   }),
 }));
 
@@ -73,6 +108,8 @@ describe('runQA()', () => {
     mockPage.screenshot.mockClear();
     mockFileManagerInstance.saveScreenshot.mockClear();
     mockFileManagerInstance.ensureOutputDirectory.mockClear();
+    mockScreenshotCapturerInstance.capture.mockClear();
+    mockGameInteractorInstance.simulateKeyboardInput.mockClear();
   });
 
   it('should complete successfully with valid URL', async () => {
@@ -85,15 +122,15 @@ describe('runQA()', () => {
     // Verify navigation was called
     expect(mockBrowserManagerInstance.navigate).toHaveBeenCalledWith(gameUrl);
     
-    // Verify screenshot was taken
-    expect(mockPage.screenshot).toHaveBeenCalledTimes(1);
+    // Verify 3 screenshots were captured (initial, after interaction, final)
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledTimes(3);
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'initial_load');
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'after_interaction');
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'final_state');
     
-    // Verify screenshot was saved
-    expect(mockFileManagerInstance.saveScreenshot).toHaveBeenCalledTimes(1);
-    expect(mockFileManagerInstance.saveScreenshot).toHaveBeenCalledWith(
-      Buffer.from('fake-png-data'),
-      'initial_load'
-    );
+    // Verify keyboard simulation was called
+    expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalledTimes(1);
+    expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalledWith(mockPage, 30000);
     
     // Verify cleanup was called
     expect(mockBrowserManagerInstance.cleanup).toHaveBeenCalledTimes(1);
@@ -109,16 +146,18 @@ describe('runQA()', () => {
     expect(result.status).toBe('pass');
     expect(result.playability_score).toBe(50);
     expect(result.issues).toEqual([]);
-    expect(result.screenshots).toHaveLength(1);
+    expect(result.screenshots).toHaveLength(3); // Three screenshots
     expect(result.screenshots[0]).toContain('.png');
+    expect(result.screenshots[1]).toContain('.png');
+    expect(result.screenshots[2]).toContain('.png');
   });
 
   it('should generate session ID', async () => {
     const gameUrl = 'https://example.com/game';
     const result = await runQA(gameUrl);
 
-    // FileManager should have been created (which generates session ID)
-    expect(mockFileManagerInstance.saveScreenshot).toHaveBeenCalled();
+    // ScreenshotCapturer should have been called (which uses FileManager internally)
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalled();
     
     // Result should have timestamp
     expect(result.timestamp).toBeDefined();
@@ -160,7 +199,7 @@ describe('runQA()', () => {
   });
 
   it('should handle screenshot errors', async () => {
-    mockPage.screenshot.mockImplementationOnce(() => {
+    mockScreenshotCapturerInstance.capture.mockImplementationOnce(() => {
       throw new Error('Screenshot failed');
     });
 
@@ -175,8 +214,24 @@ describe('runQA()', () => {
     expect(mockBrowserManagerInstance.cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it('should handle keyboard simulation errors', async () => {
+    mockGameInteractorInstance.simulateKeyboardInput.mockImplementationOnce(() => {
+      throw new Error('Keyboard simulation failed');
+    });
+
+    const gameUrl = 'https://example.com/game';
+    const result = await runQA(gameUrl);
+
+    // Should return error status
+    expect(result.status).toBe('error');
+    expect(result.playability_score).toBe(0);
+    
+    // Cleanup should still be called
+    expect(mockBrowserManagerInstance.cleanup).toHaveBeenCalledTimes(1);
+  });
+
   it('should handle file save errors', async () => {
-    mockFileManagerInstance.saveScreenshot.mockImplementationOnce(() => {
+    mockScreenshotCapturerInstance.capture.mockImplementationOnce(() => {
       throw new Error('Failed to save screenshot');
     });
 
@@ -203,13 +258,17 @@ describe('runQA()', () => {
     expect(mockBrowserManagerInstance.cleanup).toHaveBeenCalledTimes(1);
   });
 
-  it('should return screenshot path in result', async () => {
+  it('should return screenshot paths in result', async () => {
     const gameUrl = 'https://example.com/game';
     const result = await runQA(gameUrl);
 
-    expect(result.screenshots).toHaveLength(1);
-    expect(result.screenshots[0]).toContain('test-screenshot-id');
+    expect(result.screenshots).toHaveLength(3); // Three screenshots
+    expect(result.screenshots[0]).toContain('test-screenshot-initial_load');
+    expect(result.screenshots[1]).toContain('test-screenshot-after_interaction');
+    expect(result.screenshots[2]).toContain('test-screenshot-final_state');
     expect(result.screenshots[0]).toMatch(/\.png$/);
+    expect(result.screenshots[1]).toMatch(/\.png$/);
+    expect(result.screenshots[2]).toMatch(/\.png$/);
   });
 
   it('should handle missing environment variables', async () => {
