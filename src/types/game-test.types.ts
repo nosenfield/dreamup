@@ -12,10 +12,9 @@ import type { FeatureFlags } from './config.types';
 /**
  * Game type enumeration.
  * 
- * Note: This enum will be properly defined in P3.2 (game-detector.ts).
- * Using a placeholder string literal type for now.
+ * Re-exported from game-detector module for type consistency.
  */
-export type GameType = 'canvas' | 'iframe' | 'dom' | 'unknown';
+export type { GameType } from '../core/game-detector';
 
 /**
  * Request interface for initiating a game test.
@@ -102,7 +101,7 @@ export interface TestMetadata {
   duration: number;
   
   /** Detected game type (canvas, iframe, dom, or unknown) */
-  gameType: GameType;
+  gameType: import('../core/game-detector').GameType;
   
   /** Array of console errors captured during the test */
   consoleErrors: ConsoleError[];

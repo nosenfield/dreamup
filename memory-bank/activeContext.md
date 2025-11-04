@@ -38,20 +38,41 @@
 - ✅ I2.3: Expand Main Orchestration - COMPLETE
 
 ### Next Immediate Tasks
-1. **Test with Real Game** (Iteration 2 validation)
-   - Verify keyboard inputs affect game state
-   - Verify 3 screenshots captured correctly (initial, after interaction, final)
-   - Verify game responds to inputs (visible in screenshots)
-2. **Iteration 3: Detection & Monitoring**
-   - I3.1: Implement Game Detector
-   - I3.2: Implement Error Monitor
-   - I3.3: Expand Main Orchestration
+1. **I3.2: Implement Error Monitor** (Iteration 3)
+   - Create ErrorMonitor class
+   - Listen to console errors/warnings
+   - Capture and categorize errors
+2. **I3.3: Expand Main Orchestration** (Iteration 3)
+   - Integrate GameDetector and ErrorMonitor into main.ts
+   - Detect game type after navigation
+   - Wait for game ready before interaction
+   - Include metadata in result
+3. **Test with Real Game** (Iteration 3 validation)
+   - Verify game type detection works
+   - Verify ready detection prevents premature interaction
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I3.1: Implement Game Detector** (Nov 4, 2025)
+  - Created `src/core/game-detector.ts` with GameDetector class
+  - Implemented `detectType()` - Detects CANVAS, IFRAME, DOM, or UNKNOWN game types
+  - Implemented `waitForGameReady()` - Multi-signal detection (canvas exists, rendering, network idle, no loading text)
+  - Implemented `isCanvasRendering()` - Checks if canvas has non-black pixels
+  - Implemented `detectIframe()` - Detects iframes with game content
+  - Added GameType enum (CANVAS, IFRAME, DOM, UNKNOWN)
+  - All operations wrapped with timeout utilities
+  - Comprehensive error handling with structured logging
+  - Created `tests/unit/game-detector.test.ts` - 23 tests, all passing
+  - Updated `src/core/index.ts` to export GameDetector and GameType
+  - Updated `src/types/game-test.types.ts` to use GameType enum
+  - TypeScript compilation passes (note: intentional @ts-ignore for browser context code)
+  - Follows dependency injection pattern (logger/config in constructor)
+  - Uses existing Logger and timeout utilities
+  - **Acceptance Criteria Met**: ✅ Correctly detects all game types, ✅ Waits for ready state (3/4 signals), ✅ Timeouts work correctly, ✅ Tests cover all game types
+
 - ✅ **Bug Fix: GameInteractor Keyboard/Mouse API** (Nov 4, 2025)
   - Fixed runtime error: "undefined is not an object (evaluating 'actualPage.keyboard.press')"
   - **Root cause**: Used Playwright/Puppeteer API (`page.keyboard.press()`) on Stagehand Page
