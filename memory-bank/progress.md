@@ -364,7 +364,29 @@ None - all tests passing, TypeScript compilation clean
 
 ## Technical Debt
 
-None identified at this time
+### Ready Detection for DOM Games (Low Priority)
+**Current behavior**: DOM games (pure HTML/CSS/JS without canvas) trigger 60-second timeout during ready detection because they fail canvas-based signals.
+
+**Why it works**: System safely waits full timeout to ensure game has loaded, then proceeds successfully. Game interaction and testing work correctly.
+
+**Production improvements** (post-MVP):
+1. **Add DOM-specific ready signals**:
+   - Check for interactive elements (buttons, inputs, game container)
+   - Check if JavaScript event listeners are attached
+   - Check if game-specific classes/IDs are present
+   - Check document.readyState === 'complete'
+2. **Game-type-specific timeouts**:
+   - DOM games: 10-15 seconds (faster load)
+   - Canvas games: 60 seconds (needs rendering time)
+   - Iframe games: 30 seconds (cross-origin delays)
+3. **Adaptive ready detection**:
+   - Use game type to select appropriate signal set
+   - Require 3/4 signals from type-specific checks
+   - Log which signals passed/failed for debugging
+
+**Impact**: Low - current behavior is safe and effective. Optimization would reduce test time by ~45 seconds for DOM games.
+
+**Validation**: Tested with 2048 (DOM game) - timeout occurs, but test completes successfully with correct results.
 
 ---
 

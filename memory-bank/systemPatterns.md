@@ -98,6 +98,8 @@ try {
 ### Pattern 3: Multi-Signal Detection
 **When to use**: Detecting if game has fully loaded and is ready
 **Why**: Games have inconsistent loading indicators (or none at all)
+**Current limitation**: Signals are canvas-focused, causing DOM games to timeout (safe but slow)
+
 **Example**:
 ```typescript
 const signals = {
@@ -108,6 +110,25 @@ const signals = {
 };
 const readyScore = Object.values(signals).filter(Boolean).length;
 return readyScore >= 3; // 3 out of 4 signals must pass
+```
+
+**Known issue**: DOM games (pure HTML/CSS/JS without canvas) fail `hasCanvas` and `canvasNotBlank`, achieving only 2/4 signals. System correctly waits full timeout (60s) before proceeding. This is **safe behavior** - game loads completely and testing succeeds.
+
+**Production improvements** (see Technical Debt in progress.md):
+- Add game-type-specific signal sets (DOM signals, canvas signals, iframe signals)
+- Adjust timeouts based on game type (DOM: 10-15s, Canvas: 60s, Iframe: 30s)
+- Log which signals passed/failed for debugging
+- DOM-specific signals: interactive elements, event listeners, document.readyState
+
+**Example DOM-specific signals**:
+```typescript
+// For DOM games detected by GameDetector
+const domSignals = {
+  hasInteractiveElements: !!document.querySelector('button, input, [onclick], [role="button"]'),
+  documentComplete: document.readyState === 'complete',
+  noLoadingText: !document.body.innerText.match(/loading|please wait/i),
+  networkIdle: performance.getEntriesByType('resource').length > 0
+};
 ```
 
 ### Pattern 4: Dependency Injection
