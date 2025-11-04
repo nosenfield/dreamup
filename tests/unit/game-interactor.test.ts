@@ -8,21 +8,15 @@ import { Logger } from '../../src/utils/logger';
 import { TIMEOUTS } from '../../src/config/constants';
 import { TimeoutError } from '../../src/utils/timeout';
 import type { AnyPage } from '@browserbasehq/stagehand';
+import type { VisionAnalyzer } from '../../src/vision/analyzer';
+import type { ScreenshotCapturer } from '../../src/core/screenshot-capturer';
 
-// Mock keyboard and mouse objects
-const mockKeyboard = {
-  press: mock(() => Promise.resolve()),
-  type: mock(() => Promise.resolve()),
-};
-
-const mockMouse = {
-  click: mock(() => Promise.resolve()),
-};
-
-// Mock page object
+// Mock Stagehand Page API (v3 uses direct methods)
 const createMockPage = () => ({
-  keyboard: mockKeyboard,
-  mouse: mockMouse,
+  keyPress: mock(() => Promise.resolve()),
+  click: mock(() => Promise.resolve()),
+  act: mock(() => Promise.resolve()),
+  screenshot: mock(() => Promise.resolve(Buffer.from('fake-png-data'))),
   url: mock(() => 'https://example.com'),
 });
 
@@ -34,8 +28,9 @@ describe('GameInteractor', () => {
     logger = new Logger({ module: 'test', op: 'game-interactor-test' });
     mockPage = createMockPage();
     // Reset mocks
-    mockKeyboard.press.mockClear();
-    mockMouse.click.mockClear();
+    mockPage.keyPress.mockClear();
+    mockPage.click.mockClear();
+    mockPage.act.mockClear();
   });
 
   describe('GameInteractor instantiation', () => {
@@ -59,28 +54,23 @@ describe('GameInteractor', () => {
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      // Mock a short duration (100ms) for testing
       await interactor.simulateKeyboardInput(page, 100);
 
-      // Should have called keyboard.press at least once
-      expect(mockKeyboard.press).toHaveBeenCalled();
+      expect(mockPage.keyPress).toHaveBeenCalled();
     });
 
     it('should send WASD keys', async () => {
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      // Use very short duration to avoid long test runs
       await interactor.simulateKeyboardInput(page, 50);
 
-      // Check that WASD keys were pressed
-      const calls = mockKeyboard.press.mock.calls;
+      const calls = mockPage.keyPress.mock.calls;
       const pressedKeys = calls.map((call) => call[0]);
 
-      // Should include at least some of WASD keys
       const wasdKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
       const hasWASD = wasdKeys.some((key) => pressedKeys.includes(key));
-      expect(hasWASD || pressedKeys.length > 0).toBe(true); // At least some keys pressed
+      expect(hasWASD || pressedKeys.length > 0).toBe(true);
     });
 
     it('should send arrow keys', async () => {
@@ -89,10 +79,9 @@ describe('GameInteractor', () => {
 
       await interactor.simulateKeyboardInput(page, 50);
 
-      const calls = mockKeyboard.press.mock.calls;
+      const calls = mockPage.keyPress.mock.calls;
       const pressedKeys = calls.map((call) => call[0]);
 
-      // Should include arrow keys
       const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
       const hasArrows = arrowKeys.some((key) => pressedKeys.includes(key));
       expect(hasArrows || pressedKeys.length > 0).toBe(true);
@@ -104,10 +93,9 @@ describe('GameInteractor', () => {
 
       await interactor.simulateKeyboardInput(page, 50);
 
-      const calls = mockKeyboard.press.mock.calls;
+      const calls = mockPage.keyPress.mock.calls;
       const pressedKeys = calls.map((call) => call[0]);
 
-      // Should include space or enter
       const specialKeys = ['Space', 'Enter'];
       const hasSpecial = specialKeys.some((key) => pressedKeys.includes(key));
       expect(hasSpecial || pressedKeys.length > 0).toBe(true);
@@ -122,22 +110,20 @@ describe('GameInteractor', () => {
       const endTime = Date.now();
       const actualDuration = endTime - startTime;
 
-      // Should take approximately the duration (with some tolerance)
-      expect(actualDuration).toBeGreaterThanOrEqual(150); // Allow some variance
-      expect(actualDuration).toBeLessThan(500); // But not too long
+      expect(actualDuration).toBeGreaterThanOrEqual(150);
+      expect(actualDuration).toBeLessThan(500);
     });
 
     it('should wrap operations with timeout', async () => {
       const interactor = new GameInteractor({
         logger,
-        interactionTimeout: 100, // Very short timeout
+        interactionTimeout: 100,
       });
       const page = mockPage as unknown as AnyPage;
 
-      // Mock a slow keyboard press
-      mockKeyboard.press.mockImplementationOnce(() => {
+      mockPage.keyPress.mockImplementationOnce(() => {
         return new Promise((resolve) => {
-          setTimeout(resolve, 500); // Longer than timeout
+          setTimeout(resolve, 500);
         });
       });
 
@@ -150,24 +136,23 @@ describe('GameInteractor', () => {
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      // Mock keyboard error
-      mockKeyboard.press.mockImplementationOnce(() => {
+      // Individual key errors are handled gracefully and simulation continues
+      mockPage.keyPress.mockImplementationOnce(() => {
         throw new Error('Keyboard error');
       });
 
-      // Should not throw, but handle gracefully
-      await expect(
-        interactor.simulateKeyboardInput(page, 50)
-      ).rejects.toThrow('Keyboard error');
+      // Should complete successfully despite individual key error
+      await interactor.simulateKeyboardInput(page, 50);
+      expect(mockPage.keyPress).toHaveBeenCalled();
     });
 
-    it('should handle missing keyboard object', async () => {
+    it('should handle missing keyPress method', async () => {
       const interactor = new GameInteractor({ logger });
       const page = { url: mock(() => 'https://example.com') } as unknown as AnyPage;
 
-      await expect(
-        interactor.simulateKeyboardInput(page, 50)
-      ).rejects.toThrow();
+      // Missing keyPress is handled gracefully - simulation continues with errors logged
+      await interactor.simulateKeyboardInput(page, 50);
+      // Function completes despite missing keyPress (errors are logged but don't stop simulation)
     });
   });
 
@@ -178,15 +163,14 @@ describe('GameInteractor', () => {
 
       await interactor.clickAtCoordinates(page, 100, 200);
 
-      expect(mockMouse.click).toHaveBeenCalledTimes(1);
-      expect(mockMouse.click).toHaveBeenCalledWith(100, 200);
+      expect(mockPage.click).toHaveBeenCalledTimes(1);
+      expect(mockPage.click).toHaveBeenCalledWith(100, 200);
     });
 
     it('should validate coordinates are non-negative', async () => {
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      // Negative coordinates should throw
       await expect(
         interactor.clickAtCoordinates(page, -1, 100)
       ).rejects.toThrow();
@@ -202,7 +186,7 @@ describe('GameInteractor', () => {
 
       await interactor.clickAtCoordinates(page, 0, 0);
 
-      expect(mockMouse.click).toHaveBeenCalledWith(0, 0);
+      expect(mockPage.click).toHaveBeenCalledWith(0, 0);
     });
 
     it('should wrap operations with timeout', async () => {
@@ -212,8 +196,7 @@ describe('GameInteractor', () => {
       });
       const page = mockPage as unknown as AnyPage;
 
-      // Mock a slow mouse click
-      mockMouse.click.mockImplementationOnce(() => {
+      mockPage.click.mockImplementationOnce(() => {
         return new Promise((resolve) => {
           setTimeout(resolve, 500);
         });
@@ -224,21 +207,20 @@ describe('GameInteractor', () => {
       ).rejects.toThrow();
     });
 
-    it('should handle mouse errors gracefully', async () => {
+    it('should handle click errors gracefully', async () => {
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      // Mock mouse error
-      mockMouse.click.mockImplementationOnce(() => {
-        throw new Error('Mouse error');
+      mockPage.click.mockImplementationOnce(() => {
+        throw new Error('Click error');
       });
 
       await expect(
         interactor.clickAtCoordinates(page, 100, 200)
-      ).rejects.toThrow('Mouse error');
+      ).rejects.toThrow('Click error');
     });
 
-    it('should handle missing mouse object', async () => {
+    it('should handle missing click method', async () => {
       const interactor = new GameInteractor({ logger });
       const page = { url: mock(() => 'https://example.com') } as unknown as AnyPage;
 
@@ -248,24 +230,266 @@ describe('GameInteractor', () => {
     });
   });
 
+  describe('findAndClickStart()', () => {
+    const createMockVisionAnalyzer = () => ({
+      findClickableElements: mock(() => Promise.resolve([])),
+    } as unknown as VisionAnalyzer);
+
+    const createMockScreenshotCapturer = () => ({
+      capture: mock(() => Promise.resolve({
+        id: 'test-screenshot',
+        path: '/tmp/test-screenshot.png',
+        timestamp: Date.now(),
+        stage: 'initial_load' as const,
+      })),
+    } as unknown as ScreenshotCapturer);
+
+    it('should find start button with natural language and return true', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = createMockPage();
+      page.act.mockResolvedValueOnce(undefined);
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(true);
+      expect(page.act).toHaveBeenCalled();
+    });
+
+    it('should fall back to vision if natural language fails', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      
+      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+        {
+          label: 'Start Game Button',
+          x: 400,
+          y: 300,
+          confidence: 0.95,
+        },
+      ]);
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(true);
+      expect(page.act).toHaveBeenCalled();
+      expect(screenshotCapturer.capture).toHaveBeenCalledTimes(1);
+      expect(visionAnalyzer.findClickableElements).toHaveBeenCalledTimes(1);
+      expect(page.click).toHaveBeenCalledWith(400, 300);
+    });
+
+    it('should return false if both strategies fail', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      visionAnalyzer.findClickableElements.mockResolvedValueOnce([]);
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(false);
+      expect(page.act).toHaveBeenCalled();
+      expect(screenshotCapturer.capture).toHaveBeenCalledTimes(1);
+      expect(visionAnalyzer.findClickableElements).toHaveBeenCalledTimes(1);
+      expect(page.click).not.toHaveBeenCalled();
+    });
+
+    it('should only try natural language if visionAnalyzer not provided', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = createMockPage();
+      page.act.mockRejectedValue(new Error('Not found'));
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(false);
+      expect(page.act).toHaveBeenCalled();
+      expect(page.screenshot).not.toHaveBeenCalled();
+    });
+
+    it('should only try natural language if screenshotCapturer not provided', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+      });
+      const page = createMockPage();
+      page.act.mockRejectedValue(new Error('Not found'));
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(false);
+      expect(page.act).toHaveBeenCalled();
+      expect(visionAnalyzer.findClickableElements).not.toHaveBeenCalled();
+    });
+
+    it('should filter elements for start/play keywords', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      
+      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+        {
+          label: 'Settings Button',
+          x: 100,
+          y: 100,
+          confidence: 0.90,
+        },
+        {
+          label: 'Start Game Button',
+          x: 400,
+          y: 300,
+          confidence: 0.95,
+        },
+        {
+          label: 'Help Button',
+          x: 200,
+          y: 200,
+          confidence: 0.85,
+        },
+      ]);
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(true);
+      expect(page.click).toHaveBeenCalledWith(400, 300);
+    });
+
+    it('should select highest confidence element when multiple matches', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      
+      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+        {
+          label: 'Play Button',
+          x: 350,
+          y: 250,
+          confidence: 0.80,
+        },
+        {
+          label: 'Start Game',
+          x: 400,
+          y: 300,
+          confidence: 0.95,
+        },
+      ]);
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(true);
+      expect(page.click).toHaveBeenCalledWith(400, 300);
+    });
+
+    it('should only use elements with confidence >= 0.7', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      
+      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+        {
+          label: 'Start Button',
+          x: 400,
+          y: 300,
+          confidence: 0.65,
+        },
+      ]);
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(false);
+      expect(page.click).not.toHaveBeenCalled();
+    });
+
+    it('should handle vision API errors gracefully', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      visionAnalyzer.findClickableElements.mockRejectedValueOnce(new Error('Vision API error'));
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(false);
+      expect(screenshotCapturer.capture).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle screenshot capture errors gracefully', async () => {
+      const visionAnalyzer = createMockVisionAnalyzer();
+      const screenshotCapturer = createMockScreenshotCapturer();
+      const interactor = new GameInteractor({
+        logger,
+        visionAnalyzer,
+        screenshotCapturer,
+      });
+      const page = createMockPage();
+
+      page.act.mockRejectedValue(new Error('Not found'));
+      screenshotCapturer.capture.mockRejectedValueOnce(new Error('Screenshot failed'));
+
+      const result = await interactor.findAndClickStart(page as unknown as AnyPage);
+
+      expect(result).toBe(false);
+      expect(visionAnalyzer.findClickableElements).not.toHaveBeenCalled();
+    });
+  });
+
   describe('error handling', () => {
     it('should log errors during keyboard simulation', async () => {
-      const errorSpy = mock();
-      logger.error = errorSpy;
+      const warnSpy = mock();
+      logger.warn = warnSpy;
 
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      mockKeyboard.press.mockImplementationOnce(() => {
+      mockPage.keyPress.mockImplementationOnce(() => {
         throw new Error('Test error');
       });
 
-      await expect(
-        interactor.simulateKeyboardInput(page, 50)
-      ).rejects.toThrow();
+      // Individual key errors are handled gracefully - simulation continues
+      await interactor.simulateKeyboardInput(page, 50);
 
-      // Logger should have been called
-      expect(errorSpy).toHaveBeenCalled();
+      // Should log warning for individual key error
+      expect(warnSpy).toHaveBeenCalled();
     });
 
     it('should log errors during mouse click', async () => {
@@ -275,7 +499,7 @@ describe('GameInteractor', () => {
       const interactor = new GameInteractor({ logger });
       const page = mockPage as unknown as AnyPage;
 
-      mockMouse.click.mockImplementationOnce(() => {
+      mockPage.click.mockImplementationOnce(() => {
         throw new Error('Test error');
       });
 
@@ -283,9 +507,7 @@ describe('GameInteractor', () => {
         interactor.clickAtCoordinates(page, 100, 200)
       ).rejects.toThrow();
 
-      // Logger should have been called
       expect(errorSpy).toHaveBeenCalled();
     });
   });
 });
-

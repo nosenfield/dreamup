@@ -18,6 +18,8 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
+import type { VisionAnalyzer } from '../vision/analyzer';
+import type { ScreenshotCapturer } from './screenshot-capturer';
 
 /**
  * Configuration for GameInteractor.
@@ -28,6 +30,12 @@ export interface GameInteractorConfig {
   
   /** Optional timeout for interactions (default: INTERACTION_TIMEOUT) */
   interactionTimeout?: number;
+  
+  /** Optional VisionAnalyzer for vision-based element detection fallback */
+  visionAnalyzer?: VisionAnalyzer;
+  
+  /** Optional ScreenshotCapturer for taking screenshots for vision analysis */
+  screenshotCapturer?: ScreenshotCapturer;
 }
 
 /**
@@ -49,6 +57,8 @@ export interface GameInteractorConfig {
 export class GameInteractor {
   private readonly logger: Logger;
   private readonly interactionTimeout: number;
+  private readonly visionAnalyzer?: VisionAnalyzer;
+  private readonly screenshotCapturer?: ScreenshotCapturer;
 
   /**
    * Available keyboard keys for game input simulation.
@@ -79,6 +89,8 @@ export class GameInteractor {
   constructor(config: GameInteractorConfig) {
     this.logger = config.logger;
     this.interactionTimeout = config.interactionTimeout ?? TIMEOUTS.INTERACTION_TIMEOUT;
+    this.visionAnalyzer = config.visionAnalyzer;
+    this.screenshotCapturer = config.screenshotCapturer;
   }
 
   /**
@@ -239,6 +251,141 @@ export class GameInteractor {
       });
       throw error;
     }
+  }
+
+  /**
+   * Find and click the start button using natural language or vision fallback.
+   * 
+   * Uses a two-strategy approach:
+   * 1. First tries Stagehand's natural language command (`page.act("click start button")`)
+   * 2. Falls back to vision-based detection if natural language fails
+   *    - Takes a screenshot
+   *    - Uses VisionAnalyzer to find clickable elements
+   *    - Filters for "start" or "play" buttons
+   *    - Clicks at the highest confidence element (>= 0.7)
+   * 
+   * @param page - The Stagehand page object
+   * @param timeout - Optional timeout for the operation (default: interactionTimeout)
+   * @returns Promise that resolves to `true` if start button was found and clicked, `false` otherwise
+   * 
+   * @example
+   * ```typescript
+   * const success = await interactor.findAndClickStart(page);
+   * if (success) {
+   *   console.log('Start button clicked successfully');
+   * }
+   * ```
+   */
+  async findAndClickStart(page: AnyPage, timeout?: number): Promise<boolean> {
+    const operationTimeout = timeout ?? this.interactionTimeout;
+    const pageAny = page as any;
+
+    this.logger.info('Finding and clicking start button', {
+      timeout: operationTimeout,
+      hasVisionFallback: !!(this.visionAnalyzer && this.screenshotCapturer),
+    });
+
+    // Strategy 1: Try natural language commands
+    const naturalLanguagePhrases = [
+      'click start button',
+      'click play button',
+      'press start',
+      'click begin game',
+    ];
+
+    for (const phrase of naturalLanguagePhrases) {
+      try {
+        if (typeof pageAny.act === 'function') {
+          await withTimeout(
+            pageAny.act(phrase),
+            operationTimeout,
+            `Natural language act "${phrase}" timed out after ${operationTimeout}ms`
+          );
+
+          this.logger.info('Start button found using natural language', {
+            phrase,
+          });
+          return true;
+        } else {
+          // page.act() doesn't exist, skip natural language
+          break;
+        }
+      } catch (error) {
+        this.logger.debug('Natural language command failed', {
+          phrase,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue to next phrase or fallback
+      }
+    }
+
+    // Strategy 2: Fallback to vision-based detection
+    if (this.visionAnalyzer && this.screenshotCapturer) {
+      this.logger.info('Falling back to vision-based start button detection', {});
+
+      try {
+        // Take screenshot for vision analysis
+        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
+        
+        // Find clickable elements using vision
+        const elements = await this.visionAnalyzer.findClickableElements(screenshot.path);
+
+        if (elements.length === 0) {
+          this.logger.warn('No clickable elements found in screenshot', {});
+          return false;
+        }
+
+        // Filter for start/play-related buttons
+        const startKeywords = ['start', 'play', 'begin', 'go'];
+        const startElements = elements.filter((element) => {
+          const labelLower = element.label.toLowerCase();
+          return (
+            startKeywords.some((keyword) => labelLower.includes(keyword)) &&
+            element.confidence >= 0.7
+          );
+        });
+
+        if (startElements.length === 0) {
+          this.logger.warn('No start/play buttons found in clickable elements', {
+            elementCount: elements.length,
+          });
+          return false;
+        }
+
+        // Select element with highest confidence
+        const bestElement = startElements.reduce((best, current) =>
+          current.confidence > best.confidence ? current : best
+        );
+
+        this.logger.info('Start button found using vision', {
+          label: bestElement.label,
+          coordinates: { x: bestElement.x, y: bestElement.y },
+          confidence: bestElement.confidence,
+        });
+
+        // Click at the coordinates
+        await this.clickAtCoordinates(page, bestElement.x, bestElement.y);
+
+        this.logger.info('Start button clicked successfully using vision', {
+          label: bestElement.label,
+        });
+
+        return true;
+      } catch (error) {
+        this.logger.warn('Vision-based start button detection failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+
+    // Both strategies failed or fallback not available
+    this.logger.warn('Could not find start button', {
+      naturalLanguageFailed: true,
+      visionFallbackAvailable: !!(this.visionAnalyzer && this.screenshotCapturer),
+    });
+
+    return false;
   }
 }
 
