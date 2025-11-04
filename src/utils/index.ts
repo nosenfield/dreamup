@@ -11,3 +11,6 @@
 export { Logger, LogLevel } from './logger';
 export type { LoggerContext, LogEntry } from './logger';
 
+// Export timeout utilities
+export { withTimeout, TimeoutError, TIMEOUTS } from './timeout';
+

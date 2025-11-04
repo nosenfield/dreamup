@@ -1,21 +1,20 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 3, 2025
-**Session**: Phase 2 - P2.1 Complete
+**Session**: Phase 2 - P2.2 Complete
 
 ---
 
 ## Current Focus
 
 ### What We're Working On
-**Phase 2: Utility Modules** - In Progress (1/3 tasks complete):
+**Phase 2: Utility Modules** - In Progress (2/3 tasks complete):
 - ✅ P2.1: Create Logger Utility - Complete!
-- [ ] P2.2: Create Timeout Utility - Next
-- [ ] P2.3: Create File Manager Utility
+- ✅ P2.2: Create Timeout Utility - Complete!
+- [ ] P2.3: Create File Manager Utility - Next
 
 ### Next Immediate Tasks
 1. **Continue Phase 2: Utility Modules**
-   - P2.2: Create Timeout Utility
    - P2.3: Create File Manager Utility
 2. Move to Phase 3: Core Browser Automation after Phase 2 complete
 
@@ -24,6 +23,18 @@
 ## Recent Changes
 
 ### Completed This Session
+- ✅ P2.2: Create Timeout Utility
+  - Created `src/utils/timeout.ts` with `withTimeout()` function and `TimeoutError` class
+  - Wrapped `p-timeout` with typed helpers for promise timeout functionality
+  - Supports custom error messages or default format: "Operation timed out after {milliseconds}ms"
+  - Handles edge cases: Infinity timeout, zero/negative timeouts, immediate resolve/reject
+  - Re-exports `TIMEOUTS` constants from config for convenience
+  - Created `src/utils/index.ts` to export timeout utilities
+  - All code includes comprehensive JSDoc comments
+  - TypeScript compilation passes with no errors (`tsc --noEmit`)
+  - Unit tests created and passing (17 tests, all passing)
+  - Timeout utility matches architecture.md specifications and systemPatterns.md invariant
+
 - ✅ P2.1: Create Logger Utility
   - Created `src/utils/logger.ts` with Logger class and LogLevel enum
   - Implemented methods: `info()`, `warn()`, `error()`, `debug()`

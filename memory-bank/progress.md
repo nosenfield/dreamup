@@ -36,10 +36,10 @@
 
 ### Phase 2: Utility Modules
 **Status**: In Progress
-**Progress**: 1/3 tasks
+**Progress**: 2/3 tasks
 
 - [x] P2.1: Create Logger Utility
-- [ ] P2.2: Create Timeout Utility
+- [x] P2.2: Create Timeout Utility
 - [ ] P2.3: Create File Manager Utility
 
 ---
@@ -115,20 +115,31 @@
   - TypeScript compilation passes with no errors (`tsc --noEmit`)
   - Unit tests created and passing (19 tests, all passing)
   - Logger matches logging guidelines and architecture.md specifications
+- [x] P2.2: Create Timeout Utility
+  - Created `src/utils/timeout.ts` with `withTimeout()` function and `TimeoutError` class
+  - Wrapped `p-timeout` with typed helpers for promise timeout functionality
+  - Supports custom error messages or default format: "Operation timed out after {milliseconds}ms"
+  - Handles edge cases: Infinity timeout, zero/negative timeouts, immediate resolve/reject
+  - Re-exports `TIMEOUTS` constants from config for convenience
+  - Created `src/utils/index.ts` to export timeout utilities
+  - All code includes comprehensive JSDoc comments
+  - TypeScript compilation passes with no errors (`tsc --noEmit`)
+  - Unit tests created and passing (17 tests, all passing)
+  - Timeout utility matches architecture.md specifications and systemPatterns.md invariant
 
 ---
 
 ## In Progress
 
-**Current Task**: P2.2: Create Timeout Utility
+**Current Task**: P2.3: Create File Manager Utility
 
 ---
 
 ## Upcoming Tasks (Next 3)
 
-1. **P2.2: Create Timeout Utility**
-2. **P2.3: Create File Manager Utility**
-3. **P3.1: Implement Browser Manager**
+1. **P2.3: Create File Manager Utility**
+2. **P3.1: Implement Browser Manager**
+3. **P3.2: Implement Game Detector**
 
 ---
 
