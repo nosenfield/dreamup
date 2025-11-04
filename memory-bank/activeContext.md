@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 4, 2025
-**Session**: Iteration 3 - Detection & Monitoring (COMPLETE)
+**Session**: Iteration 4 - Vision Analysis (In Progress)
 
 ---
 
@@ -42,22 +42,48 @@
 - ✅ I3.2: Implement Error Monitor - COMPLETE
 - ✅ I3.3: Expand Main Orchestration - COMPLETE
 
+🔄 **Iteration 4: Vision Analysis** - In Progress
+- ✅ I4.1: Create Vision Prompts - COMPLETE
+- [ ] I4.2: Implement Vision Analyzer
+- [ ] I4.3: Complete Game Interactor with Vision
+- [ ] I4.4: Expand Main Orchestration
+
 ### Next Immediate Tasks
-1. **Test with Real Game** (Iteration 3 validation)
-   - Verify game type detection works
-   - Verify ready detection prevents premature interaction
-   - Verify console errors are captured
-2. **Iteration 4: Vision Analysis**
-   - I4.1: Create Vision Prompts
-   - I4.2: Implement Vision Analyzer
-   - I4.3: Complete Game Interactor with Vision
-   - I4.4: Expand Main Orchestration
+1. **I4.2: Implement Vision Analyzer** (Iteration 4)
+   - Create VisionAnalyzer class
+   - Implement analyzeScreenshots() with OpenAI API
+   - Implement findClickableElements()
+   - Implement detectCrash()
+2. **I4.3: Complete Game Interactor with Vision** (Iteration 4)
+   - Add findAndClickStart() method
+   - Integrate vision-based element detection
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I4.1: Create Vision Prompts** (Nov 4, 2025)
+  - Created `src/vision/prompts.ts` with three vision prompts
+  - Defined `GAME_ANALYSIS_PROMPT` - Analyzes 3 screenshots for playability assessment
+    - Evaluates: load success, control responsiveness, crash detection, playability score
+    - Returns structured data matching `gameTestResultSchema`
+    - Includes few-shot examples (working game vs broken game)
+    - References schema fields explicitly (status, playability_score, issues)
+  - Defined `FIND_CLICKABLE_ELEMENTS_PROMPT` - Detects clickable UI elements
+    - Returns array matching `clickableElementSchema`
+    - Includes coordinates (x, y), labels, confidence scores
+    - Includes examples for common game UI elements (start buttons, menus)
+  - Defined `DETECT_CRASH_PROMPT` - Identifies crashes and error states
+    - Detects error messages, blank screens, frozen states
+    - Includes examples of crash indicators
+  - Added `PROMPT_VERSION` constant ('1.0.0') for version tracking
+  - Comprehensive JSDoc comments explaining each prompt's purpose and usage
+  - Created `tests/unit/vision/prompts.test.ts` - 25 tests, all passing
+  - Tests verify: exports, schema references, examples, no placeholder text, reasonable length
+  - TypeScript compilation passes
+  - **Acceptance Criteria Met**: ✅ Prompts are clear and specific, ✅ Reference Zod schemas, ✅ Include examples, ✅ Exported and reusable, ✅ Version tracking included
+
 - ✅ **I3.3: Expand Main Orchestration** (Nov 4, 2025)
   - Integrated GameDetector and ErrorMonitor into `src/main.ts`
   - Added game type detection after navigation (defaults to UNKNOWN on error)
