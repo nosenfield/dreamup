@@ -3,7 +3,7 @@
  * For testing error cases, validation, and failure scenarios
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 
 describe('Error Handling', () => {
   describe('Input Validation', () => {
