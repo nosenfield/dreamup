@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 4, 2025
-**Session**: Iteration 1 Complete (Minimal Working Agent)
+**Session**: Critical Bug Fix - Stagehand v3 Upgrade Required (Playwright/Bun incompatibility)
 
 ---
 
@@ -28,15 +28,24 @@
 - Phase 1: Types & Config (3/3 tasks) + InputSchema enhancement
 - Phase 2: Utilities (3/3 tasks)
 
-✅ **Iteration 1: Minimal Working Agent** - COMPLETE
-- ✅ I1.1: Implement Browser Manager - COMPLETE
+🔴 **Iteration 1: BLOCKED** - Critical Runtime Bug Discovered
+- ⚠️ I1.1: Implement Browser Manager - RUNTIME BUG (Stagehand v1 uses Playwright, incompatible with Bun)
 - ✅ I1.2: Implement Minimal Main Orchestration - COMPLETE
+- 🔧 **Bug Fix In Progress**: Upgrade to Stagehand v3.0.1
+
+**Critical Issue**: Runtime test failed with error: "Playwright does not currently support the Bun runtime environment"
 
 ### Next Immediate Tasks
-1. **Test with real game** to validate Browserbase integration works end-to-end
-2. **Iteration 2**: Basic Interaction (I2.1: Implement Basic Game Interactor)
-3. **Iteration 2**: I2.2: Implement Basic Screenshot Capturer
-4. **Iteration 2**: I2.3: Expand Main Orchestration
+1. **CRITICAL: Fix I1.1 - Upgrade Stagehand v1 → v3** (15-20 minutes)
+   - Upgrade package: `bun add @browserbasehq/stagehand@3.0.1`
+   - Update `src/core/browser-manager.ts`: Change page access pattern
+   - Update integration tests for v3 API
+   - Test with real game to verify fix
+2. **Complete Iteration 1 Testing**
+   - Verify real game loads in Browserbase
+   - Verify screenshot captured and saved
+   - Verify no runtime errors
+3. **Iteration 2**: Basic Interaction
 
 ---
 

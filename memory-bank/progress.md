@@ -31,18 +31,22 @@
 
 ### Iteration 1: Minimal Working Agent
 **Goal**: Validate Browserbase integration, load game, take screenshot
-**Status**: ✅ Complete
-**Progress**: 2/2 tasks
+**Status**: 🔴 BLOCKED - Critical Runtime Bug
+**Progress**: 2/2 tasks implemented, but I1.1 has runtime bug requiring fix
 
-- [x] I1.1: Implement Browser Manager (2-3 hours) ✅ COMPLETE
+- [⚠️] I1.1: Implement Browser Manager (2-3 hours) - RUNTIME BUG: Stagehand v1 uses Playwright (incompatible with Bun)
 - [x] I1.2: Implement Minimal Main Orchestration (1 hour) ✅ COMPLETE
 
 **Completion Criteria**:
-- [x] Real game loads in Browserbase (can be tested manually)
-- [x] Screenshot captured and saved
-- [x] No errors in execution (handled gracefully)
-- [x] Structured logs show each step
-- [x] Can run multiple games in sequence (function supports it)
+- [ ] Real game loads in Browserbase (FAILING - Playwright error)
+- [ ] Screenshot captured and saved (blocked by above)
+- [ ] No errors in execution (currently failing)
+
+**Critical Issue Discovered**:
+- Error: "Playwright does not currently support the Bun runtime environment"
+- Root cause: Stagehand v1.x internally depends on Playwright
+- Solution: Upgrade to Stagehand v3.0.1 (removes Playwright, uses CDP directly, Bun-compatible)
+- Estimated fix time: 15-20 minutes
 
 ### Iteration 2: Basic Interaction
 **Goal**: Add keyboard input simulation
@@ -220,18 +224,21 @@
   - **Phase 2 Complete!** All 3 utility tasks finished
 
 ### Iteration 1: Minimal Working Agent
-- [x] I1.1: Implement Browser Manager (Nov 4, 2025)
+- [⚠️] I1.1: Implement Browser Manager (Nov 4, 2025) - RUNTIME BUG DISCOVERED
   - Created `src/core/browser-manager.ts` with BrowserManager class
-  - Implemented `initialize()` - Creates Browserbase session, connects Stagehand
+  - Implemented `initialize()` - Creates Browserbase session, connects Stagehand v1
   - Implemented `navigate(url)` - Navigates to URL with networkidle wait
   - Implemented `cleanup()` - Closes browser session and releases resources
   - Added comprehensive error handling with structured logging
   - All operations wrapped with timeout utilities
   - Created `src/core/index.ts` to export BrowserManager
-  - Integration tests: 11 tests, all passing
+  - Integration tests: 11 tests, all passing (with mocks)
   - TypeScript compilation passes
   - Follows dependency injection pattern (logger/config in constructor)
   - Uses existing Logger and timeout utilities
+  - **CRITICAL BUG**: Runtime test with real game fails - Stagehand v1 uses Playwright internally
+  - **Error**: "Playwright does not currently support the Bun runtime environment"
+  - **Fix Required**: Upgrade to Stagehand v3.0.1 (CDP-based, Bun-compatible)
 - [x] I1.2: Implement Minimal Main Orchestration (Nov 4, 2025)
   - Updated `src/main.ts` with `runQA()` function
   - Generate session ID using nanoid
@@ -246,7 +253,7 @@
   - Structured logging at each step
   - Integration tests: 10 tests, all passing
   - TypeScript compilation passes
-  - **Iteration 1 Complete!** Minimal working agent ready for real game testing
+  - **NOTE**: Iteration 1 implementation complete but runtime bug discovered (see I1.1 above)
 
 ### Strategic Enhancements
 - [x] InputSchema Support Added (Nov 3, 2025)
@@ -265,7 +272,11 @@
 
 ## In Progress
 
-**Current Task**: Iteration 2 (I2.1: Implement Basic Game Interactor)
+**Current Task**: Critical Bug Fix - Upgrade Stagehand v1 → v3
+**Blocker**: Playwright/Bun incompatibility discovered in runtime testing
+**Issue**: Stagehand v1.x uses Playwright internally, which refuses to run on Bun
+**Solution**: Upgrade to Stagehand v3.0.1 (removes Playwright dependency, uses CDP, Bun-compatible)
+**Estimated Time**: 15-20 minutes
 
 ---
 
