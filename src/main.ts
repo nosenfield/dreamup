@@ -10,9 +10,10 @@
  */
 
 import { nanoid } from 'nanoid';
-import { BrowserManager, GameInteractor, ScreenshotCapturer } from './core';
+import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType } from './core';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
+import { TIMEOUTS } from './config/constants';
 import type { GameTestResult, Issue } from './types/game-test.types';
 
 /**
@@ -33,6 +34,7 @@ import type { GameTestResult, Issue } from './types/game-test.types';
  * ```
  */
 export async function runQA(gameUrl: string): Promise<GameTestResult> {
+  const startTime = Date.now();
   const sessionId = nanoid();
   const logger = new Logger({
     module: 'qa-agent',
@@ -44,6 +46,8 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
 
   const fileManager = new FileManager(sessionId);
   let browserManager: BrowserManager | null = null;
+  let errorMonitor: ErrorMonitor | null = null;
+  let gameType: GameType = GameType.UNKNOWN;
 
   try {
     // Validate environment variables
@@ -69,6 +73,42 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
     logger.info('Navigating to game URL', { gameUrl });
     await browserManager.navigate(gameUrl);
     logger.info('Navigation completed', {});
+
+    // Initialize game detector and error monitor
+    const gameDetector = new GameDetector({ logger });
+    errorMonitor = new ErrorMonitor({ logger });
+
+    // Start error monitoring (early to capture loading errors)
+    try {
+      await errorMonitor.startMonitoring(page);
+      logger.info('Error monitoring started', {});
+    } catch (error) {
+      logger.warn('Failed to start error monitoring', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Detect game type
+    try {
+      gameType = await gameDetector.detectType(page);
+      logger.info('Game type detected', { gameType });
+    } catch (error) {
+      logger.warn('Failed to detect game type', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      gameType = GameType.UNKNOWN;
+    }
+
+    // Wait for game to be ready before interaction
+    try {
+      await gameDetector.waitForGameReady(page, TIMEOUTS.GAME_LOAD_TIMEOUT);
+      logger.info('Game ready state confirmed', {});
+    } catch (error) {
+      logger.warn('Failed to confirm game ready state', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue anyway - game may still be functional
+    }
 
     // Initialize screenshot capturer and game interactor
     const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
@@ -103,7 +143,23 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
       screenshotPath: finalScreenshot.path,
     });
 
-    // Create result with all screenshots
+    // Retrieve console errors before stopping monitoring
+    let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
+    if (errorMonitor) {
+      try {
+        consoleErrors = await errorMonitor.getErrors(page);
+        logger.info('Console errors retrieved', { errorCount: consoleErrors.length });
+      } catch (error) {
+        logger.warn('Failed to retrieve console errors', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Calculate test duration
+    const duration = Date.now() - startTime;
+
+    // Create result with all screenshots and metadata
     const result: GameTestResult = {
       status: 'pass',
       playability_score: 50, // Placeholder score for I2.3
@@ -114,6 +170,13 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
         finalScreenshot.path,
       ],
       timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration,
+        gameType,
+        consoleErrors,
+      },
     };
 
     logger.info('QA test completed successfully', {
@@ -137,17 +200,53 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
       timestamp: new Date().toISOString(),
     };
 
+    // Try to retrieve console errors even on error
+    let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
+    if (errorMonitor) {
+      try {
+        const page = browserManager?.getPage();
+        if (page) {
+          consoleErrors = await errorMonitor.getErrors(page);
+        }
+      } catch {
+        // Ignore errors when retrieving errors on failure
+      }
+    }
+
+    const duration = Date.now() - startTime;
     const errorResult: GameTestResult = {
       status: 'error',
       playability_score: 0,
       issues: [errorIssue],
       screenshots: [],
       timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration,
+        gameType: GameType.UNKNOWN, // Default to UNKNOWN on error
+        consoleErrors,
+      },
     };
 
     return errorResult;
 
   } finally {
+    // Stop error monitoring before cleanup
+    if (errorMonitor && browserManager) {
+      try {
+        const page = browserManager.getPage();
+        if (page) {
+          await errorMonitor.stopMonitoring(page);
+          logger.info('Error monitoring stopped', {});
+        }
+      } catch (error) {
+        logger.warn('Failed to stop error monitoring', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // Always cleanup browser
     if (browserManager) {
       try {

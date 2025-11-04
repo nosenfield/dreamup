@@ -62,6 +62,19 @@ const mockGameInteractorInstance = {
   clickAtCoordinates: mock(() => Promise.resolve()),
 };
 
+const mockGameDetectorInstance = {
+  detectType: mock(() => Promise.resolve('canvas' as any)),
+  waitForGameReady: mock(() => Promise.resolve()),
+};
+
+const mockErrorMonitorInstance = {
+  startMonitoring: mock(() => Promise.resolve()),
+  stopMonitoring: mock(() => Promise.resolve()),
+  getErrors: mock(() => Promise.resolve([])),
+  hasErrors: mock(() => Promise.resolve(false)),
+  hasCriticalError: mock(() => Promise.resolve(false)),
+};
+
 // Mock modules
 mock.module('@browserbasehq/stagehand', () => ({
   Stagehand: mock(() => mockStagehand),
@@ -82,6 +95,24 @@ mock.module('../../src/core/screenshot-capturer', () => ({
 mock.module('../../src/core/game-interactor', () => ({
   GameInteractor: mock(function(config: any) {
     return mockGameInteractorInstance;
+  }),
+}));
+
+mock.module('../../src/core/game-detector', () => ({
+  GameDetector: mock(function(config: any) {
+    return mockGameDetectorInstance;
+  }),
+  GameType: {
+    CANVAS: 'canvas',
+    IFRAME: 'iframe',
+    DOM: 'dom',
+    UNKNOWN: 'unknown',
+  },
+}));
+
+mock.module('../../src/core/error-monitor', () => ({
+  ErrorMonitor: mock(function(config: any) {
+    return mockErrorMonitorInstance;
   }),
 }));
 
@@ -110,6 +141,14 @@ describe('runQA()', () => {
     mockFileManagerInstance.ensureOutputDirectory.mockClear();
     mockScreenshotCapturerInstance.capture.mockClear();
     mockGameInteractorInstance.simulateKeyboardInput.mockClear();
+    mockGameDetectorInstance.detectType.mockClear();
+    mockGameDetectorInstance.waitForGameReady.mockClear();
+    mockErrorMonitorInstance.startMonitoring.mockClear();
+    mockErrorMonitorInstance.stopMonitoring.mockClear();
+    mockErrorMonitorInstance.getErrors.mockClear();
+    // Reset mock return values to defaults
+    mockGameDetectorInstance.detectType.mockImplementation(() => Promise.resolve('canvas' as any));
+    mockErrorMonitorInstance.getErrors.mockImplementation(() => Promise.resolve([]));
   });
 
   it('should complete successfully with valid URL', async () => {
@@ -122,6 +161,18 @@ describe('runQA()', () => {
     // Verify navigation was called
     expect(mockBrowserManagerInstance.navigate).toHaveBeenCalledWith(gameUrl);
     
+    // Verify game detection was called
+    expect(mockGameDetectorInstance.detectType).toHaveBeenCalledTimes(1);
+    expect(mockGameDetectorInstance.detectType).toHaveBeenCalledWith(mockPage);
+    
+    // Verify wait for game ready was called
+    expect(mockGameDetectorInstance.waitForGameReady).toHaveBeenCalledTimes(1);
+    expect(mockGameDetectorInstance.waitForGameReady).toHaveBeenCalledWith(mockPage, expect.any(Number));
+    
+    // Verify error monitoring was started
+    expect(mockErrorMonitorInstance.startMonitoring).toHaveBeenCalledTimes(1);
+    expect(mockErrorMonitorInstance.startMonitoring).toHaveBeenCalledWith(mockPage);
+    
     // Verify 3 screenshots were captured (initial, after interaction, final)
     expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledTimes(3);
     expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'initial_load');
@@ -131,6 +182,14 @@ describe('runQA()', () => {
     // Verify keyboard simulation was called
     expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalledTimes(1);
     expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalledWith(mockPage, 30000);
+    
+    // Verify error monitoring was stopped
+    expect(mockErrorMonitorInstance.stopMonitoring).toHaveBeenCalledTimes(1);
+    expect(mockErrorMonitorInstance.stopMonitoring).toHaveBeenCalledWith(mockPage);
+    
+    // Verify errors were retrieved
+    expect(mockErrorMonitorInstance.getErrors).toHaveBeenCalledTimes(1);
+    expect(mockErrorMonitorInstance.getErrors).toHaveBeenCalledWith(mockPage);
     
     // Verify cleanup was called
     expect(mockBrowserManagerInstance.cleanup).toHaveBeenCalledTimes(1);
@@ -150,6 +209,14 @@ describe('runQA()', () => {
     expect(result.screenshots[0]).toContain('.png');
     expect(result.screenshots[1]).toContain('.png');
     expect(result.screenshots[2]).toContain('.png');
+    
+    // Verify metadata includes game type and errors
+    expect(result.metadata).toBeDefined();
+    expect(result.metadata?.gameType).toBe('canvas');
+    expect(result.metadata?.consoleErrors).toEqual([]);
+    expect(result.metadata?.sessionId).toBeDefined();
+    expect(result.metadata?.gameUrl).toBe(gameUrl);
+    expect(result.metadata?.duration).toBeGreaterThanOrEqual(0);
   });
 
   it('should generate session ID', async () => {
@@ -290,6 +357,105 @@ describe('runQA()', () => {
     // Restore env vars
     process.env.BROWSERBASE_API_KEY = originalKey;
     process.env.BROWSERBASE_PROJECT_ID = originalProjectId;
+  });
+
+  it('should detect game type and include in metadata', async () => {
+    const gameUrl = 'https://example.com/game';
+    mockGameDetectorInstance.detectType.mockResolvedValueOnce('iframe' as any);
+
+    const result = await runQA(gameUrl);
+
+    expect(mockGameDetectorInstance.detectType).toHaveBeenCalledWith(mockPage);
+    expect(result.metadata?.gameType).toBe('iframe');
+  });
+
+  it('should wait for game ready before interaction', async () => {
+    const gameUrl = 'https://example.com/game';
+    
+    await runQA(gameUrl);
+
+    // Verify waitForGameReady is called before simulateKeyboardInput
+    const detectTypeCall = mockGameDetectorInstance.detectType.mock.invocationCallOrder[0];
+    const waitReadyCall = mockGameDetectorInstance.waitForGameReady.mock.invocationCallOrder[0];
+    const keyboardCall = mockGameInteractorInstance.simulateKeyboardInput.mock.invocationCallOrder[0];
+    
+    expect(detectTypeCall).toBeLessThan(waitReadyCall);
+    expect(waitReadyCall).toBeLessThan(keyboardCall);
+  });
+
+  it('should capture console errors and include in metadata', async () => {
+    const gameUrl = 'https://example.com/game';
+    const mockErrors = [
+      {
+        message: 'Test error',
+        timestamp: Date.now(),
+        level: 'error' as const,
+      },
+      {
+        message: 'Test warning',
+        timestamp: Date.now(),
+        level: 'warning' as const,
+      },
+    ];
+    mockErrorMonitorInstance.getErrors.mockResolvedValueOnce(mockErrors);
+
+    const result = await runQA(gameUrl);
+
+    expect(mockErrorMonitorInstance.startMonitoring).toHaveBeenCalledWith(mockPage);
+    expect(mockErrorMonitorInstance.getErrors).toHaveBeenCalledWith(mockPage);
+    expect(result.metadata?.consoleErrors).toEqual(mockErrors);
+  });
+
+  it('should start error monitoring after navigation', async () => {
+    const gameUrl = 'https://example.com/game';
+    
+    await runQA(gameUrl);
+
+    // Verify error monitoring starts after navigation
+    const navigateCall = mockBrowserManagerInstance.navigate.mock.invocationCallOrder[0];
+    const startMonitoringCall = mockErrorMonitorInstance.startMonitoring.mock.invocationCallOrder[0];
+    
+    expect(navigateCall).toBeLessThan(startMonitoringCall);
+  });
+
+  it('should stop error monitoring before cleanup', async () => {
+    const gameUrl = 'https://example.com/game';
+    
+    await runQA(gameUrl);
+
+    // Verify error monitoring stops before cleanup
+    const stopMonitoringCall = mockErrorMonitorInstance.stopMonitoring.mock.invocationCallOrder[0];
+    const cleanupCall = mockBrowserManagerInstance.cleanup.mock.invocationCallOrder[0];
+    
+    expect(stopMonitoringCall).toBeLessThan(cleanupCall);
+  });
+
+  it('should handle game detection errors gracefully', async () => {
+    const gameUrl = 'https://example.com/game';
+    mockGameDetectorInstance.detectType.mockRejectedValueOnce(new Error('Detection failed'));
+
+    const result = await runQA(gameUrl);
+
+    // Should continue with UNKNOWN game type
+    expect(result.metadata?.gameType).toBe('unknown');
+  });
+
+  it('should handle error monitoring failures gracefully', async () => {
+    const gameUrl = 'https://example.com/game';
+    mockErrorMonitorInstance.startMonitoring.mockRejectedValueOnce(new Error('Monitoring failed'));
+
+    const result = await runQA(gameUrl);
+
+    // Should continue with empty errors array
+    expect(result.metadata?.consoleErrors).toEqual([]);
+  });
+
+  it('should include duration in metadata', async () => {
+    const gameUrl = 'https://example.com/game';
+    const result = await runQA(gameUrl);
+
+    expect(result.metadata?.duration).toBeGreaterThanOrEqual(0);
+    expect(typeof result.metadata?.duration).toBe('number');
   });
 });
 

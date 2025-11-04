@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 4, 2025
-**Session**: Iteration 2 - Basic Interaction (COMPLETE)
+**Session**: Iteration 3 - Detection & Monitoring (COMPLETE)
 
 ---
 
@@ -37,23 +37,43 @@
 - ✅ I2.2: Implement Basic Screenshot Capturer - COMPLETE
 - ✅ I2.3: Expand Main Orchestration - COMPLETE
 
+✅ **Iteration 3: Detection & Monitoring** - COMPLETE
+- ✅ I3.1: Implement Game Detector - COMPLETE
+- ✅ I3.2: Implement Error Monitor - COMPLETE
+- ✅ I3.3: Expand Main Orchestration - COMPLETE
+
 ### Next Immediate Tasks
-1. **I3.3: Expand Main Orchestration** (Iteration 3)
-   - Integrate GameDetector and ErrorMonitor into main.ts
-   - Detect game type after navigation
-   - Wait for game ready before interaction
-   - Start error monitoring
-   - Include game type and errors in result metadata
-2. **Test with Real Game** (Iteration 3 validation)
+1. **Test with Real Game** (Iteration 3 validation)
    - Verify game type detection works
    - Verify ready detection prevents premature interaction
    - Verify console errors are captured
+2. **Iteration 4: Vision Analysis**
+   - I4.1: Create Vision Prompts
+   - I4.2: Implement Vision Analyzer
+   - I4.3: Complete Game Interactor with Vision
+   - I4.4: Expand Main Orchestration
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I3.3: Expand Main Orchestration** (Nov 4, 2025)
+  - Integrated GameDetector and ErrorMonitor into `src/main.ts`
+  - Added game type detection after navigation (defaults to UNKNOWN on error)
+  - Added wait for game ready before interaction (uses TIMEOUTS.GAME_LOAD_TIMEOUT)
+  - Started error monitoring early (after navigation) to capture loading errors
+  - Retrieved console errors before stopping monitoring
+  - Stopped error monitoring before browser cleanup
+  - Added TestMetadata to GameTestResult with:
+    - sessionId, gameUrl, duration (calculated from start time)
+    - gameType (detected or UNKNOWN)
+    - consoleErrors array
+  - Comprehensive error handling - continues with defaults if detection/monitoring fails
+  - Updated `tests/integration/main.test.ts` - Added 9 new tests, all 19 tests passing
+  - Tests verify: game detection, ready waiting, error monitoring, metadata inclusion, error handling
+  - **Acceptance Criteria Met**: ✅ Game type detected correctly, ✅ Waits for game ready, ✅ Console errors captured, ✅ Metadata includes game type and errors
+
 - ✅ **I3.2: Implement Error Monitor** (Nov 4, 2025)
   - Created `src/core/error-monitor.ts` with ErrorMonitor class
   - Implemented `startMonitoring()` - Overrides console.error() and console.warn() in browser context
