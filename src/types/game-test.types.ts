@@ -29,6 +29,9 @@ export interface GameTestRequest {
   
   /** Optional configuration overrides for this test */
   config?: Partial<TestConfig>;
+  
+  /** Optional input schema describing game controls and interaction methods */
+  inputSchema?: InputSchema;
 }
 
 /**
@@ -154,5 +157,41 @@ export interface ConsoleError {
   
   /** Log level: 'error' for JavaScript errors, 'warning' for console warnings */
   level: 'error' | 'warning';
+}
+
+/**
+ * Input schema describing how to interact with a game.
+ * 
+ * Provides information about game controls and input methods to help
+ * the QA agent understand how to interact with the game.
+ * 
+ * - Actions: Discrete button events (e.g., Jump, Shoot)
+ * - Axes: Continuous inputs that return values from -1 to 1 (e.g., MoveHorizontal)
+ * - First-party games provide JS snippets ('javascript' type)
+ * - Third-party games provide semantic descriptions ('semantic' type)
+ */
+export interface InputSchema {
+  /** Type of input schema: 'javascript' for executable JS snippets, 'semantic' for descriptions */
+  type: 'javascript' | 'semantic';
+  
+  /** 
+   * Content of the input schema.
+   * - For 'javascript': Executable JavaScript snippet that defines input handling
+   * - For 'semantic': Human-readable description of game controls
+   */
+  content: string;
+  
+  /** 
+   * Optional array of action names for discrete button events.
+   * Examples: ['Jump', 'Shoot', 'Interact', 'Pause']
+   */
+  actions?: string[];
+  
+  /** 
+   * Optional array of axis names for continuous inputs.
+   * Examples: ['MoveHorizontal', 'MoveVertical', 'LookHorizontal', 'LookVertical']
+   * Axes return values from -1.0 to 1.0 representing input direction/magnitude
+   */
+  axes?: string[];
 }
 

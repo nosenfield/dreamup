@@ -18,6 +18,7 @@ export type {
   ClickableElement,
   Screenshot,
   ConsoleError,
+  InputSchema,
 } from './game-test.types';
 
 // Export all configuration types

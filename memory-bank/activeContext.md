@@ -1,30 +1,47 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 3, 2025
-**Session**: Phase 2 - P2.3 Complete (Phase 2 Complete!)
+**Session**: Ad-hoc enhancement - InputSchema support added
 
 ---
 
 ## Current Focus
 
 ### What We're Working On
-**Phase 2: Utility Modules** - ✅ Complete! All 3 tasks finished:
-- ✅ P2.1: Create Logger Utility - Complete!
-- ✅ P2.2: Create Timeout Utility - Complete!
-- ✅ P2.3: Create File Manager Utility - Complete!
+**Ad-hoc Enhancement**: InputSchema support for game controls
+- Added InputSchema interface to support game-specific input information
+- Updated GameTestRequest to accept optional inputSchema
+- Added comprehensive tests for InputSchema validation
 
 ### Next Immediate Tasks
 1. **Begin Phase 3: Core Browser Automation**
    - P3.1: Implement Browser Manager
    - P3.2: Implement Game Detector
    - P3.3: Implement Error Monitor
-2. Continue with foundation development
+2. Implement InputSchema usage in game interaction logic (P3.5)
 
 ---
 
 ## Recent Changes
 
-### Completed This Session
+### Completed This Session (Latest)
+- ✅ Enhanced Type Definitions: Added InputSchema support
+  - Added `InputSchema` interface to `src/types/game-test.types.ts`
+    - Supports `type: 'javascript' | 'semantic'` for first-party vs third-party games
+    - Includes `content` field for JS snippets or semantic descriptions
+    - Optional `actions?: string[]` for discrete button events (Jump, Shoot)
+    - Optional `axes?: string[]` for continuous inputs (MoveHorizontal, -1 to 1 range)
+  - Updated `GameTestRequest` interface with optional `inputSchema?: InputSchema` field
+  - Updated `src/types/index.ts` to export InputSchema
+  - Added 3 new unit tests in `tests/unit/types.test.ts`:
+    - Test InputSchema type imports correctly
+    - Test GameTestRequest accepts inputSchema field
+    - Test both javascript and semantic schema types work
+  - All tests passing (5 tests total in types.test.ts)
+  - TypeScript compilation passes (`bunx tsc --noEmit`)
+  - **Rationale**: Some games provide additional information about their construction and controls to help QA agent understand how to interact with them
+
+### Completed This Session (Previous)
 - ✅ P2.3: Create File Manager Utility
   - Created `src/utils/file-manager.ts` with FileManager class
   - Implemented `ensureOutputDirectory()` to create directories recursively
@@ -147,6 +164,11 @@
 6. **Screenshots**: Keep all screenshots, no cleanup in MVP
 7. **Caching**: Disabled for MVP, stub implementation for future
 8. **Environment Variables**: Bun automatically loads `.env` files, so `dotenv` package is not needed
+9. **Input Schema Support**: Added InputSchema interface to support game-specific control information
+   - First-party games provide JavaScript snippets ('javascript' type)
+   - Third-party games provide semantic descriptions ('semantic' type)
+   - Supports both discrete actions (Jump, Shoot) and continuous axes (MoveHorizontal)
+   - Optional field in GameTestRequest to maintain backward compatibility
 
 ---
 
@@ -164,3 +186,8 @@
 - `_docs/technical-concerns.md`: Known risks and mitigation strategies
 - `_docs/required-reading.md`: Learning resources and documentation
 - `memory-bank/systemPatterns.md`: Design patterns and invariants
+
+### Key Files Currently Being Modified
+- `src/types/game-test.types.ts`: Contains InputSchema interface
+- `src/types/index.ts`: Exports InputSchema type
+- `tests/unit/types.test.ts`: Tests for InputSchema functionality

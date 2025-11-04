@@ -141,6 +141,39 @@ const result = await generateObject({
 });
 ```
 
+### Pattern 6: Input Schema Support
+**When to use**: Games that provide additional control information
+**Why**: Helps QA agent understand game-specific input methods and interact more effectively
+**Example**:
+```typescript
+// First-party games provide JavaScript snippets
+const jsSchema: InputSchema = {
+  type: 'javascript',
+  content: 'window.gameControls = { jump: () => {}, shoot: () => {} };',
+  actions: ['Jump', 'Shoot'],
+};
+
+// Third-party games provide semantic descriptions
+const semanticSchema: InputSchema = {
+  type: 'semantic',
+  content: 'Platformer game: Use arrow keys to move, spacebar to jump',
+  actions: ['Jump'],
+  axes: ['MoveHorizontal', 'MoveVertical'],
+};
+
+// Usage in GameTestRequest
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/game',
+  inputSchema: jsSchema, // Optional - enhances interaction accuracy
+};
+```
+
+**Key concepts**:
+- **Actions**: Discrete button events (Jump, Shoot, Interact)
+- **Axes**: Continuous inputs returning -1.0 to 1.0 (MoveHorizontal, MoveVertical)
+- **JavaScript type**: Executable code snippets for first-party games
+- **Semantic type**: Human-readable descriptions for third-party games
+
 ---
 
 ## Key Invariants
@@ -167,9 +200,10 @@ Lambda function is stateless. Each invocation starts fresh, no reliance on /tmp 
 ### Request/Response Cycle
 
 1. **Initialization**
-   - Parse input (gameUrl + optional config)
+   - Parse input (gameUrl + optional config + optional inputSchema)
    - Generate session ID (nanoid)
    - Initialize logger with context
+   - Extract input schema if provided (for use in interaction phase)
 
 2. **Browser Session**
    - Create Browserbase session (30s timeout)
