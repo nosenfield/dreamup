@@ -1,25 +1,59 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 3, 2025
-**Session**: Template Overlay Complete
+**Session**: Phase 0 Complete
 
 ---
 
 ## Current Focus
 
 ### What We're Working On
-**Template overlay complete**. All memory bank files filled with DreamUp-specific context. Ready to begin Phase 0 (Project Setup) of implementation.
+**Phase 0: Project Setup & Configuration** - ✅ Complete! All setup tasks finished:
+- P0.1: Project structure initialized
+- P0.2: Dependencies installed
+- P0.3: TypeScript configured
+- P0.4: Environment configuration documented
 
 ### Next Immediate Tasks
-1. Initialize git repository with initial commit
-2. Run `verify-context.sh` to ensure all memory bank files are complete
-3. Begin Phase 0 (Project Setup): Initialize Bun project, install dependencies, configure TypeScript
+1. **Begin Phase 1: Type Definitions & Configuration**
+   - P1.1: Define Core Types
+   - P1.2: Create Configuration Constants
+2. Continue with foundation development
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session
+- ✅ P0.4: Environment Configuration
+  - Verified `.env.example` is tracked in git (already exists and committed)
+  - Verified `.env` exists locally with credentials (user confirmed)
+  - Updated `README.md` with comprehensive setup instructions
+  - Documented environment variables, API key setup, and Bun's automatic .env loading
+  - **Phase 0 Complete!** All 4 tasks finished
+
+### Previous Tasks
+- ✅ P0.3: Configure TypeScript
+  - Verified `tsconfig.json` meets all task requirements (target ES2022, module ESNext, strict mode, etc.)
+  - Tested TypeScript compilation with `bun build src/main.ts` - successful
+  - Verified TypeScript type checking with `tsc --noEmit` - no errors
+  - Existing config includes additional strict checks and path mappings beyond minimum requirements
+
+### Previous Tasks
+- ✅ P0.2: Install Dependencies
+  - Installed missing dev dependencies: `@types/jest@30.0.0`, `jest@30.2.0`, `ts-jest@29.4.5`
+  - Verified all packages installed successfully with `bun install`
+  - Confirmed `bun run` command works correctly
+  - Note: Skipped `dotenv` as Bun automatically loads `.env` files (confirmed via Context7 docs)
+
+### Previous Tasks
+- ✅ P0.1: Initialize Project Structure
+  - Verified all directory structure exists (src/{core,vision,utils,config,types}, tests/{fixtures,integration,unit}, output/{screenshots,reports})
+  - Updated `.gitignore` to include `output/` directory with exceptions for `.gitkeep` files
+  - Created `.gitkeep` files for `output/`, `output/reports/`, and `output/screenshots/` to preserve directory structure
+  - Verified `package.json` has correct name "dreamup"
+
+### Previous Session
 - ✅ Copied ai-project-template structure into existing dreamup directory
 - ✅ Renamed all memory-bank/*.template files to *.md
 - ✅ Filled projectbrief.md with DreamUp MVP scope and success criteria
@@ -39,6 +73,7 @@
 5. **Error handling**: Fail immediately, no retry logic in MVP
 6. **Screenshots**: Keep all screenshots, no cleanup in MVP
 7. **Caching**: Disabled for MVP, stub implementation for future
+8. **Environment Variables**: Bun automatically loads `.env` files, so `dotenv` package is not needed
 
 ---
 
