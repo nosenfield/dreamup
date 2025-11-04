@@ -77,6 +77,58 @@ Use patterns from `tests/patterns/`:
 - `error.test.ts` - Error handling
 - `performance.test.ts` - Performance benchmarks
 
+## Bun-Specific Testing Patterns
+
+### Enum Comparisons in Tests
+
+**Issue**: TypeScript enums cannot be directly compared to string literals in tests.
+
+**❌ Bad**:
+```typescript
+expect(LogLevel.TRACE).toBe('trace'); // Type error!
+```
+
+**✅ Good**:
+```typescript
+// Compare enum to enum
+expect(LogLevel.TRACE).toBe(LogLevel.TRACE);
+
+// Or verify string value separately
+expect(String(LogLevel.TRACE)).toBe('trace');
+```
+
+### Error Testing in Bun
+
+**Issue**: Bun's test framework doesn't support `expect.fail()` method.
+
+**❌ Bad**:
+```typescript
+try {
+  await functionThatShouldThrow();
+  expect.fail('Should have thrown error'); // Not available in Bun!
+} catch (error) {
+  // ...
+}
+```
+
+**✅ Good**:
+```typescript
+let error: unknown;
+try {
+  await functionThatShouldThrow();
+  throw new Error('Should have thrown error');
+} catch (e) {
+  error = e;
+}
+
+expect(error).toBeInstanceOf(ExpectedError);
+```
+
+**Alternative**: Use `rejects.toThrow()` when possible:
+```typescript
+await expect(functionThatShouldThrow()).rejects.toThrow(ExpectedError);
+```
+
 ## Pre-Commit Requirements
 
 Tests MUST pass before committing:

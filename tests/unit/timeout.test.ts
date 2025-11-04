@@ -90,13 +90,16 @@ describe('Timeout Utility', () => {
         setTimeout(() => resolve('success'), 200);
       });
 
+      let error: unknown;
       try {
         await withTimeout(slowPromise, 50, 'Test operation');
-        expect.fail('Should have thrown TimeoutError');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect(error).toBeInstanceOf(TimeoutError);
+        throw new Error('Should have thrown TimeoutError');
+      } catch (e) {
+        error = e;
       }
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toBeInstanceOf(TimeoutError);
     });
 
     it('should include timeout duration in default message', async () => {
@@ -104,14 +107,17 @@ describe('Timeout Utility', () => {
         setTimeout(() => resolve('success'), 200);
       });
 
+      let error: unknown;
       try {
         await withTimeout(slowPromise, 75); // No custom message
-        expect.fail('Should have thrown TimeoutError');
-      } catch (error) {
-        expect(error).toBeInstanceOf(TimeoutError);
-        expect((error as TimeoutError).message).toContain('75');
-        expect((error as TimeoutError).message).toContain('timed out');
+        throw new Error('Should have thrown TimeoutError');
+      } catch (e) {
+        error = e;
       }
+
+      expect(error).toBeInstanceOf(TimeoutError);
+      expect((error as TimeoutError).message).toContain('75');
+      expect((error as TimeoutError).message).toContain('timed out');
     });
 
     it('should have correct error name', async () => {
@@ -119,13 +125,16 @@ describe('Timeout Utility', () => {
         setTimeout(() => resolve('success'), 200);
       });
 
+      let error: unknown;
       try {
         await withTimeout(slowPromise, 50, 'Test operation');
-        expect.fail('Should have thrown TimeoutError');
-      } catch (error) {
-        expect(error).toBeInstanceOf(TimeoutError);
-        expect((error as TimeoutError).name).toBe('TimeoutError');
+        throw new Error('Should have thrown TimeoutError');
+      } catch (e) {
+        error = e;
       }
+
+      expect(error).toBeInstanceOf(TimeoutError);
+      expect((error as TimeoutError).name).toBe('TimeoutError');
     });
   });
 

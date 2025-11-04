@@ -292,12 +292,21 @@ describe('Logger', () => {
 
   describe('LogLevel enum', () => {
     it('should export LogLevel enum with correct values', () => {
-      expect(LogLevel.TRACE).toBe('trace');
-      expect(LogLevel.DEBUG).toBe('debug');
-      expect(LogLevel.INFO).toBe('info');
-      expect(LogLevel.WARN).toBe('warn');
-      expect(LogLevel.ERROR).toBe('error');
-      expect(LogLevel.FATAL).toBe('fatal');
+      expect(LogLevel.TRACE).toBe(LogLevel.TRACE);
+      expect(LogLevel.DEBUG).toBe(LogLevel.DEBUG);
+      expect(LogLevel.INFO).toBe(LogLevel.INFO);
+      expect(LogLevel.WARN).toBe(LogLevel.WARN);
+      expect(LogLevel.ERROR).toBe(LogLevel.ERROR);
+      expect(LogLevel.FATAL).toBe(LogLevel.FATAL);
+    });
+
+    it('should have correct string values', () => {
+      expect(String(LogLevel.TRACE)).toBe('trace');
+      expect(String(LogLevel.DEBUG)).toBe('debug');
+      expect(String(LogLevel.INFO)).toBe('info');
+      expect(String(LogLevel.WARN)).toBe('warn');
+      expect(String(LogLevel.ERROR)).toBe('error');
+      expect(String(LogLevel.FATAL)).toBe('fatal');
     });
   });
 });
