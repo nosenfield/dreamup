@@ -19,10 +19,10 @@
 
 ### Phase 0: Project Setup & Configuration
 **Status**: In Progress
-**Progress**: 1/4 tasks
+**Progress**: 2/4 tasks
 
 - [x] P0.1: Initialize Project Structure
-- [ ] P0.2: Install Dependencies
+- [x] P0.2: Install Dependencies
 - [ ] P0.3: Configure TypeScript
 - [ ] P0.4: Environment Configuration
 
@@ -41,20 +41,25 @@
   - Updated `.gitignore` to exclude `output/` directory
   - Created `.gitkeep` files for output directories
   - Verified `package.json` has correct name "dreamup"
+- [x] P0.2: Install Dependencies
+  - Installed dev dependencies: `@types/jest@30.0.0`, `jest@30.2.0`, `ts-jest@29.4.5`
+  - Verified all packages installed successfully with `bun install`
+  - Confirmed `bun run` command works correctly
+  - Note: Skipped `dotenv` as Bun automatically loads `.env` files
 
 ---
 
 ## In Progress
 
-**Current Task**: P0.2: Install Dependencies
+**Current Task**: P0.3: Configure TypeScript
 
 ---
 
 ## Upcoming Tasks (Next 3)
 
-1. **P0.2: Install Dependencies**
-2. **P0.3: Configure TypeScript**
-3. **P0.4: Environment Configuration**
+1. **P0.3: Configure TypeScript**
+2. **P0.4: Environment Configuration**
+3. **P1.1: Define Core Types**
 
 ---
 

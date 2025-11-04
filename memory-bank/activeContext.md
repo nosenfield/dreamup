@@ -1,25 +1,32 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 3, 2025
-**Session**: Phase 0 - P0.1 Complete
+**Session**: Phase 0 - P0.2 Complete
 
 ---
 
 ## Current Focus
 
 ### What We're Working On
-**P0.1: Initialize Project Structure** - ✅ Complete. Project structure verified and finalized. All directories exist, `.gitignore` updated, `.gitkeep` files created for output directories.
+**P0.2: Install Dependencies** - ✅ Complete. All dev dependencies installed (@types/jest, jest, ts-jest). Note: `dotenv` not needed as Bun automatically loads `.env` files.
 
 ### Next Immediate Tasks
-1. **P0.2: Install Dependencies** - Install core and dev dependencies
-2. **P0.3: Configure TypeScript** - Verify TypeScript configuration
-3. **P0.4: Environment Configuration** - Create `.env.example` and document setup
+1. **P0.3: Configure TypeScript** - Verify TypeScript configuration
+2. **P0.4: Environment Configuration** - Create `.env.example` and document setup
+3. Begin Phase 1: Type Definitions & Configuration
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session
+- ✅ P0.2: Install Dependencies
+  - Installed missing dev dependencies: `@types/jest@30.0.0`, `jest@30.2.0`, `ts-jest@29.4.5`
+  - Verified all packages installed successfully with `bun install`
+  - Confirmed `bun run` command works correctly
+  - Note: Skipped `dotenv` as Bun automatically loads `.env` files (confirmed via Context7 docs)
+
+### Previous Tasks
 - ✅ P0.1: Initialize Project Structure
   - Verified all directory structure exists (src/{core,vision,utils,config,types}, tests/{fixtures,integration,unit}, output/{screenshots,reports})
   - Updated `.gitignore` to include `output/` directory with exceptions for `.gitkeep` files
@@ -46,6 +53,7 @@
 5. **Error handling**: Fail immediately, no retry logic in MVP
 6. **Screenshots**: Keep all screenshots, no cleanup in MVP
 7. **Caching**: Disabled for MVP, stub implementation for future
+8. **Environment Variables**: Bun automatically loads `.env` files, so `dotenv` package is not needed
 
 ---
 
