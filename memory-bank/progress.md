@@ -241,6 +241,13 @@
   - TypeScript compilation passes
   - Follows dependency injection pattern (logger/config in constructor)
   - Uses existing Logger and timeout utilities
+  - **Bug Fix** (Nov 4, 2025): Fixed keyboard/mouse input to use correct Stagehand API
+    - Changed from Playwright/Puppeteer API (`page.keyboard.press()`) to Stagehand API (`page.keyPress()`)
+    - Changed from `page.mouse.click(x, y)` to Stagehand's `page.click(x, y)`
+    - Stagehand Page exposes keyPress() and click() directly, not via keyboard/mouse properties
+    - Added error handling to continue simulation even if individual key presses fail
+    - Fixed by reading Stagehand type definitions (node_modules/@browserbasehq/stagehand/dist/index.d.ts)
+    - Real game test now passes keyboard input successfully
   - **Acceptance Criteria Met**: ✅ Can send keyboard inputs, ✅ Can click at coordinates, ✅ Interactions don't crash browser, ✅ Errors handled gracefully
 
 - [x] I2.2: Implement Basic Screenshot Capturer (Nov 4, 2025) ✅ COMPLETE

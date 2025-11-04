@@ -1,6 +1,6 @@
 # System Patterns: DreamUp
 
-**Last Updated**: November 3, 2025
+**Last Updated**: November 4, 2025
 
 ## Architecture Overview
 
@@ -223,6 +223,90 @@ Please use Node.js instead.
 If you see this error, upgrade to Stagehand v3: `bun add @browserbasehq/stagehand@3.0.1`
 
 **See also**: `_docs/stagehand-v3-upgrade-guide.md` for migration instructions
+
+---
+
+### Pattern 8: Stagehand Native API (Not Playwright/Puppeteer)
+**When to use**: All keyboard/mouse input with Stagehand Page objects
+**Why**: Stagehand Page has its own API that differs from Playwright/Puppeteer
+**Critical**: Do NOT use `page.keyboard.press()` or `page.mouse.click()` - these don't exist on Stagehand Page
+
+**Example (CORRECT)**:
+```typescript
+import type { AnyPage } from '@browserbasehq/stagehand';
+
+// ✅ Use Stagehand's native keyboard API
+async function sendKeyboardInput(page: AnyPage) {
+  const pageAny = page as any;
+
+  // Stagehand exposes keyPress() directly on page
+  await pageAny.keyPress('ArrowUp', { delay: 0 });
+  await pageAny.keyPress('Space', { delay: 100 });
+  await pageAny.keyPress('Enter');
+}
+
+// ✅ Use Stagehand's native mouse API
+async function clickAt(page: AnyPage, x: number, y: number) {
+  const pageAny = page as any;
+
+  // Stagehand exposes click() directly on page with coordinates
+  await pageAny.click(x, y);
+  await pageAny.click(100, 200, { button: 'right', clickCount: 2 });
+}
+
+// ✅ Use Stagehand's native typing API
+async function typeText(page: AnyPage, text: string) {
+  const pageAny = page as any;
+
+  // Stagehand exposes type() directly on page
+  await pageAny.type(text, { delay: 50 });
+}
+```
+
+**Anti-pattern (INCORRECT)**:
+```typescript
+// ❌ Trying to use Playwright/Puppeteer keyboard API
+async function sendKeyboardInput(page: AnyPage) {
+  const pageAny = page as any;
+
+  // ❌ FAILS: page.keyboard doesn't exist on Stagehand Page
+  await pageAny.keyboard.press('Space');  // TypeError: undefined is not an object
+}
+
+// ❌ Trying to use Playwright/Puppeteer mouse API
+async function clickAt(page: AnyPage, x: number, y: number) {
+  const pageAny = page as any;
+
+  // ❌ FAILS: page.mouse doesn't exist on Stagehand Page
+  await pageAny.mouse.click(x, y);  // TypeError: undefined is not an object
+}
+```
+
+**Key Stagehand Page API methods** (see node_modules/@browserbasehq/stagehand/dist/index.d.ts):
+- `page.keyPress(key: string, options?: { delay?: number })` - Press a single key (line 842)
+- `page.type(text: string, options?: { delay?: number })` - Type text string (line 833)
+- `page.click(x: number, y: number, options?: { button?: "left" | "right" | "middle", clickCount?: number })` - Click at coordinates (line 781)
+- `page.goto(url: string, options?: { waitUntil?: LoadState })` - Navigate to URL (line 690)
+- `page.screenshot(options?: { fullPage?: boolean })` - Capture screenshot (line 732)
+- `page.evaluate(fn: Function | string, arg?: any)` - Execute JavaScript (line 767)
+
+**Why this matters**:
+- Stagehand v3 uses CDP (Chrome DevTools Protocol) directly, not Playwright/Puppeteer
+- The Page class has its own implementation that mirrors but differs from Playwright
+- Type definitions show `AnyPage = PlaywrightPage | PuppeteerPage | PatchrightPage | Page` but at runtime with Browserbase you get Stagehand's `Page` class
+- The `keyboard` and `mouse` properties that exist on Playwright/Puppeteer pages do NOT exist on Stagehand Page
+
+**Runtime error to watch for**:
+```
+TypeError: undefined is not an object (evaluating 'page.keyboard.press')
+TypeError: undefined is not an object (evaluating 'page.mouse.click')
+```
+
+If you see these errors, you're using Playwright/Puppeteer API on a Stagehand Page. Switch to Stagehand's native methods.
+
+**See also**:
+- Pattern 7 for Bun/Stagehand compatibility
+- `src/core/game-interactor.ts` for reference implementation
 
 ---
 

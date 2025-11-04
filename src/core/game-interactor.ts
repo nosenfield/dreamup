@@ -1,10 +1,16 @@
 /**
  * Game Interactor for simulating user input in browser-based games.
- * 
+ *
  * This module provides a GameInteractor class that handles keyboard and mouse
  * interactions with game pages. It supports basic input simulation for automated
  * game testing.
- * 
+ *
+ * IMPORTANT: Uses Stagehand's native Page API, NOT Playwright/Puppeteer API.
+ * - Use `page.keyPress(key, options)` NOT `page.keyboard.press(key)`
+ * - Use `page.click(x, y, options)` NOT `page.mouse.click(x, y)`
+ *
+ * See Pattern 8 in memory-bank/systemPatterns.md for details.
+ *
  * @module core.game-interactor
  */
 
@@ -98,15 +104,9 @@ export class GameInteractor {
       timeout: this.interactionTimeout,
     });
 
-    // Validate page has keyboard object
+    // Cast to any to access Stagehand Page methods
+    // Stagehand exposes keyPress() directly on the Page object
     const pageAny = page as any;
-    if (!pageAny.keyboard || typeof pageAny.keyboard.press !== 'function') {
-      const error = new Error('Page does not have keyboard object or press method');
-      this.logger.error('Keyboard simulation failed - invalid page', {
-        error: error.message,
-      });
-      throw error;
-    }
 
     try {
       // Wrap entire simulation in timeout
@@ -130,8 +130,11 @@ export class GameInteractor {
 
   /**
    * Internal method to perform keyboard simulation.
-   * 
-   * @param page - Page object with keyboard property
+   *
+   * Uses Stagehand's page.keyPress() API to send keyboard events.
+   * Stagehand Page exposes keyPress(key) rather than keyboard.press(key).
+   *
+   * @param page - Stagehand Page object (AnyPage type)
    * @param duration - Duration in milliseconds
    */
   private async _performKeyboardSimulation(
@@ -146,8 +149,17 @@ export class GameInteractor {
       const key = this.keyboardKeys[keyIndex % this.keyboardKeys.length];
       keyIndex++;
 
-      // Press the key
-      await page.keyboard.press(key);
+      try {
+        // Use Stagehand's keyPress() method (not keyboard.press())
+        // Stagehand Page exposes keyPress directly on the page object
+        await page.keyPress(key, { delay: 0 });
+      } catch (error) {
+        this.logger.warn('Key press failed, continuing simulation', {
+          key,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with next key rather than failing entire simulation
+      }
 
       // Wait before next key press
       const remainingTime = duration - (Date.now() - startTime);
@@ -159,6 +171,11 @@ export class GameInteractor {
       const delay = Math.min(this.keyPressDelay, remainingTime);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
+
+    this.logger.debug('Keyboard simulation loop completed', {
+      keysPressed: keyIndex,
+      duration: Date.now() - startTime,
+    });
   }
 
   /**
@@ -196,20 +213,15 @@ export class GameInteractor {
       timeout: this.interactionTimeout,
     });
 
-    // Validate page has mouse object
+    // Cast to any to access Stagehand Page methods
+    // Stagehand exposes click() directly on the Page object
     const pageAny = page as any;
-    if (!pageAny.mouse || typeof pageAny.mouse.click !== 'function') {
-      const error = new Error('Page does not have mouse object or click method');
-      this.logger.error('Mouse click failed - invalid page', {
-        error: error.message,
-      });
-      throw error;
-    }
 
     try {
-      // Wrap click operation in timeout
+      // Use Stagehand's click(x, y) method
+      // Stagehand Page exposes click directly with coordinates
       await withTimeout(
-        pageAny.mouse.click(x, y),
+        pageAny.click(x, y),
         this.interactionTimeout,
         `Mouse click timed out after ${this.interactionTimeout}ms`
       );

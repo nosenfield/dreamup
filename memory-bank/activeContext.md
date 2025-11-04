@@ -52,6 +52,18 @@
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **Bug Fix: GameInteractor Keyboard/Mouse API** (Nov 4, 2025)
+  - Fixed runtime error: "undefined is not an object (evaluating 'actualPage.keyboard.press')"
+  - **Root cause**: Used Playwright/Puppeteer API (`page.keyboard.press()`) on Stagehand Page
+  - **Solution**: Changed to Stagehand's native API:
+    - Keyboard: `page.keyPress(key, { delay: 0 })` instead of `page.keyboard.press(key)`
+    - Mouse: `page.click(x, y)` instead of `page.mouse.click(x, y)`
+  - Stagehand Page exposes keyPress() and click() directly, not via keyboard/mouse properties
+  - Added try-catch around key presses to continue simulation even if individual keys fail
+  - Fixed by reading Stagehand type definitions (node_modules/@browserbasehq/stagehand/dist/index.d.ts line 833, 842, 781)
+  - Real game test with keyboard input now works correctly
+  - Files modified: `src/core/game-interactor.ts` (lines 101-173, 210-221)
+
 - ✅ **I2.3: Expand Main Orchestration** (Nov 4, 2025)
   - Updated `src/main.ts` to use GameInteractor and ScreenshotCapturer
   - Integrated keyboard input simulation (30 seconds duration)
