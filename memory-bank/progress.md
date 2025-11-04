@@ -35,12 +35,12 @@
 - [x] P1.3: Create Zod Schemas
 
 ### Phase 2: Utility Modules
-**Status**: In Progress
-**Progress**: 2/3 tasks
+**Status**: ✅ Complete
+**Progress**: 3/3 tasks
 
 - [x] P2.1: Create Logger Utility
 - [x] P2.2: Create Timeout Utility
-- [ ] P2.3: Create File Manager Utility
+- [x] P2.3: Create File Manager Utility
 
 ---
 
@@ -126,20 +126,36 @@
   - TypeScript compilation passes with no errors (`tsc --noEmit`)
   - Unit tests created and passing (17 tests, all passing)
   - Timeout utility matches architecture.md specifications and systemPatterns.md invariant
+- [x] P2.3: Create File Manager Utility
+  - Created `src/utils/file-manager.ts` with FileManager class
+  - Implemented `ensureOutputDirectory()` to create directories recursively
+  - Implemented `saveScreenshot()` to save PNG buffers with unique IDs (nanoid)
+  - Implemented `saveReport()` to save JSON reports with indentation
+  - Implemented `getScreenshotPath()` and `getReportPath()` for path generation
+  - Implemented `cleanup()` as stub for future implementation
+  - All file operations use PATHS constants from config (/tmp/game-qa-output)
+  - Screenshots saved as PNG files with unique IDs and stage information
+  - Reports saved as JSON files with proper formatting
+  - Created `src/utils/index.ts` to export FileManager
+  - All code includes comprehensive JSDoc comments
+  - TypeScript compilation passes with no errors (`tsc --noEmit`)
+  - Unit tests created and passing (23 tests, all passing)
+  - FileManager matches architecture.md specifications
+  - **Phase 2 Complete!** All 3 utility tasks finished
 
 ---
 
 ## In Progress
 
-**Current Task**: P2.3: Create File Manager Utility
+**Current Task**: P3.1: Implement Browser Manager
 
 ---
 
 ## Upcoming Tasks (Next 3)
 
-1. **P2.3: Create File Manager Utility**
-2. **P3.1: Implement Browser Manager**
-3. **P3.2: Implement Game Detector**
+1. **P3.1: Implement Browser Manager**
+2. **P3.2: Implement Game Detector**
+3. **P3.3: Implement Error Monitor**
 
 ---
 

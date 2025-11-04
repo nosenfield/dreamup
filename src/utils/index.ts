@@ -14,3 +14,6 @@ export type { LoggerContext, LogEntry } from './logger';
 // Export timeout utilities
 export { withTimeout, TimeoutError, TIMEOUTS } from './timeout';
 
+// Export file manager
+export { FileManager } from './file-manager';
+
