@@ -52,23 +52,27 @@ Based on expert recommendation and game engine context:
 
 #### I1.1: Implement Browser Manager
 **Effort**: M (2-3 hours)
-**Status**: `[ ]`
+**Status**: `[⚠️]` - **RUNTIME BUG: Requires Stagehand v3 upgrade**
 **Original Reference**: P3.1 in `task-list-waterfall-original.md`
 
+**⚠️ CRITICAL NOTE**: Initial implementation with Stagehand v1.x discovered runtime bug - Playwright incompatibility with Bun. **Requires upgrade to Stagehand v3.0.1** (see `_docs/stagehand-v3-upgrade-guide.md`).
+
 **Implementation**:
-- [ ] Create `src/core/browser-manager.ts`
-- [ ] Implement `BrowserManager` class
-  - [ ] `initialize()` - Create Browserbase session, connect Stagehand
-  - [ ] `navigate(url)` - Navigate to URL with timeout and networkidle
-  - [ ] `cleanup()` - Close browser session
-- [ ] Add error handling and logging
-- [ ] Write integration tests with mock Browserbase
+- [x] Create `src/core/browser-manager.ts`
+- [x] Implement `BrowserManager` class
+  - [x] `initialize()` - Create Browserbase session, connect Stagehand
+  - [x] `navigate(url)` - Navigate to URL with timeout and networkidle
+  - [x] `cleanup()` - Close browser session
+- [x] Add error handling and logging
+- [x] Write integration tests with mock Browserbase
+- [ ] **BUG FIX**: Upgrade to Stagehand v3.0.1 (15-20 min)
 
 **Acceptance Criteria**:
-- [ ] Browser initializes successfully
-- [ ] Can navigate to URLs
-- [ ] Cleanup releases resources
-- [ ] Errors are caught and logged
+- [x] Browser initializes successfully (with mocks)
+- [x] Can navigate to URLs (with mocks)
+- [x] Cleanup releases resources (with mocks)
+- [x] Errors are caught and logged
+- [ ] **Real game test passes** (blocked by Playwright/Bun bug)
 
 ---
 

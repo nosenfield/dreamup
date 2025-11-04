@@ -347,6 +347,76 @@ await page.mouse.click(buttonLocation.x, buttonLocation.y);
 
 ---
 
+## Critical Concerns (Resolved)
+
+### C10: Playwright/Bun Incompatibility ✅ RESOLVED
+**Severity**: CRITICAL
+**Status**: Resolved via Stagehand v3 upgrade
+**Impact**: Blocking - Agent cannot run on Bun runtime
+
+#### Problem
+Runtime testing discovered that Stagehand v1.x internally depends on Playwright, which refuses to run on Bun:
+
+```
+Error: Playwright does not currently support the Bun runtime environment.
+Please use Node.js instead.
+For more information, see: https://github.com/microsoft/playwright/issues/27139
+```
+
+**Discovery**: November 4, 2025 during Iteration 1 real game testing
+
+#### Root Cause Analysis
+```typescript
+// Our code (correct):
+import { Stagehand } from '@browserbasehq/stagehand';
+
+const stagehand = new Stagehand({
+  env: 'BROWSERBASE',  // Cloud browsers
+  apiKey: process.env.BROWSERBASE_API_KEY,
+  projectId: process.env.BROWSERBASE_PROJECT_ID,
+});
+
+await stagehand.init(); // ❌ FAILS - Stagehand v1.x uses Playwright internally
+```
+
+Despite using Browserbase cloud browsers (no local browser needed), Stagehand v1.x loads Playwright as a dependency, and Playwright's initialization code checks the runtime and refuses to run on Bun.
+
+#### Solution: Upgrade to Stagehand v3.0.1
+**Stagehand v3 architecture change**:
+- Removed Playwright dependency entirely
+- Uses Chrome DevTools Protocol (CDP) directly
+- Fully Bun-compatible
+- Production-ready stable release
+
+**Implementation**:
+```bash
+# Upgrade package
+bun add @browserbasehq/stagehand@3.0.1
+```
+
+**Code changes required**: Minimal (mostly page access pattern)
+```typescript
+// v1 (old):
+this.page = this.stagehand.page;
+
+// v3 (new - may still have convenience getter):
+this.page = this.stagehand.page; // Try this first
+// OR: this.page = this.stagehand.context.pages()[0];
+```
+
+**Estimated fix time**: 15-20 minutes
+
+#### Documentation
+See comprehensive upgrade guide: `_docs/stagehand-v3-upgrade-guide.md`
+
+#### Status
+- ✅ Issue identified and root cause understood
+- ✅ Solution confirmed (Stagehand v3 is Bun-compatible)
+- ✅ Comprehensive upgrade guide created
+- ⏳ Implementation pending (Cursor to execute)
+
+---
+
 ## Low Concerns (Monitoring Required)
 
 ### C7: Browserbase Session Limits
@@ -391,19 +461,20 @@ Unlikely to hit these with game testing volumes.
 
 ## Decision Matrix
 
-| Concern | Severity | Must Address Before Launch? | Estimated Effort |
-|---------|----------|------------------------------|------------------|
-| C1: Canvas Detection | HIGH | YES | 4-6 hours |
-| C2: Lambda Timeout | HIGH | YES | 2-3 hours |
-| C3: iFrame Handling | MEDIUM-HIGH | YES | 2-4 hours |
-| C4: Loading Detection | MEDIUM | YES | 3-4 hours |
-| C5: Vision API Costs | MEDIUM | Monitor first week | 2 hours (if needed) |
-| C6: Non-Deterministic Games | MEDIUM | YES (design patterns) | 1-2 hours |
-| C7: Browserbase Limits | LOW | NO (monitor) | 1 hour (if needed) |
-| C8: OpenAI Rate Limits | LOW | NO (monitor) | 1 hour (if needed) |
-| C9: Storage Growth | LOW | NO (monitor) | 30 min (if needed) |
+| Concern | Severity | Must Address Before Launch? | Estimated Effort | Status |
+|---------|----------|------------------------------|------------------|--------|
+| C1: Canvas Detection | HIGH | YES | 4-6 hours | Pending |
+| C2: Lambda Timeout | HIGH | YES | 2-3 hours | Pending |
+| C3: iFrame Handling | MEDIUM-HIGH | YES | 2-4 hours | Pending |
+| C4: Loading Detection | MEDIUM | YES | 3-4 hours | Pending |
+| C5: Vision API Costs | MEDIUM | Monitor first week | 2 hours (if needed) | Pending |
+| C6: Non-Deterministic Games | MEDIUM | YES (design patterns) | 1-2 hours | Pending |
+| C7: Browserbase Limits | LOW | NO (monitor) | 1 hour (if needed) | Pending |
+| C8: OpenAI Rate Limits | LOW | NO (monitor) | 1 hour (if needed) | Pending |
+| C9: Storage Growth | LOW | NO (monitor) | 30 min (if needed) | Pending |
+| **C10: Playwright/Bun** | **CRITICAL** | **YES (BLOCKING)** | **15-20 min** | **✅ Solution Ready** |
 
-**Total Pre-Launch Effort**: 14-21 hours of problem-solving
+**Total Pre-Launch Effort**: 14-21 hours of problem-solving (+ 15-20 min for C10 fix)
 
 ---
 

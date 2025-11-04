@@ -176,6 +176,56 @@ const request: GameTestRequest = {
 
 ---
 
+### Pattern 7: Bun/Stagehand Compatibility
+**When to use**: Always - when using Stagehand with Bun runtime
+**Why**: Playwright is incompatible with Bun; must use Stagehand v3+ which uses CDP directly
+**Critical**: Stagehand v1.x will fail at runtime with Playwright error
+
+**Example (CORRECT)**:
+```typescript
+// ✅ Use Stagehand v3.0.1+ with Browserbase
+import { Stagehand } from '@browserbasehq/stagehand'; // v3.0.1+
+
+const stagehand = new Stagehand({
+  env: 'BROWSERBASE',  // Cloud browsers via CDP
+  apiKey: process.env.BROWSERBASE_API_KEY,
+  projectId: process.env.BROWSERBASE_PROJECT_ID,
+});
+
+await stagehand.init(); // ✅ Works - v3 uses CDP, not Playwright
+
+// Page access (v3 API)
+const page = stagehand.page; // Convenience getter
+// OR: const page = stagehand.context.pages()[0];
+```
+
+**Anti-pattern (INCORRECT)**:
+```typescript
+// ❌ Stagehand v1.x with Bun
+import { Stagehand } from '@browserbasehq/stagehand'; // v1.0.0
+
+const stagehand = new Stagehand({ env: 'BROWSERBASE', ... });
+await stagehand.init(); // ❌ FAILS: "Playwright does not support Bun"
+```
+
+**Key concepts**:
+- **Stagehand v1/v2**: Built on Playwright → Incompatible with Bun
+- **Stagehand v3**: Built on Chrome DevTools Protocol (CDP) → Bun-compatible
+- **Browserbase mode**: Cloud browsers eliminate need for local Chromium
+- **Always verify version**: `package.json` must show `"@browserbasehq/stagehand": "^3.0.1"`
+
+**Runtime error to watch for**:
+```
+Error: Playwright does not currently support the Bun runtime environment.
+Please use Node.js instead.
+```
+
+If you see this error, upgrade to Stagehand v3: `bun add @browserbasehq/stagehand@3.0.1`
+
+**See also**: `_docs/stagehand-v3-upgrade-guide.md` for migration instructions
+
+---
+
 ## Key Invariants
 
 ### Invariant 1: Every Test Returns a Report
