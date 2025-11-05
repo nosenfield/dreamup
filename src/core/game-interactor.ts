@@ -254,20 +254,23 @@ export class GameInteractor {
   }
 
   /**
-   * Find and click the start button using natural language or vision fallback.
-   * 
-   * Uses a two-strategy approach:
-   * 1. First tries Stagehand's natural language command (`page.act("click start button")`)
-   * 2. Falls back to vision-based detection if natural language fails
+   * Find and click the start button using DOM selector, natural language, or vision fallback.
+   *
+   * Uses a three-strategy approach:
+   * 1. First tries direct DOM selection (fastest, most reliable for HTML buttons)
+   *    - Looks for common start/play button selectors
+   *    - Works for HTML elements above or below canvas
+   * 2. Then tries Stagehand's natural language command (`page.act("click start button")`)
+   * 3. Finally falls back to vision-based detection if both fail
    *    - Takes a screenshot
    *    - Uses VisionAnalyzer to find clickable elements
    *    - Filters for "start" or "play" buttons
    *    - Clicks at the highest confidence element (>= 0.7)
-   * 
+   *
    * @param page - The Stagehand page object
    * @param timeout - Optional timeout for the operation (default: interactionTimeout)
    * @returns Promise that resolves to `true` if start button was found and clicked, `false` otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const success = await interactor.findAndClickStart(page);
@@ -285,7 +288,53 @@ export class GameInteractor {
       hasVisionFallback: !!(this.visionAnalyzer && this.screenshotCapturer),
     });
 
-    // Strategy 1: Try natural language commands
+    // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
+    const domSelectors = [
+      'button:has-text("Start")',
+      'button:has-text("Play")',
+      'button:has-text("START GAME")',
+      'button:has-text("MORE GAMES")', // Try this too, in case it's the only clickable
+      '[onclick*="start" i]',
+      '[onclick*="play" i]',
+      'a:has-text("Start")',
+      'a:has-text("Play")',
+      'div[role="button"]:has-text("Start")',
+      'div[role="button"]:has-text("Play")',
+    ];
+
+    for (const selector of domSelectors) {
+      try {
+        // Try to find and click the element using standard page.click(selector)
+        const element = await pageAny.locator(selector).first();
+        if (element && (await element.isVisible({ timeout: 1000 }).catch(() => false))) {
+          await withTimeout(
+            element.click(),
+            operationTimeout,
+            `DOM selector click "${selector}" timed out after ${operationTimeout}ms`
+          );
+
+          this.logger.info('Start button found using DOM selector', {
+            selector,
+          });
+
+          // Wait for game to initialize after clicking start
+          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+          this.logger.debug('Post-click delay completed (DOM selector)', {
+            delayMs: TIMEOUTS.POST_START_DELAY,
+          });
+
+          return true;
+        }
+      } catch (error) {
+        this.logger.debug('DOM selector failed', {
+          selector,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue to next selector
+      }
+    }
+
+    // Strategy 2: Try natural language commands
     const naturalLanguagePhrases = [
       'click start button',
       'click play button',
@@ -326,7 +375,7 @@ export class GameInteractor {
       }
     }
 
-    // Strategy 2: Fallback to vision-based detection
+    // Strategy 3: Fallback to vision-based detection
     if (this.visionAnalyzer && this.screenshotCapturer) {
       this.logger.info('Falling back to vision-based start button detection', {});
 
@@ -392,8 +441,9 @@ export class GameInteractor {
       }
     }
 
-    // Both strategies failed or fallback not available
+    // All strategies failed or fallback not available
     this.logger.warn('Could not find start button', {
+      domSelectionFailed: true,
       naturalLanguageFailed: true,
       visionFallbackAvailable: !!(this.visionAnalyzer && this.screenshotCapturer),
     });

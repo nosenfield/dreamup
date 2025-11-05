@@ -10,13 +10,16 @@
 
 /**
  * Version of the prompts for tracking changes over time.
- * 
+ *
  * Follows semantic versioning: MAJOR.MINOR.PATCH
  * - MAJOR: Breaking changes to prompt structure or behavior
  * - MINOR: New features or improvements to existing prompts
  * - PATCH: Bug fixes or minor clarifications
+ *
+ * Version History:
+ * - 1.1.0: Improved FIND_CLICKABLE_ELEMENTS_PROMPT with better coordinate accuracy guidance
  */
-export const PROMPT_VERSION = '1.0.0';
+export const PROMPT_VERSION = '1.1.0';
 
 /**
  * Prompt for analyzing game screenshots to determine playability.
@@ -152,11 +155,16 @@ export const FIND_CLICKABLE_ELEMENTS_PROMPT = `You are analyzing a game screensh
    - Interactive game elements (if clearly clickable)
    - Links or text buttons
 
-2. **Coordinates (clickableElementSchema):**
-   - **x**: X coordinate in pixels (0-based, top-left origin)
-   - **y**: Y coordinate in pixels (0-based, top-left origin)
-   - Provide coordinates for the CENTER of the clickable element
-   - Measure from the top-left corner of the screenshot
+2. **Coordinates (clickableElementSchema) - CRITICAL FOR ACCURACY:**
+   - **x**: X coordinate in pixels (0-based, left edge of image is 0)
+   - **y**: Y coordinate in pixels (0-based, top edge of image is 0)
+   - **IMPORTANT**: Provide coordinates for the CENTER of the clickable element
+   - **IMPORTANT**: Measure carefully from the top-left corner (0,0) of the screenshot
+   - **IMPORTANT**: Consider the actual pixel position, not relative positioning
+   - Example: If a button is on the left side of the screen at approximately 1/4 width and 1/4 height:
+     - For a 640x480 image: x ≈ 160, y ≈ 120
+     - For a 1280x720 image: x ≈ 320, y ≈ 180
+   - Double-check your coordinate measurements before returning results
 
 3. **Labels:**
    - Use descriptive labels (e.g., "Start Game Button", "Settings Menu", "Play Button")
@@ -171,35 +179,25 @@ export const FIND_CLICKABLE_ELEMENTS_PROMPT = `You are analyzing a game screensh
 
 **Output Format (clickableElementSchema array):**
 - **label**: String describing the element
-- **x**: Number >= 0 (X coordinate in pixels)
-- **y**: Number >= 0 (Y coordinate in pixels)
+- **x**: Number >= 0 (X coordinate in pixels from left edge)
+- **y**: Number >= 0 (Y coordinate in pixels from top edge)
 - **confidence**: Number between 0 and 1 (certainty of detection)
 
 **Examples:**
 
-Example 1 - Game Menu:
+Example 1 - Button on left side of 800x600 image:
+If you see a "Start Game" button on the left quarter of the screen, about 1/3 down:
 [
   {
     "label": "Start Game Button",
-    "x": 400,
-    "y": 300,
+    "x": 200,
+    "y": 200,
     "confidence": 0.95
-  },
-  {
-    "label": "Settings Button",
-    "x": 400,
-    "y": 350,
-    "confidence": 0.90
-  },
-  {
-    "label": "Help Button",
-    "x": 400,
-    "y": 400,
-    "confidence": 0.85
   }
 ]
 
-Example 2 - Single Button:
+Example 2 - Button centered in 640x480 image:
+If you see a "Play" button in the center:
 [
   {
     "label": "Play Button",
@@ -209,11 +207,28 @@ Example 2 - Single Button:
   }
 ]
 
-**Important:** 
+Example 3 - Multiple buttons vertically stacked:
+[
+  {
+    "label": "Start Game Button",
+    "x": 170,
+    "y": 200,
+    "confidence": 0.95
+  },
+  {
+    "label": "More Games Button",
+    "x": 170,
+    "y": 240,
+    "confidence": 0.90
+  }
+]
+
+**Important:**
 - Return an array of clickableElementSchema objects
 - Only include elements with confidence >= 0.5
-- Coordinates must be non-negative integers
-- Confidence must be between 0 and 1`;
+- Coordinates must be non-negative integers measured from top-left (0,0)
+- Confidence must be between 0 and 1
+- **ACCURACY MATTERS**: Wrong coordinates will cause clicks to miss the button entirely`;
 
 /**
  * Prompt for detecting crashes or error states in a game screenshot.

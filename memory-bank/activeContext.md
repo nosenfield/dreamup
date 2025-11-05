@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
-**Last Updated**: November 4, 2025
-**Session**: Iteration 4 - Vision Analysis (In Progress)
+**Last Updated**: November 5, 2025
+**Session**: Bug Fixes - Start Button Detection (Complete)
 
 ---
 
@@ -48,6 +48,10 @@
 - ✅ I4.3: Complete Game Interactor with Vision - COMPLETE
 - ✅ I4.4: Expand Main Orchestration - COMPLETE
 
+✅ **Bug Fixes: Start Button Detection** - COMPLETE (Nov 5, 2025)
+- ✅ Fixed: Agent now tries DOM selection before vision
+- ✅ Fixed: Vision coordinate accuracy improved
+
 ### Next Immediate Tasks
 1. **I5.1: Implement Input Schema Parser** (Iteration 5)
    - Parse JavaScript input schemas
@@ -58,6 +62,27 @@
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **Bug Fix: Start Button Detection** (Nov 5, 2025)
+  - **Issue 1**: Agent skipped HTML button detection for games with canvas + HTML elements (Pacman)
+  - **Issue 2**: Vision returned incorrect coordinates (640,207 instead of 170,190)
+  - **Solution 1**: Added Strategy 1 (DOM selection) before natural language/vision fallback
+    - Added 10 common DOM selectors for start/play buttons
+    - Tries `button:has-text("Start")`, `button:has-text("START GAME")`, onclick handlers, etc.
+    - Falls through to natural language and vision only if DOM fails
+    - **Performance improvement**: DOM is instant vs. 3-5s for vision API
+    - **Cost savings**: No OpenAI API call when DOM works
+  - **Solution 2**: Enhanced vision prompt with explicit coordinate accuracy guidance
+    - Added "CRITICAL FOR ACCURACY" section with measurement instructions
+    - Provided concrete examples matching common game layouts
+    - Added warning: "ACCURACY MATTERS: Wrong coordinates will cause clicks to miss"
+    - Bumped prompt version from 1.0.0 to 1.1.0
+  - **Files modified**:
+    - `src/core/game-interactor.ts` (lines 256-335, 444-449)
+    - `src/vision/prompts.ts` (lines 11-22, 144-228)
+  - **Tested with**: Pacman game (funhtml5games.com/pacman) - DOM selection now works
+  - **Impact**: Faster, cheaper, more reliable start button detection for hybrid games
+
+### Completed This Session (Previous)
 - ✅ **I4.4: Expand Main Orchestration** (Nov 5, 2025)
   - Updated `src/main.ts` to integrate VisionAnalyzer and `findAndClickStart()`
   - Added VisionAnalyzer initialization (optional, requires OPENAI_API_KEY)

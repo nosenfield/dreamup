@@ -78,22 +78,44 @@ try {
 }
 ```
 
-### Pattern 2: Vision-First Interaction
-**When to use**: Canvas games with no accessible DOM elements
-**Why**: GPT-4 Vision can detect UI elements in rendered pixels
+### Pattern 2: Three-Strategy Start Button Detection
+**When to use**: Finding and clicking start/play buttons in games
+**Why**: Hybrid games may have HTML buttons, canvas buttons, or both. Try fastest/cheapest methods first.
+**Strategy order** (Nov 5, 2025 update):
+1. **DOM selection** (instant, $0.00) - HTML buttons above/below canvas
+2. **Natural language** (1-2s, $0.00) - Stagehand's `page.act()` for rendered UI
+3. **Vision fallback** (3-5s, ~$0.01) - GPT-4V for canvas-only buttons
+
 **Example**:
 ```typescript
-// Strategy 1: Try natural language first (faster, cheaper)
+// Strategy 1: Try DOM selection first (NEW - fastest for HTML buttons)
+const selectors = ['button:has-text("Start")', 'button:has-text("Play")', ...];
+for (const selector of selectors) {
+  const element = await page.locator(selector).first();
+  if (await element.isVisible()) {
+    await element.click();
+    return true; // Success - instant, free
+  }
+}
+
+// Strategy 2: Try natural language (for rendered UI elements)
 try {
   await page.act("click the start button");
+  return true;
 } catch {
-  // Strategy 2: Fallback to vision (slower, more expensive)
+  // Strategy 3: Fallback to vision (for canvas-only buttons)
   const screenshot = await page.screenshot();
   const elements = await visionAnalyzer.findClickableElements(screenshot);
   const startButton = elements.find(e => e.label.includes('start'));
-  await page.mouse.click(startButton.x, startButton.y);
+  await page.click(startButton.x, startButton.y);
+  return true;
 }
 ```
+
+**Performance impact**:
+- Pacman (HTML button): Was 3-5s vision call → Now instant DOM click
+- Pure canvas games: Unchanged (DOM fails, vision works as before)
+- Hybrid games: Significantly faster and cheaper
 
 ### Pattern 3: Multi-Signal Detection
 **When to use**: Detecting if game has fully loaded and is ready

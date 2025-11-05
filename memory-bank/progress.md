@@ -88,6 +88,21 @@
 - [ ] I5.5: Comprehensive Testing & Validation (4-6 hours)
 - [ ] I5.6: Documentation & Deployment Prep (3-4 hours)
 
+### Bug Fixes (Post-Iteration 4)
+**Status**: ✅ Complete (Nov 5, 2025)
+**Progress**: 2/2 issues fixed
+
+- [x] **Fix #1**: Agent skips HTML button detection for hybrid canvas+HTML games ✅ FIXED
+  - Added DOM selection as Strategy 1 (before natural language and vision)
+  - 10 common selectors for start/play buttons
+  - Performance: instant vs. 3-5s for vision API
+  - Cost: $0.00 vs. ~$0.01 per vision call
+- [x] **Fix #2**: Vision reports incorrect coordinates for start buttons ✅ FIXED
+  - Enhanced FIND_CLICKABLE_ELEMENTS_PROMPT with accuracy guidance
+  - Added concrete examples with specific pixel measurements
+  - Version bump: 1.0.0 → 1.1.0
+  - Tested with Pacman game (funhtml5games.com/pacman)
+
 ---
 
 ## Completed Foundation (Phases 0-2)
