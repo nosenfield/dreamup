@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 5, 2025
-**Session**: Bug Fixes - Start Button Detection (Complete)
+**Session**: Iteration 5 Preparation - GameMetadata Documentation (Complete)
 
 ---
 
@@ -52,16 +52,99 @@
 - ✅ Fixed: Agent now tries DOM selection before vision
 - ✅ Fixed: Vision coordinate accuracy improved
 
+📋 **Iteration 5: Input Schema & Polish** - IN PROGRESS
+- ✅ **Documentation Phase Complete** (Nov 5, 2025)
+  - ✅ Defined GameMetadata type system architecture
+  - ✅ Created example metadata files (Pong, Snake)
+  - ✅ Documented Pattern 10: Metadata-Driven Testing
+- ✅ **I5.0: Define GameMetadata Type System** - COMPLETE (Nov 5, 2025)
+  - ✅ Created 6 new interfaces in `src/types/game-test.types.ts`
+  - ✅ Created Zod schemas in `src/schemas/metadata.schema.ts`
+  - ✅ Updated `src/types/index.ts` to export new types
+  - ✅ Added comprehensive unit tests (48 tests, all passing)
+  - ✅ Validated example metadata files (Pong, Snake)
+  - ✅ Backwards compatible with old `inputSchema` field
+- ⏳ **I5.1-I5.6**: Remaining tasks
+
 ### Next Immediate Tasks
-1. **I5.1: Implement Input Schema Parser** (Iteration 5)
+1. **I5.1: Implement Input Schema Parser** (READY - depends on I5.0)
    - Parse JavaScript input schemas
    - Parse semantic descriptions
+2. **I5.2: Integrate Metadata into GameInteractor** (depends on I5.1)
+   - Use metadata for targeted testing
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I5.0: Define GameMetadata Type System** (Nov 5, 2025)
+  - **Implementation**: Created complete GameMetadata type system with Zod validation
+  - **Files Created**:
+    - `src/schemas/metadata.schema.ts`: Zod schemas for all metadata interfaces (268 lines)
+    - `tests/unit/metadata.schema.test.ts`: Comprehensive schema validation tests (33 tests)
+  - **Files Modified**:
+    - `src/types/game-test.types.ts`: Added 6 new interfaces (GameMetadata, InputAction, InputAxis, LoadingIndicator, SuccessIndicator, TestingStrategy), updated InputSchema to support both old and new formats, added metadata field to GameTestRequest, marked inputSchema as deprecated
+    - `src/types/index.ts`: Exported all new types
+    - `tests/unit/types.test.ts`: Added 10 new tests for new types
+  - **Key Features**:
+    - Backwards compatible: InputSchema supports both `string[]` (old) and structured arrays (new)
+    - Comprehensive validation: Zod schemas validate all metadata fields
+    - Example validation: Both Pong and Snake metadata.json files pass validation
+    - Type safety: Inferred Zod types match TypeScript interfaces
+    - Helper functions: Validation helpers follow same pattern as `vision/schema.ts`
+  - **Test Results**: 48 tests passing (15 type tests + 33 schema tests)
+  - **TypeScript**: Compilation passes (pre-existing browser globals warnings are intentional)
+  - **Acceptance Criteria Met**: ✅ All types exported, ✅ Zod schemas validate examples, ✅ TypeScript compiles, ✅ Tests pass, ✅ Backwards compatible
+  - **Foundation**: Ready for I5.1 (Input Schema Parser) and I5.2 (GameInteractor integration)
+
+- ✅ **I5.0 Documentation & Planning** (Nov 5, 2025)
+  - **Goal**: Prepare comprehensive documentation for GameMetadata type system before implementation
+  - **Decision**: Chose Option A (static metadata files) for MVP, with Option C (scan agent) for future
+  - **Analysis**: Assessed three metadata approaches and recommended hybrid strategy
+    - Option A: Pre-built metadata files (best for MVP, human-refinable)
+    - Option B: Inline scraping (single agent, slower, higher cost)
+    - Option C: Scan agent (two-agent, cacheable, production-ready)
+    - Hybrid: Start with A, migrate to C, support both long-term
+  - **Documentation Created**:
+    - `_docs/task-list.md`: Added I5.0 task with complete implementation checklist
+      - 6 new interfaces: GameMetadata, InputAction, InputAxis, LoadingIndicator, SuccessIndicator, TestingStrategy
+      - Updated I5.1, I5.2, I5.4 to use GameMetadata instead of just InputSchema
+      - Removed premature deprecation warnings from CLI (no old behavior to deprecate yet)
+      - Updated time estimate: 6-8 hours → 8-10 hours (includes I5.0)
+    - `_docs/architecture.md`: Added Game Metadata System section
+      - Visual architecture diagram showing metadata flow
+      - Complete interface descriptions with examples
+      - Three usage patterns: direct, CLI, Lambda (with backwards compat)
+      - Updated directory structure showing new files
+      - Benefits list: targeted testing, faster tests, better validation, context for vision
+    - `memory-bank/systemPatterns.md`: Added Pattern 10 (Metadata-Driven Testing)
+      - Correct vs incorrect usage patterns
+      - Metadata sources (Option A, C, Hybrid)
+      - Complete metadata structure documentation
+      - 6 key benefits with examples
+    - `_game-examples/pong/metadata.json`: Complete metadata for Pong game
+      - 1 action (Pause with Escape key)
+      - 1 axis (RightPaddleVertical with Arrow keys)
+      - 2 loading indicators (start button, title text)
+      - 3 success indicators (score change, ball animation, elements visible)
+      - Testing strategy with 2s wait, 30s interaction, critical inputs prioritized
+    - `_game-examples/snake/metadata.json`: Complete metadata for Snake game
+      - 1 2D axis (Move with WASD, arrows, virtual D-pad)
+      - 2 loading indicators (start button, title text)
+      - 4 success indicators (score, snake movement, visibility checks)
+      - Testing strategy focused on directional movement
+  - **Key Decisions**:
+    - Backwards compatibility: Keep `inputSchema` field on GameTestRequest (mark deprecated)
+    - Lambda API: Support both `metadata` and `inputSchema` in event (convert old to new)
+    - CLI: Only support `--metadata` flag (no deprecated flag needed since none exists yet)
+    - Zod validation: Use inferred types to ensure TypeScript/Zod consistency
+  - **Commit**: `aa17175` - "docs: Add GameMetadata type system and I5.0 task definition"
+    - 5 files changed, 461 insertions, 35 deletions
+  - **Impact**: Clear implementation path for Cursor to build type system
+  - **Next**: I5.0 implementation (types + Zod schemas + tests)
+
+### Completed This Session (Previous)
 - ✅ **Bug Fix: Start Button Detection** (Nov 5, 2025)
   - **Issue 1**: Agent skipped HTML button detection for games with canvas + HTML elements (Pacman)
   - **Issue 2**: Vision returned incorrect coordinates (640,207 instead of 170,190)

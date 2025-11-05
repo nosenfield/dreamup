@@ -1,6 +1,6 @@
 # Progress Tracker: DreamUp
 
-**Last Updated**: November 3, 2025
+**Last Updated**: November 5, 2025
 **Development Approach**: Iterative (5 iterations)
 
 ---
@@ -20,10 +20,10 @@
 
 - [x] **Milestone 1: Foundation Complete** (Phase 0-2) - ✅ COMPLETE
 - [x] **Milestone 2: Iteration 1-2 Complete** (Minimal agent + interaction) - ✅ COMPLETE
-- [ ] **Milestone 3: Iteration 3-4 Complete** (Detection + vision) - 9-12 hours
-- [ ] **Milestone 4: MVP Complete** (Iteration 5 + polish) - 6-8 hours
+- [x] **Milestone 3: Iteration 3-4 Complete** (Detection + vision) - ✅ COMPLETE
+- [ ] **Milestone 4: MVP Complete** (Iteration 5 + polish) - 8-10 hours
 
-**Current Milestone**: Milestone 3 (Iteration 3-4)
+**Current Milestone**: Milestone 4 (Iteration 5)
 
 ---
 
@@ -78,11 +78,25 @@
 
 ### Iteration 5: Input Schema & Polish
 **Goal**: Parse InputSchema, polish features, prepare for production
-**Status**: ⏳ Pending
-**Progress**: 0/6 tasks
+**Status**: 📋 In Progress (I5.0 Complete)
+**Progress**: 1.5/7 tasks (documentation + I5.0 complete)
 
+- [x] **Documentation Phase** (Nov 5, 2025) ✅ COMPLETE
+  - Defined GameMetadata type system architecture
+  - Created example metadata files (Pong, Snake)
+  - Added Pattern 10: Metadata-Driven Testing
+  - Updated task-list.md with I5.0 and refined I5.1/I5.2/I5.4
+  - Commit: `aa17175` - 5 files changed, 461 insertions
+- [x] I5.0: Define GameMetadata Type System (1-2 hours) ✅ COMPLETE (Nov 5, 2025)
+  - Created 6 new interfaces: GameMetadata, InputAction, InputAxis, LoadingIndicator, SuccessIndicator, TestingStrategy
+  - Created Zod schemas in `src/schemas/metadata.schema.ts` with validation helpers
+  - Updated InputSchema to support both old (`string[]`) and new (structured arrays) formats
+  - Added `metadata` field to GameTestRequest, marked `inputSchema` as deprecated
+  - 48 tests passing (15 type tests + 33 schema validation tests)
+  - Validated example metadata files (Pong, Snake) against schemas
+  - Foundation ready for I5.1 and I5.2
 - [ ] I5.1: Implement Input Schema Parser (2-3 hours)
-- [ ] I5.2: Integrate Input Schema into Interactor (2 hours)
+- [ ] I5.2: Integrate Metadata into GameInteractor (2-3 hours)
 - [ ] I5.3: Complete Screenshot Capturer (1-2 hours)
 - [ ] I5.4: Implement CLI and Lambda Interfaces (2-3 hours)
 - [ ] I5.5: Comprehensive Testing & Validation (4-6 hours)
@@ -341,9 +355,9 @@
 
 ## In Progress
 
-**Current Task**: Iteration 3 (I3.1: Implement Game Detector)
-**Status**: Ready to begin - Iteration 2 complete and tested
-**Previous Task**: ✅ I2.3: Expand Main Orchestration complete - 3 screenshots captured, keyboard simulation working
+**Current Task**: Iteration 5 (I5.0: Define GameMetadata Type System)
+**Status**: Documentation complete, ready for implementation
+**Previous Task**: ✅ I5.0 Documentation Phase complete - Architecture defined, examples created, patterns documented
 
 ---
 
@@ -419,17 +433,19 @@ None - all tests passing, TypeScript compilation clean
 | Phase 0 | 3-4 hours | TBD | - |
 | Phase 1 | 5-6 hours | TBD | - |
 | Phase 2 | 4-6 hours | TBD | - |
-| **Iterations (1-5)** | **20-27 hours** | **TBD** | **-** |
+| **Iterations (1-5)** | **22-29 hours** | **TBD** | **-** |
 | Iteration 1 | 2-3 hours | TBD | - |
 | Iteration 2 | 3-4 hours | TBD | - |
 | Iteration 3 | 4-5 hours | TBD | - |
 | Iteration 4 | 5-7 hours | TBD | - |
-| Iteration 5 | 6-8 hours | TBD | - |
+| Iteration 5 | 8-10 hours | TBD | - |
 | **Ad-hoc Enhancements** | **<1 hour** | **<1 hour** | **-** |
 | InputSchema Support | <1 hour | <1 hour | - |
-| **Total MVP** | **32-44 hours** | **TBD** | **-** |
+| **Total MVP** | **34-46 hours** | **TBD** | **-** |
 
 **Note**: Original waterfall estimate was 67-94 hours. Iterative approach reduces time through:
 - Earlier testing (fewer rework cycles)
 - Incremental complexity (simpler debugging)
 - Focused iterations (clear scope per iteration)
+
+**Iteration 5 Update** (Nov 5, 2025): Time increased from 6-8h to 8-10h to include I5.0 (Define GameMetadata Type System), which provides foundation for metadata-driven testing.
