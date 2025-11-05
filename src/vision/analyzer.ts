@@ -16,8 +16,9 @@ import {
   GAME_ANALYSIS_PROMPT,
   FIND_CLICKABLE_ELEMENTS_PROMPT,
   DETECT_CRASH_PROMPT,
+  buildGameAnalysisPrompt,
 } from './prompts';
-import type { Screenshot, ClickableElement, GameTestResult } from '../types/game-test.types';
+import type { Screenshot, ClickableElement, GameTestResult, GameMetadata } from '../types/game-test.types';
 import { z } from 'zod';
 
 /**
@@ -84,6 +85,7 @@ export class VisionAnalyzer {
    * with playability score, status, and identified issues.
    * 
    * @param screenshots - Array of Screenshot objects to analyze
+   * @param metadata - Optional GameMetadata for context (expectedControls, genre)
    * @returns Promise that resolves to GameTestResult
    * @throws {Error} If screenshot files cannot be read or API call fails
    * 
@@ -93,10 +95,13 @@ export class VisionAnalyzer {
    *   { id: '1', path: '/tmp/screenshot1.png', timestamp: Date.now(), stage: 'initial_load' },
    *   { id: '2', path: '/tmp/screenshot2.png', timestamp: Date.now(), stage: 'after_interaction' },
    *   { id: '3', path: '/tmp/screenshot3.png', timestamp: Date.now(), stage: 'final_state' },
-   * ]);
+   * ], metadata);
    * ```
    */
-  async analyzeScreenshots(screenshots: Screenshot[]): Promise<GameTestResult> {
+  async analyzeScreenshots(
+    screenshots: Screenshot[],
+    metadata?: GameMetadata
+  ): Promise<GameTestResult> {
     this.logger.info('Starting screenshot analysis', {
       screenshotCount: screenshots.length,
     });
@@ -116,11 +121,14 @@ export class VisionAnalyzer {
         imageCount: images.length,
       });
 
+      // Build prompt with metadata context if available
+      const prompt = buildGameAnalysisPrompt(metadata);
+
       // Build multi-modal prompt content
       const content = [
         {
           type: 'text' as const,
-          text: GAME_ANALYSIS_PROMPT,
+          text: prompt,
         },
         ...images.map((image) => ({
           type: 'image' as const,

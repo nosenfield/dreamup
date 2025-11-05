@@ -60,6 +60,7 @@ const mockScreenshotCapturerInstance = {
 
 const mockGameInteractorInstance = {
   simulateKeyboardInput: mock(() => Promise.resolve()),
+  simulateGameplayWithMetadata: mock(() => Promise.resolve()),
   clickAtCoordinates: mock(() => Promise.resolve()),
   findAndClickStart: mock(() => Promise.resolve(true)),
 };
@@ -78,7 +79,7 @@ const mockErrorMonitorInstance = {
 };
 
 const mockVisionAnalyzerInstance = {
-  analyzeScreenshots: mock(() => Promise.resolve({
+  analyzeScreenshots: mock((screenshots: any[], metadata?: any) => Promise.resolve({
     status: 'pass' as const,
     playability_score: 75,
     issues: [],
@@ -172,11 +173,12 @@ describe('runQA()', () => {
     mockErrorMonitorInstance.getErrors.mockClear();
     mockGameInteractorInstance.findAndClickStart.mockClear();
     mockVisionAnalyzerInstance.analyzeScreenshots.mockClear();
+    mockGameInteractorInstance.simulateGameplayWithMetadata.mockClear();
     // Reset mock return values to defaults
     mockGameDetectorInstance.detectType.mockImplementation(() => Promise.resolve('canvas' as any));
     mockErrorMonitorInstance.getErrors.mockImplementation(() => Promise.resolve([]));
     mockGameInteractorInstance.findAndClickStart.mockImplementation(() => Promise.resolve(true));
-    mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementation(() => Promise.resolve({
+    mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementation((screenshots: any[], metadata?: any) => Promise.resolve({
       status: 'pass',
       playability_score: 75,
       issues: [],
@@ -186,6 +188,7 @@ describe('runQA()', () => {
         visionAnalysisTokens: 1500,
       },
     }));
+    mockGameInteractorInstance.simulateGameplayWithMetadata.mockImplementation(() => Promise.resolve());
   });
 
   it('should complete successfully with valid URL', async () => {
@@ -225,9 +228,10 @@ describe('runQA()', () => {
     expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'after_interaction');
     expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'final_state');
     
-    // Verify keyboard simulation was called
+    // Verify keyboard simulation was called (generic inputs since no metadata)
     expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalledTimes(1);
     expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalledWith(mockPage, 30000);
+    expect(mockGameInteractorInstance.simulateGameplayWithMetadata).not.toHaveBeenCalled();
     
     // Verify error monitoring was stopped
     expect(mockErrorMonitorInstance.stopMonitoring).toHaveBeenCalledTimes(1);
@@ -538,7 +542,7 @@ describe('runQA()', () => {
         expect.objectContaining({ stage: 'initial_load' }),
         expect.objectContaining({ stage: 'after_interaction' }),
         expect.objectContaining({ stage: 'final_state' }),
-      ]);
+      ], undefined);
       expect(screenshotCalls[2]).toBeLessThan(visionCall); // Last screenshot before vision
     });
 
@@ -671,6 +675,102 @@ describe('runQA()', () => {
       // Should continue execution and complete successfully
       expect(result.status).toBe('pass');
       expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalled();
+    });
+
+    it('should use simulateGameplayWithMetadata when metadata is provided', async () => {
+      const gameUrl = 'https://example.com/game';
+      const metadata = {
+        inputSchema: {
+          type: 'javascript' as const,
+          content: 'gameBuilder.createAction("Jump").bindKey("Space")',
+          actions: [
+            {
+              name: 'Jump',
+              keys: ['Space'],
+            },
+          ],
+        },
+        testingStrategy: {
+          waitBeforeInteraction: 1000,
+          interactionDuration: 20000,
+          criticalActions: ['Jump'],
+        },
+      };
+
+      const result = await runQA(gameUrl, { metadata });
+
+      // Should use simulateGameplayWithMetadata instead of simulateKeyboardInput
+      expect(mockGameInteractorInstance.simulateGameplayWithMetadata).toHaveBeenCalledTimes(1);
+      expect(mockGameInteractorInstance.simulateGameplayWithMetadata).toHaveBeenCalledWith(
+        mockPage,
+        metadata,
+        20000
+      );
+      expect(mockGameInteractorInstance.simulateKeyboardInput).not.toHaveBeenCalled();
+
+      // Should pass metadata to vision analyzer
+      expect(mockVisionAnalyzerInstance.analyzeScreenshots).toHaveBeenCalledWith(
+        expect.any(Array),
+        metadata
+      );
+    });
+
+    it('should convert deprecated inputSchema to metadata (backwards compat)', async () => {
+      const gameUrl = 'https://example.com/game';
+      const inputSchema = {
+        type: 'semantic' as const,
+        content: 'Use arrow keys to move',
+      };
+
+      const result = await runQA(gameUrl, { inputSchema });
+
+      // Should use simulateGameplayWithMetadata with converted metadata
+      expect(mockGameInteractorInstance.simulateGameplayWithMetadata).toHaveBeenCalledTimes(1);
+      expect(mockGameInteractorInstance.simulateKeyboardInput).not.toHaveBeenCalled();
+    });
+
+    it('should use testingStrategy.waitBeforeInteraction', async () => {
+      const gameUrl = 'https://example.com/game';
+      const metadata = {
+        inputSchema: {
+          type: 'javascript' as const,
+          content: 'gameBuilder.createAction("Jump").bindKey("Space")',
+        },
+        testingStrategy: {
+          waitBeforeInteraction: 500,
+          interactionDuration: 20000,
+        },
+      };
+
+      const startTime = Date.now();
+      await runQA(gameUrl, { metadata });
+      const duration = Date.now() - startTime;
+
+      // Should wait at least 500ms before interaction
+      expect(duration).toBeGreaterThanOrEqual(400); // Allow some margin for test execution
+      expect(mockGameInteractorInstance.simulateGameplayWithMetadata).toHaveBeenCalled();
+    });
+
+    it('should use testingStrategy.interactionDuration from metadata', async () => {
+      const gameUrl = 'https://example.com/game';
+      const metadata = {
+        inputSchema: {
+          type: 'javascript' as const,
+          content: 'gameBuilder.createAction("Jump").bindKey("Space")',
+        },
+        testingStrategy: {
+          interactionDuration: 15000,
+        },
+      };
+
+      await runQA(gameUrl, { metadata });
+
+      // Should use interactionDuration from metadata
+      expect(mockGameInteractorInstance.simulateGameplayWithMetadata).toHaveBeenCalledWith(
+        mockPage,
+        metadata,
+        15000
+      );
     });
   });
 });

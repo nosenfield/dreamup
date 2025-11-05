@@ -18,8 +18,10 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
+import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
+import type { GameMetadata, InputAction, InputAxis } from '../types';
 
 /**
  * Configuration for GameInteractor.
@@ -59,6 +61,7 @@ export class GameInteractor {
   private readonly interactionTimeout: number;
   private readonly visionAnalyzer?: VisionAnalyzer;
   private readonly screenshotCapturer?: ScreenshotCapturer;
+  private readonly inputSchemaParser: InputSchemaParser;
 
   /**
    * Available keyboard keys for game input simulation.
@@ -91,6 +94,7 @@ export class GameInteractor {
     this.interactionTimeout = config.interactionTimeout ?? TIMEOUTS.INTERACTION_TIMEOUT;
     this.visionAnalyzer = config.visionAnalyzer;
     this.screenshotCapturer = config.screenshotCapturer;
+    this.inputSchemaParser = new InputSchemaParser({ logger: config.logger });
   }
 
   /**
@@ -449,6 +453,208 @@ export class GameInteractor {
     });
 
     return false;
+  }
+
+  /**
+   * Simulate gameplay using metadata-driven input testing.
+   * 
+   * Uses GameMetadata to extract targeted controls and test them in priority order:
+   * 1. Critical actions (from testingStrategy.criticalActions)
+   * 2. Critical axes (from testingStrategy.criticalAxes)
+   * 3. Remaining actions
+   * 4. Remaining axes
+   * 
+   * Falls back to generic inputs if metadata is missing or has no keys.
+   * 
+   * @param page - The Stagehand page object
+   * @param metadata - Optional GameMetadata containing input schema and testing strategy
+   * @param duration - Optional duration in milliseconds (overrides testingStrategy.interactionDuration if provided)
+   * @throws {TimeoutError} If interaction exceeds timeout
+   * 
+   * @example
+   * ```typescript
+   * await interactor.simulateGameplayWithMetadata(page, metadata);
+   * // Uses testingStrategy.interactionDuration from metadata
+   * 
+   * await interactor.simulateGameplayWithMetadata(page, metadata, 15000);
+   * // Uses provided duration instead
+   * ```
+   */
+  async simulateGameplayWithMetadata(
+    page: AnyPage,
+    metadata?: GameMetadata,
+    duration?: number
+  ): Promise<void> {
+    // Determine duration: use provided duration, or testingStrategy.interactionDuration, or default
+    const actualDuration = duration ?? 
+      metadata?.testingStrategy?.interactionDuration ?? 
+      30000;
+
+    this.logger.info('Starting metadata-driven gameplay simulation', {
+      duration: actualDuration,
+      hasMetadata: !!metadata,
+      timeout: this.interactionTimeout,
+    });
+
+    // If no metadata provided, fallback to generic inputs
+    if (!metadata) {
+      this.logger.info('No metadata provided - using generic inputs', {});
+      return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    // Parse metadata to extract actions and axes
+    const parsed = this.inputSchemaParser.parse(metadata);
+    const allKeys = this.inputSchemaParser.inferKeybindings(parsed.actions, parsed.axes);
+
+    // If no keys found, fallback to generic inputs
+    if (allKeys.length === 0) {
+      this.logger.warn('No keys found in metadata - using generic inputs', {});
+      return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    // Extract critical inputs from testingStrategy
+    const criticalActions = metadata.testingStrategy?.criticalActions ?? [];
+    const criticalAxes = metadata.testingStrategy?.criticalAxes ?? [];
+
+    // Build priority key list: critical first, then others
+    const criticalKeys: string[] = [];
+    const regularKeys: string[] = [];
+
+    // Collect critical action keys
+    for (const action of parsed.actions) {
+      if (criticalActions.includes(action.name)) {
+        criticalKeys.push(...action.keys.map(k => this.mapKeyToStagehandKey(k)));
+      } else {
+        regularKeys.push(...action.keys.map(k => this.mapKeyToStagehandKey(k)));
+      }
+    }
+
+    // Collect critical axis keys
+    for (const axis of parsed.axes) {
+      if (criticalAxes.includes(axis.name)) {
+        criticalKeys.push(...axis.keys.map(k => this.mapKeyToStagehandKey(k)));
+      } else {
+        regularKeys.push(...axis.keys.map(k => this.mapKeyToStagehandKey(k)));
+      }
+    }
+
+    // Remove duplicates
+    const uniqueCriticalKeys = [...new Set(criticalKeys)];
+    const uniqueRegularKeys = [...new Set(regularKeys)];
+
+    // Combine: critical first, then regular
+    const priorityKeys = [...uniqueCriticalKeys, ...uniqueRegularKeys];
+
+    if (priorityKeys.length === 0) {
+      this.logger.warn('No valid keys after mapping - using generic inputs', {});
+      return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    this.logger.info('Testing keys from metadata', {
+      criticalKeys: uniqueCriticalKeys.length,
+      regularKeys: uniqueRegularKeys.length,
+      totalKeys: priorityKeys.length,
+    });
+
+    // Cast to any to access Stagehand Page methods
+    const pageAny = page as any;
+
+    try {
+      // Wrap entire simulation in timeout
+      await withTimeout(
+        this._performMetadataKeyboardSimulation(pageAny, priorityKeys, actualDuration),
+        this.interactionTimeout,
+        `Metadata-driven simulation timed out after ${this.interactionTimeout}ms`
+      );
+
+      this.logger.info('Metadata-driven gameplay simulation completed', {
+        duration: actualDuration,
+        keysTested: priorityKeys.length,
+      });
+    } catch (error) {
+      this.logger.error('Metadata-driven gameplay simulation failed', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Map key name from metadata to Stagehand key code.
+   * 
+   * Maps common key names to their Stagehand equivalents:
+   * - 'w', 'a', 's', 'd' → 'KeyW', 'KeyA', 'KeyS', 'KeyD'
+   * - Arrow keys remain as-is
+   * - Space, Escape, Enter remain as-is
+   * 
+   * @param key - Key name from metadata (e.g., 'w', 'ArrowUp', 'Space')
+   * @returns Stagehand key code (e.g., 'KeyW', 'ArrowUp', 'Space')
+   */
+  private mapKeyToStagehandKey(key: string): string {
+    const keyMap: Record<string, string> = {
+      'w': 'KeyW',
+      'a': 'KeyA',
+      's': 'KeyS',
+      'd': 'KeyD',
+      'W': 'KeyW',
+      'A': 'KeyA',
+      'S': 'KeyS',
+      'D': 'KeyD',
+    };
+
+    // Return mapped key if exists, otherwise return original (for Arrow keys, Space, etc.)
+    return keyMap[key.toLowerCase()] ?? key;
+  }
+
+  /**
+   * Internal method to perform metadata-driven keyboard simulation.
+   *
+   * Cycles through provided keys in priority order.
+   *
+   * @param page - Stagehand Page object (AnyPage type)
+   * @param keys - Array of keys to test (in priority order)
+   * @param duration - Duration in milliseconds
+   */
+  private async _performMetadataKeyboardSimulation(
+    page: any,
+    keys: string[],
+    duration: number
+  ): Promise<void> {
+    const startTime = Date.now();
+    let keyIndex = 0;
+
+    while (Date.now() - startTime < duration) {
+      // Get next key to press (cycle through provided keys)
+      const key = keys[keyIndex % keys.length];
+      keyIndex++;
+
+      try {
+        // Use Stagehand's keyPress() method
+        await page.keyPress(key, { delay: 0 });
+      } catch (error) {
+        this.logger.warn('Key press failed, continuing simulation', {
+          key,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with next key rather than failing entire simulation
+      }
+
+      // Wait before next key press
+      const remainingTime = duration - (Date.now() - startTime);
+      if (remainingTime <= 0) {
+        break;
+      }
+
+      // Use smaller delay if we're near the end
+      const delay = Math.min(this.keyPressDelay, remainingTime);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    this.logger.debug('Metadata-driven keyboard simulation loop completed', {
+      keysPressed: keyIndex,
+      duration: Date.now() - startTime,
+    });
   }
 }
 

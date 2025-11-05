@@ -126,6 +126,48 @@ Example 2 - Broken Game:
 **Important:** Return data that strictly matches the gameTestResultSchema structure. Ensure all required fields are present and types are correct.`;
 
 /**
+ * Build enhanced game analysis prompt with optional metadata context.
+ * 
+ * Adds metadata context (expectedControls, genre) to the base prompt if provided.
+ * This helps the vision model understand what controls to look for and what
+ * type of game is being tested.
+ * 
+ * @param metadata - Optional GameMetadata containing expectedControls and genre
+ * @returns Enhanced prompt string with metadata context
+ */
+export function buildGameAnalysisPrompt(metadata?: {
+  expectedControls?: string;
+  genre?: string;
+}): string {
+  let prompt = GAME_ANALYSIS_PROMPT;
+
+  // Add metadata context if available
+  if (metadata?.expectedControls || metadata?.genre) {
+    const contextParts: string[] = [];
+
+    if (metadata.genre) {
+      const genreLine = '**Game Genre:** ' + metadata.genre;
+      contextParts.push(genreLine);
+    }
+
+    if (metadata.expectedControls) {
+      const controlsLine = '**Expected Controls:** ' + metadata.expectedControls;
+      contextParts.push(controlsLine);
+      contextParts.push('\n**Note:** When evaluating control responsiveness, check if the game responds to these specific controls.');
+    }
+
+    if (contextParts.length > 0) {
+      const contextSection = '\n\n**Game Context:**\n' + contextParts.join('\n');
+      // Insert context after the screenshot sequence description
+      const insertIndex = prompt.indexOf('**Evaluation Criteria:**');
+      prompt = prompt.slice(0, insertIndex) + contextSection + '\n\n' + prompt.slice(insertIndex);
+    }
+  }
+
+  return prompt;
+}
+
+/**
  * Prompt for finding clickable elements in a game screenshot.
  * 
  * This prompt is used with the clickableElementSchema to detect interactive

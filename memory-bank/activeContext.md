@@ -72,18 +72,67 @@
   - ✅ Implemented inferKeybindings() for key list generation
   - ✅ Added comprehensive unit tests (24 tests, all passing)
   - ✅ Updated `src/core/index.ts` to export parser
-- ⏳ **I5.2-I5.6**: Remaining tasks
+- ✅ **I5.2: Integrate Metadata into GameInteractor** - COMPLETE (Nov 5, 2025)
+  - ✅ Implemented simulateGameplayWithMetadata() in GameInteractor
+  - ✅ Updated main.ts to extract and pass metadata
+  - ✅ Enhanced vision prompts with metadata context
+  - ✅ Added comprehensive tests (70 tests passing)
+  - ✅ Backwards compatible with deprecated inputSchema
+- ⏳ **I5.3-I5.6**: Remaining tasks
 
 ### Next Immediate Tasks
-1. **I5.2: Integrate Metadata into GameInteractor** (READY - depends on I5.1)
-   - Use metadata for targeted testing
-   - Prioritize critical actions/axes
+1. **I5.3: Complete Screenshot Capturer** (READY - depends on I5.2)
+   - Add metadata-based screenshot timing
+   - Use loading/success indicators from metadata
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I5.2: Integrate Metadata into GameInteractor** (Nov 5, 2025)
+  - **Implementation**: Integrated GameMetadata into GameInteractor for metadata-driven testing
+  - **Files Modified**:
+    - `src/core/game-interactor.ts`: Added simulateGameplayWithMetadata() method (163 lines)
+    - `src/main.ts`: Added metadata extraction and timing support (30 lines modified)
+    - `src/vision/prompts.ts`: Added buildGameAnalysisPrompt() helper function (29 lines)
+    - `src/vision/analyzer.ts`: Updated analyzeScreenshots() to accept optional metadata parameter
+    - `tests/unit/game-interactor.test.ts`: Added 10 new tests for simulateGameplayWithMetadata()
+    - `tests/integration/main.test.ts`: Added 4 new tests for metadata integration
+  - **Key Features**:
+    - `simulateGameplayWithMetadata()`: Uses InputSchemaParser to extract actions/axes
+      - Prioritizes critical actions/axes from testingStrategy (tests them first)
+      - Maps key names to Stagehand key codes (w → KeyW, arrow keys remain as-is)
+      - Falls back to generic inputs when metadata missing or no keys found
+      - Uses testingStrategy.interactionDuration (defaults to 30000ms)
+      - Handles missing testingStrategy gracefully
+    - `main.ts` metadata handling:
+      - Extracts metadata from request (handles both metadata and deprecated inputSchema)
+      - Converts deprecated inputSchema to metadata internally (backwards compat)
+      - Uses testingStrategy.waitBeforeInteraction for pre-interaction delay
+      - Uses testingStrategy.interactionDuration for interaction duration
+      - Passes metadata to GameInteractor and VisionAnalyzer
+    - Vision prompt enhancement:
+      - `buildGameAnalysisPrompt()` adds game genre and expected controls to prompt
+      - Helps vision model understand what controls to look for
+      - Context inserted before evaluation criteria section
+  - **Test Results**: 70 tests passing (38 unit + 32 integration)
+    - 10 new unit tests for simulateGameplayWithMetadata() (all passing)
+      - Tests actions/axes from Pong and Snake metadata
+      - Tests critical action/axis prioritization
+      - Tests fallback to generic inputs
+      - Tests key mapping (w → KeyW)
+      - Tests testingStrategy.interactionDuration usage
+    - 4 new integration tests (all passing)
+      - Tests metadata usage in runQA()
+      - Tests deprecated inputSchema conversion (backwards compat)
+      - Tests waitBeforeInteraction timing
+      - Tests interactionDuration from metadata
+    - All existing tests continue to pass (backwards compatibility verified)
+  - **TypeScript**: Compilation passes (no new errors)
+  - **Acceptance Criteria Met**: ✅ Tests actions from metadata, ✅ Tests axes from metadata, ✅ Prioritizes critical actions/axes, ✅ Handles missing metadata gracefully, ✅ Vision prompts reference metadata, ✅ Backwards compatible with old inputSchema, ✅ Uses testingStrategy timing values
+  - **Foundation**: Ready for I5.3 (Screenshot Capturer enhancements)
+
 - ✅ **I5.1: Implement Input Schema Parser** (Nov 5, 2025)
   - **Implementation**: Created InputSchemaParser class for extracting structured actions and axes from GameMetadata
   - **Files Created**:

@@ -15,7 +15,7 @@ import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
-import type { GameTestResult, Issue } from './types/game-test.types';
+import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema } from './types/game-test.types';
 
 /**
  * Run QA test on a game URL.
@@ -25,6 +25,7 @@ import type { GameTestResult, Issue } from './types/game-test.types';
  * the game URL, captures a screenshot, and returns a test result.
  * 
  * @param gameUrl - The URL of the game to test
+ * @param request - Optional GameTestRequest containing metadata or inputSchema (for backwards compat)
  * @returns Promise that resolves to GameTestResult
  * 
  * @example
@@ -34,7 +35,7 @@ import type { GameTestResult, Issue } from './types/game-test.types';
  * console.log(`Screenshots: ${result.screenshots.length}`);
  * ```
  */
-export async function runQA(gameUrl: string): Promise<GameTestResult> {
+export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>): Promise<GameTestResult> {
   const startTime = Date.now();
   const sessionId = nanoid();
   const logger = new Logger({
@@ -136,6 +137,26 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
       screenshotCapturer,
     });
 
+    // Extract metadata from request (handle both metadata and deprecated inputSchema)
+    let metadata: GameMetadata | undefined = undefined;
+    if (request) {
+      if (request.metadata) {
+        metadata = request.metadata;
+      } else if (request.inputSchema) {
+        // Backwards compatibility: convert inputSchema to metadata
+        metadata = {
+          inputSchema: request.inputSchema,
+        };
+      }
+    }
+
+    // Use testingStrategy.waitBeforeInteraction if available
+    const waitBeforeInteraction = metadata?.testingStrategy?.waitBeforeInteraction ?? 0;
+    if (waitBeforeInteraction > 0) {
+      logger.info('Waiting before interaction', { waitMs: waitBeforeInteraction });
+      await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
+    }
+
     // Try to find and click start button before interaction
     try {
       const startButtonClicked = await gameInteractor.findAndClickStart(page);
@@ -159,10 +180,20 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
       screenshotPath: initialScreenshot.path,
     });
 
-    // Simulate keyboard inputs for 30 seconds
-    logger.info('Starting keyboard input simulation', { duration: 30000 });
-    await gameInteractor.simulateKeyboardInput(page, 30000);
-    logger.info('Keyboard input simulation completed', {});
+    // Simulate gameplay inputs (use metadata if available, otherwise generic inputs)
+    const interactionDuration = metadata?.testingStrategy?.interactionDuration ?? 30000;
+    logger.info('Starting gameplay simulation', { 
+      duration: interactionDuration,
+      hasMetadata: !!metadata,
+    });
+    
+    if (metadata) {
+      await gameInteractor.simulateGameplayWithMetadata(page, metadata, interactionDuration);
+    } else {
+      await gameInteractor.simulateKeyboardInput(page, interactionDuration);
+    }
+    
+    logger.info('Gameplay simulation completed', {});
 
     // Capture screenshot after interaction
     logger.info('Capturing screenshot after interaction', {});
@@ -208,7 +239,7 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
           initialScreenshot,
           afterInteractionScreenshot,
           finalScreenshot,
-        ]);
+        ], metadata);
 
         playabilityScore = visionResult.playability_score;
         visionIssues = visionResult.issues;

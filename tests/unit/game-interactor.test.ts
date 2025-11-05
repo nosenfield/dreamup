@@ -7,9 +7,16 @@ import { GameInteractor } from '../../src/core/game-interactor';
 import { Logger } from '../../src/utils/logger';
 import { TIMEOUTS } from '../../src/config/constants';
 import { TimeoutError } from '../../src/utils/timeout';
+import { InputSchemaParser } from '../../src/core/input-schema-parser';
 import type { AnyPage } from '@browserbasehq/stagehand';
 import type { VisionAnalyzer } from '../../src/vision/analyzer';
 import type { ScreenshotCapturer } from '../../src/core/screenshot-capturer';
+import type { GameMetadata } from '../../src/types';
+import pongMetadataJson from '../../_game-examples/pong/metadata.json';
+import snakeMetadataJson from '../../_game-examples/snake/metadata.json';
+
+const pongMetadata = pongMetadataJson as unknown as GameMetadata;
+const snakeMetadata = snakeMetadataJson as unknown as GameMetadata;
 
 // Mock Stagehand Page API (v3 uses direct methods)
 const createMockPage = () => ({
@@ -508,6 +515,167 @@ describe('GameInteractor', () => {
       ).rejects.toThrow();
 
       expect(errorSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('simulateGameplayWithMetadata()', () => {
+    it('should test actions from Pong metadata', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, pongMetadata, 500);
+
+      const calls = mockPage.keyPress.mock.calls;
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
+
+      // Should test Escape key (Pause action)
+      expect(pressedKeys).toContain('Escape');
+    });
+
+    it('should test axes from Pong metadata', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, pongMetadata, 500);
+
+      const calls = mockPage.keyPress.mock.calls;
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
+
+      // Should test ArrowDown and ArrowUp (RightPaddleVertical axis)
+      expect(pressedKeys).toContain('ArrowDown');
+      expect(pressedKeys).toContain('ArrowUp');
+    });
+
+    it('should test axes from Snake metadata', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, snakeMetadata, 500);
+
+      const calls = mockPage.keyPress.mock.calls;
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
+
+      // Should test WASD and arrow keys (Move axis)
+      expect(pressedKeys.some(key => ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(key) || 
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key))).toBe(true);
+    });
+
+    it('should prioritize critical actions first', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, pongMetadata, 500);
+
+      const calls = mockPage.keyPress.mock.calls;
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
+
+      // First key should be Escape (critical action)
+      if (pressedKeys.length > 0) {
+        expect(pressedKeys[0]).toBe('Escape');
+      }
+    });
+
+    it('should prioritize critical axes first', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, pongMetadata, 500);
+
+      const calls = mockPage.keyPress.mock.calls;
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
+
+      // Should test ArrowDown/ArrowUp (critical axis) early
+      const criticalKeys = ['ArrowDown', 'ArrowUp'];
+      const hasCriticalKeys = pressedKeys.some(key => criticalKeys.includes(key));
+      expect(hasCriticalKeys).toBe(true);
+    });
+
+    it('should fallback to generic inputs when metadata is undefined', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, undefined, 100);
+
+      // Should still call keyPress (fallback to generic inputs)
+      expect(mockPage.keyPress).toHaveBeenCalled();
+    });
+
+    it('should fallback to generic inputs when metadata has no keys', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      const emptyMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'No keys specified',
+        },
+      };
+
+      await interactor.simulateGameplayWithMetadata(page, emptyMetadata, 100);
+
+      // Should still call keyPress (fallback to generic inputs)
+      expect(mockPage.keyPress).toHaveBeenCalled();
+    });
+
+    it('should map key names correctly (w → KeyW)', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      await interactor.simulateGameplayWithMetadata(page, snakeMetadata, 500);
+
+      const calls = mockPage.keyPress.mock.calls;
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
+
+      // Should map 'w' to 'KeyW'
+      expect(pressedKeys).toContain('KeyW');
+    });
+
+    it('should use testingStrategy.interactionDuration when provided', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      // Create metadata with shorter interactionDuration for testing
+      const metadataWithShortDuration: GameMetadata = {
+        ...pongMetadata,
+        testingStrategy: {
+          waitBeforeInteraction: 2000,
+          interactionDuration: 200, // Short duration for test
+          criticalActions: ['Pause'],
+          criticalAxes: ['RightPaddleVertical'],
+        },
+      };
+
+      const startTime = Date.now();
+      await interactor.simulateGameplayWithMetadata(page, metadataWithShortDuration);
+      const endTime = Date.now();
+      const actualDuration = endTime - startTime;
+
+      // Should use testingStrategy.interactionDuration (200ms) from metadata
+      expect(actualDuration).toBeGreaterThanOrEqual(150);
+      expect(actualDuration).toBeLessThan(500);
+    });
+
+    it('should handle missing testingStrategy gracefully', async () => {
+      const interactor = new GameInteractor({ logger });
+      const page = mockPage as unknown as AnyPage;
+
+      const metadataWithoutStrategy: GameMetadata = {
+        inputSchema: {
+          type: 'javascript',
+          content: 'gameBuilder.createAction("Jump").bindKey("Space")',
+          actions: [
+            {
+              name: 'Jump',
+              keys: ['Space'],
+            },
+          ],
+        },
+      };
+
+      await interactor.simulateGameplayWithMetadata(page, metadataWithoutStrategy, 100);
+
+      // Should complete successfully without testingStrategy
+      expect(mockPage.keyPress).toHaveBeenCalled();
     });
   });
 });

@@ -78,8 +78,8 @@
 
 ### Iteration 5: Input Schema & Polish
 **Goal**: Parse InputSchema, polish features, prepare for production
-**Status**: 📋 In Progress (I5.0 + I5.1 Complete)
-**Progress**: 2.5/7 tasks (documentation + I5.0 + I5.1 complete)
+**Status**: 📋 In Progress (I5.0 + I5.1 + I5.2 Complete)
+**Progress**: 3.5/7 tasks (documentation + I5.0 + I5.1 + I5.2 complete)
 
 - [x] **Documentation Phase** (Nov 5, 2025) ✅ COMPLETE
   - Defined GameMetadata type system architecture
@@ -102,7 +102,25 @@
   - Handles structured arrays, string[] arrays, and content-only schemas
   - 24 tests passing (comprehensive coverage)
   - Ready for I5.2 (GameInteractor integration)
-- [ ] I5.2: Integrate Metadata into GameInteractor (2-3 hours)
+- [x] I5.2: Integrate Metadata into GameInteractor (2-3 hours) ✅ COMPLETE (Nov 5, 2025)
+  - Implemented simulateGameplayWithMetadata() in GameInteractor
+    - Uses InputSchemaParser to extract actions/axes from metadata
+    - Prioritizes critical actions/axes from testingStrategy
+    - Maps key names to Stagehand key codes (w → KeyW, etc.)
+    - Falls back to generic inputs when metadata missing or no keys found
+    - Uses testingStrategy.interactionDuration (defaults to 30000ms)
+  - Updated main.ts to handle metadata
+    - Extracts metadata from request (handles both metadata and deprecated inputSchema)
+    - Uses testingStrategy.waitBeforeInteraction and interactionDuration
+    - Passes metadata to GameInteractor and VisionAnalyzer
+  - Enhanced vision prompts with metadata context
+    - Adds game genre and expected controls to prompt
+    - Helps vision model understand what controls to look for
+  - Updated tests: 70 tests passing (38 unit + 32 integration)
+    - 10 new tests for simulateGameplayWithMetadata()
+    - 4 new tests for metadata integration
+    - Backwards compatibility verified
+  - Ready for I5.3 (Screenshot Capturer enhancements)
 - [ ] I5.3: Complete Screenshot Capturer (1-2 hours)
 - [ ] I5.4: Implement CLI and Lambda Interfaces (2-3 hours)
 - [ ] I5.5: Comprehensive Testing & Validation (4-6 hours)
