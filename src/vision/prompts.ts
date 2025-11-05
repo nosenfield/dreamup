@@ -337,3 +337,136 @@ Example 3 - No Crash:
 - Consider that some games may show loading screens initially (not a crash)
 - Look for error messages, blank screens, or frozen states`;
 
+/**
+ * Prompt for state analysis and action recommendation.
+ * 
+ * This prompt is used with the actionRecommendationSchema to analyze
+ * current game state and recommend the next action to take.
+ * Used when heuristic approaches fail and LLM analysis is needed.
+ * 
+ * @example
+ * ```typescript
+ * const result = await generateObject({
+ *   model: openai('gpt-4-turbo'),
+ *   messages: [{ role: 'user', content: [
+ *     { type: 'text', text: STATE_ANALYSIS_PROMPT },
+ *     { type: 'image', image: screenshot },
+ *   ]}],
+ *   schema: actionRecommendationSchema,
+ * });
+ * ```
+ */
+export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend the next action to achieve a specific goal.
+
+**Your Task:**
+Analyze the current game state (HTML structure and screenshot) and recommend the best action to take next. The goal is provided in the context below.
+
+**Action Types:**
+- **click**: Click at specific pixel coordinates { x: number, y: number }
+- **keypress**: Press a keyboard key (e.g., "Space", "ArrowUp", "Enter")
+- **wait**: Wait for a specified duration in milliseconds (number)
+- **complete**: Indicate that the goal has been achieved (no further action needed)
+
+**Coordinate Accuracy (CRITICAL for click actions):**
+- **x**: X coordinate in pixels (0-based, left edge of image is 0)
+- **y**: Y coordinate in pixels (0-based, top edge of image is 0)
+- **IMPORTANT**: Provide coordinates for the CENTER of the clickable element
+- **IMPORTANT**: Measure carefully from the top-left corner (0,0) of the screenshot
+- **IMPORTANT**: Consider the actual pixel position, not relative positioning
+- Example: For a button at 1/4 width and 1/4 height of a 640x480 image: x ≈ 160, y ≈ 120
+
+**Key Names (for keypress actions):**
+- Arrow keys: "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"
+- Letter keys: "KeyW", "KeyA", "KeyS", "KeyD" (WASD) or "Space", "Enter", "Escape"
+- Use standard key names that match browser/Stagehand key codes
+
+**Confidence Scoring:**
+- 0.9-1.0: Very confident, clear path to goal
+- 0.7-0.89: Confident, likely correct action
+- 0.5-0.69: Somewhat confident, reasonable action
+- Below 0.5: Uncertain, consider alternatives
+
+**Alternative Actions:**
+Provide 1-3 alternative actions if your primary recommendation might fail. This helps recover from failures.
+
+**Output Format (actionRecommendationSchema):**
+- **action**: One of 'click', 'keypress', 'wait', or 'complete'
+- **target**: 
+  - For 'click': { x: number, y: number } coordinates
+  - For 'keypress': string key name
+  - For 'wait': number duration in milliseconds
+  - For 'complete': not used (can be empty string)
+- **reasoning**: Clear explanation of why this action helps achieve the goal
+- **confidence**: Number between 0 and 1 (certainty of recommendation)
+- **alternatives**: Array of 1-3 alternative actions (same structure)
+
+**Examples:**
+
+Example 1 - Finding Start Button:
+Goal: "Find and click the start/play button to begin the game"
+{
+  "action": "click",
+  "target": { "x": 320, "y": 240 },
+  "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
+  "confidence": 0.95,
+  "alternatives": [
+    {
+      "action": "click",
+      "target": { "x": 300, "y": 250 },
+      "reasoning": "Alternative: Click slightly below the main button if there's a secondary start option"
+    }
+  ]
+}
+
+Example 2 - Waiting for Load:
+Goal: "Wait for game to finish loading"
+{
+  "action": "wait",
+  "target": 2000,
+  "reasoning": "The game is still showing a loading indicator. Wait 2 seconds for it to complete loading.",
+  "confidence": 0.90,
+  "alternatives": [
+    {
+      "action": "wait",
+      "target": 3000,
+      "reasoning": "Alternative: Wait longer if loading is slow"
+    }
+  ]
+}
+
+Example 3 - Keypress Action:
+Goal: "Start the game by pressing a key"
+{
+  "action": "keypress",
+  "target": "Space",
+  "reasoning": "The game shows 'Press Space to Start' text. Pressing Space will begin the game.",
+  "confidence": 0.92,
+  "alternatives": [
+    {
+      "action": "keypress",
+      "target": "Enter",
+      "reasoning": "Alternative: Try Enter key if Space doesn't work"
+    }
+  ]
+}
+
+Example 4 - Goal Complete:
+Goal: "Find and click the start button"
+{
+  "action": "complete",
+  "target": "",
+  "reasoning": "The game has already started. The main menu is gone and gameplay has begun. Goal achieved.",
+  "confidence": 0.98,
+  "alternatives": []
+}
+
+**Important:**
+- Analyze both the HTML structure (if provided) and the screenshot
+- Consider previous actions (if provided) to avoid repeating failed attempts
+- Provide clear reasoning for your recommendation
+- Include alternatives for robustness
+- Ensure coordinates are accurate (center of clickable element)
+- Use correct key names for keypress actions
+- Return data that strictly matches the actionRecommendationSchema structure`;
+
+

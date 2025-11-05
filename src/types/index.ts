@@ -25,6 +25,10 @@ export type {
   LoadingIndicator,
   SuccessIndicator,
   TestingStrategy,
+  Action,
+  GameState,
+  AlternativeAction,
+  ActionRecommendation,
 } from './game-test.types';
 
 // Export all configuration types

@@ -22,3 +22,6 @@ export type { ErrorMonitorConfig } from './error-monitor';
 export { InputSchemaParser } from './input-schema-parser';
 export type { InputSchemaParserConfig, ParsedInputSchema } from './input-schema-parser';
 
+export { StateAnalyzer } from './state-analyzer';
+export type { StateAnalyzerConfig } from './state-analyzer';
+

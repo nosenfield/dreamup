@@ -11,7 +11,7 @@
 
 import { nanoid } from 'nanoid';
 import { resolve } from 'path';
-import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType } from './core';
+import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType, StateAnalyzer } from './core';
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
@@ -54,6 +54,7 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
   let errorMonitor: ErrorMonitor | null = null;
   let gameType: GameType = GameType.UNKNOWN;
   let visionAnalyzer: VisionAnalyzer | null = null;
+  let stateAnalyzer: StateAnalyzer | null = null;
 
   try {
     // Validate environment variables
@@ -122,24 +123,24 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       if (openaiApiKey) {
         visionAnalyzer = new VisionAnalyzer({ logger, apiKey: openaiApiKey });
         logger.info('Vision analyzer initialized', {});
+        
+        // Initialize state analyzer (same API key)
+        stateAnalyzer = new StateAnalyzer({ logger, apiKey: openaiApiKey });
+        logger.info('State analyzer initialized', {});
       } else {
-        logger.warn('OPENAI_API_KEY not found - vision analysis will be skipped', {});
+        logger.warn('OPENAI_API_KEY not found - vision and state analysis will be skipped', {});
       }
     } catch (error) {
-      logger.warn('Failed to initialize vision analyzer', {
+      logger.warn('Failed to initialize vision/state analyzers', {
         error: error instanceof Error ? error.message : String(error),
       });
       visionAnalyzer = null;
+      stateAnalyzer = null;
     }
 
     // Initialize screenshot capturer and game interactor
     const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
-    const gameInteractor = new GameInteractor({
-      logger,
-      visionAnalyzer: visionAnalyzer ?? undefined,
-      screenshotCapturer,
-    });
-
+    
     // Extract metadata from request (handle both metadata and deprecated inputSchema)
     let metadata: GameMetadata | undefined = undefined;
     if (request) {
@@ -152,6 +153,14 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         };
       }
     }
+    
+    const gameInteractor = new GameInteractor({
+      logger,
+      visionAnalyzer: visionAnalyzer ?? undefined,
+      screenshotCapturer,
+      stateAnalyzer: stateAnalyzer ?? undefined,
+      metadata,
+    });
 
     // Use testingStrategy.waitBeforeInteraction if available
     const waitBeforeInteraction = metadata?.testingStrategy?.waitBeforeInteraction ?? 0;

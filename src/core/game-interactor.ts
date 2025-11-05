@@ -21,7 +21,8 @@ import { TIMEOUTS } from '../config/constants';
 import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
-import type { GameMetadata, InputAction, InputAxis } from '../types';
+import type { StateAnalyzer } from './state-analyzer';
+import type { GameMetadata, ActionRecommendation } from '../types';
 
 /**
  * Configuration for GameInteractor.
@@ -38,6 +39,12 @@ export interface GameInteractorConfig {
   
   /** Optional ScreenshotCapturer for taking screenshots for vision analysis */
   screenshotCapturer?: ScreenshotCapturer;
+  
+  /** Optional StateAnalyzer for LLM-powered state analysis (Strategy 3) */
+  stateAnalyzer?: StateAnalyzer;
+  
+  /** Optional game metadata for context in state analysis */
+  metadata?: GameMetadata;
 }
 
 /**
@@ -61,6 +68,8 @@ export class GameInteractor {
   private readonly interactionTimeout: number;
   private readonly visionAnalyzer?: VisionAnalyzer;
   private readonly screenshotCapturer?: ScreenshotCapturer;
+  private readonly stateAnalyzer?: StateAnalyzer;
+  private readonly metadata?: GameMetadata;
   private readonly inputSchemaParser: InputSchemaParser;
 
   /**
@@ -94,6 +103,8 @@ export class GameInteractor {
     this.interactionTimeout = config.interactionTimeout ?? TIMEOUTS.INTERACTION_TIMEOUT;
     this.visionAnalyzer = config.visionAnalyzer;
     this.screenshotCapturer = config.screenshotCapturer;
+    this.stateAnalyzer = config.stateAnalyzer;
+    this.metadata = config.metadata;
     this.inputSchemaParser = new InputSchemaParser({ logger: config.logger });
   }
 
@@ -464,14 +475,165 @@ export class GameInteractor {
       }
     }
 
+    // Strategy 3: LLM State Analysis (fallback when DOM and natural language fail)
+    if (this.stateAnalyzer && this.screenshotCapturer) {
+      try {
+        this.logger.info('DOM and natural language failed, using LLM state analysis');
+
+        // Capture HTML and screenshot for state analysis
+        // @ts-ignore - Code runs in browser context where document exists
+        const html = await (page as any).evaluate(() => document.documentElement.outerHTML);
+        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
+
+        // Get sanitized HTML
+        const sanitizedHTML = this.stateAnalyzer.sanitizeHTML(html);
+
+        // Analyze state and get recommendation
+        const recommendation = await this.stateAnalyzer.analyzeAndRecommendAction({
+          html: sanitizedHTML,
+          screenshot: screenshot.path,
+          previousActions: [],
+          metadata: this.metadata,
+          goal: 'Find and click the start/play button to begin the game',
+        });
+
+        // Execute recommendation
+        const success = await this.executeRecommendation(page, recommendation);
+        
+        if (success) {
+          // Wait for game to initialize after clicking start
+          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+          this.logger.debug('Post-click delay completed (state analysis)', {
+            delayMs: TIMEOUTS.POST_START_DELAY,
+          });
+          return true;
+        }
+
+        // Try alternatives if primary recommendation failed
+        if (recommendation.alternatives.length > 0) {
+          this.logger.info('Primary recommendation failed, trying alternatives', {
+            alternativeCount: recommendation.alternatives.length,
+          });
+
+          for (const alternative of recommendation.alternatives) {
+            const altSuccess = await this.executeRecommendation(page, {
+              action: alternative.action,
+              target: alternative.target,
+              reasoning: alternative.reasoning,
+              confidence: 0.5, // Lower confidence for alternatives
+              alternatives: [],
+            });
+
+            if (altSuccess) {
+              await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+              return true;
+            }
+          }
+        }
+
+        return false;
+      } catch (error) {
+        this.logger.warn('LLM state analysis failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+
     // All strategies failed or fallback not available
     this.logger.warn('Could not find start button', {
       domSelectionFailed: true,
       naturalLanguageFailed: true,
       visionFallbackAvailable: !!(this.visionAnalyzer && this.screenshotCapturer),
+      stateAnalysisAvailable: !!(this.stateAnalyzer && this.screenshotCapturer),
     });
 
     return false;
+  }
+
+  /**
+   * Execute an action recommendation.
+   * 
+   * Executes the recommended action (click, keypress, wait, or complete)
+   * based on the ActionRecommendation from StateAnalyzer.
+   * 
+   * @param page - The Stagehand page object
+   * @param recommendation - Action recommendation to execute
+   * @returns Promise that resolves to `true` if action executed successfully, `false` otherwise
+   */
+  private async executeRecommendation(
+    page: AnyPage,
+    recommendation: ActionRecommendation
+  ): Promise<boolean> {
+    try {
+      if (recommendation.action === 'complete') {
+        this.logger.info('Recommendation indicates goal complete', {
+          reasoning: recommendation.reasoning,
+        });
+        return true;
+      }
+
+      if (recommendation.action === 'wait') {
+        const duration = typeof recommendation.target === 'number' ? recommendation.target : 1000;
+        this.logger.info('Executing wait recommendation', {
+          duration,
+          reasoning: recommendation.reasoning,
+        });
+        await new Promise(resolve => setTimeout(resolve, duration));
+        return true;
+      }
+
+      if (recommendation.action === 'click') {
+        if (typeof recommendation.target === 'object' && 'x' in recommendation.target && 'y' in recommendation.target) {
+          const { x, y } = recommendation.target;
+          this.logger.info('Executing click recommendation', {
+            coordinates: { x, y },
+            reasoning: recommendation.reasoning,
+            confidence: recommendation.confidence,
+          });
+          await this.clickAtCoordinates(page, x, y);
+          return true;
+        } else {
+          this.logger.warn('Invalid click recommendation target', {
+            target: recommendation.target,
+          });
+          return false;
+        }
+      }
+
+      if (recommendation.action === 'keypress') {
+        if (typeof recommendation.target === 'string') {
+          const key = recommendation.target;
+          this.logger.info('Executing keypress recommendation', {
+            key,
+            reasoning: recommendation.reasoning,
+            confidence: recommendation.confidence,
+          });
+          await withTimeout(
+            (page as any).keyPress(key, { delay: 0 }),
+            this.interactionTimeout,
+            `Keypress "${key}" timed out after ${this.interactionTimeout}ms`
+          );
+          return true;
+        } else {
+          this.logger.warn('Invalid keypress recommendation target', {
+            target: recommendation.target,
+          });
+          return false;
+        }
+      }
+
+      this.logger.warn('Unknown recommendation action', {
+        action: recommendation.action,
+      });
+      return false;
+    } catch (error) {
+      this.logger.warn('Failed to execute recommendation', {
+        action: recommendation.action,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   /**

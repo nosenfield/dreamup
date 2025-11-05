@@ -372,3 +372,91 @@ export interface GameMetadata {
   testingStrategy?: TestingStrategy;
 }
 
+/**
+ * Action performed during game testing.
+ * 
+ * Represents a single action taken by the QA agent with context
+ * for tracking action history and avoiding repetition.
+ */
+export interface Action {
+  /** Type of action performed */
+  action: 'click' | 'keypress' | 'wait' | 'complete';
+  
+  /** Target of the action (coordinates for click, key name for keypress, duration for wait) */
+  target: string | { x: number; y: number } | number;
+  
+  /** Reasoning for why this action was taken */
+  reasoning: string;
+  
+  /** Timestamp when the action was performed */
+  timestamp: number;
+}
+
+/**
+ * Game state context for LLM state analysis.
+ * 
+ * Contains all information needed for the StateAnalyzer to make
+ * intelligent decisions about what action to take next.
+ */
+export interface GameState {
+  /** Sanitized HTML content (scripts removed, structure preserved) */
+  html: string;
+  
+  /** File path to current screenshot */
+  screenshot: string;
+  
+  /** Array of previous actions taken */
+  previousActions: Action[];
+  
+  /** Optional game metadata for context */
+  metadata?: GameMetadata;
+  
+  /** Current goal or objective for the agent */
+  goal: string;
+}
+
+/**
+ * Alternative action recommendation.
+ * 
+ * Provides fallback options when primary recommendation fails.
+ */
+export interface AlternativeAction {
+  /** Type of alternative action */
+  action: 'click' | 'keypress' | 'wait';
+  
+  /** Target of the alternative action */
+  target: string | { x: number; y: number } | number;
+  
+  /** Reasoning for this alternative */
+  reasoning: string;
+}
+
+/**
+ * Action recommendation from LLM state analysis.
+ * 
+ * Provides intelligent recommendations for what action to take next
+ * based on current game state analysis.
+ */
+export interface ActionRecommendation {
+  /** Type of action to perform */
+  action: 'click' | 'keypress' | 'wait' | 'complete';
+  
+  /** 
+   * Target of the action:
+   * - For 'click': { x: number, y: number } coordinates
+   * - For 'keypress': string key name (e.g., "Space", "ArrowUp")
+   * - For 'wait': number duration in milliseconds
+   * - For 'complete': not used
+   */
+  target: string | { x: number; y: number } | number;
+  
+  /** Human-readable reasoning for this recommendation */
+  reasoning: string;
+  
+  /** Confidence score from 0-1 indicating recommendation certainty */
+  confidence: number;
+  
+  /** Array of alternative actions if primary recommendation fails */
+  alternatives: AlternativeAction[];
+}
+
