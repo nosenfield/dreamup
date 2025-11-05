@@ -6,6 +6,8 @@
 
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import type { ConsoleError } from '../../src/types/game-test.types';
+import { TEST_GAMES, getCanvasGames, getIframeGames, getDOMGames, getEdgeCaseGames } from '../fixtures/sample-games';
+import { GameType } from '../../src/core/game-detector';
 
 // Mock dependencies before importing main
 const mockPage = {
@@ -171,6 +173,10 @@ import { GameType } from '../../src/core/game-detector';
 
 describe('runQA()', () => {
   beforeEach(() => {
+    // Ensure environment variables are set for all tests
+    process.env.BROWSERBASE_API_KEY = process.env.BROWSERBASE_API_KEY || 'test-api-key';
+    process.env.BROWSERBASE_PROJECT_ID = process.env.BROWSERBASE_PROJECT_ID || 'test-project-id';
+    
     // Reset all mocks
     mockBrowserManagerInstance.initialize.mockClear();
     mockBrowserManagerInstance.navigate.mockClear();
@@ -785,6 +791,295 @@ describe('runQA()', () => {
         metadata,
         15000
       );
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    it('should handle invalid URL format', async () => {
+      const { handler } = await import('../../src/main');
+      const event = {
+        gameUrl: 'not-a-valid-url',
+      };
+
+      const response = await handler(event);
+      
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.error).toContain('Invalid URL format');
+    });
+
+    it('should handle missing gameUrl in Lambda event', async () => {
+      const { handler } = await import('../../src/main');
+      const event = {} as any;
+
+      const response = await handler(event);
+      
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.error).toContain('Missing required field: gameUrl');
+    });
+
+    it('should handle network errors gracefully', async () => {
+      // Mock browser manager to throw network error
+      mockBrowserManagerInstance.navigate.mockImplementationOnce(() => 
+        Promise.reject(new Error('Network error: Failed to fetch'))
+      );
+
+      const gameUrl = 'https://example.com/game';
+      const result = await runQA(gameUrl);
+
+      expect(result.status).toBe('error');
+      expect(result.playability_score).toBe(0);
+      expect(result.issues.length).toBeGreaterThan(0);
+      expect(result.issues[0].severity).toBe('critical');
+    });
+
+    it('should handle timeout scenarios', async () => {
+      // Mock game detector to timeout
+      mockGameDetectorInstance.waitForGameReady.mockImplementationOnce(() => 
+        Promise.reject(new Error('Timeout waiting for game ready'))
+      );
+
+      const gameUrl = 'https://example.com/game';
+      const result = await runQA(gameUrl);
+
+      // Should still complete, but may have warnings
+      expect(result.status).toBeDefined();
+      expect(['pass', 'fail', 'error']).toContain(result.status);
+    });
+
+    it('should handle games that crash during interaction', async () => {
+      // Mock game interactor to simulate crash
+      mockGameInteractorInstance.simulateKeyboardInput.mockImplementationOnce(() => 
+        Promise.reject(new Error('Game crashed during interaction'))
+      );
+
+      const gameUrl = 'https://example.com/game';
+      const result = await runQA(gameUrl);
+
+      expect(result.status).toBe('error');
+      expect(result.issues.length).toBeGreaterThan(0);
+    });
+
+    it('should handle missing BROWSERBASE_API_KEY', async () => {
+      const originalKey = process.env.BROWSERBASE_API_KEY;
+      const originalProjectId = process.env.BROWSERBASE_PROJECT_ID;
+      
+      // Delete API key (but keep project ID temporarily to avoid early exit)
+      delete process.env.BROWSERBASE_API_KEY;
+      // Ensure project ID is set so we can test the API key check
+      if (!process.env.BROWSERBASE_PROJECT_ID) {
+        process.env.BROWSERBASE_PROJECT_ID = 'test-project-id';
+      }
+
+      const gameUrl = 'https://example.com/game';
+      
+      // runQA catches errors and returns error result, doesn't throw
+      const result = await runQA(gameUrl);
+      
+      expect(result.status).toBe('error');
+      expect(result.issues.length).toBeGreaterThan(0);
+      expect(result.issues[0].description).toContain('Missing required environment variables');
+
+      // Restore
+      if (originalKey) {
+        process.env.BROWSERBASE_API_KEY = originalKey;
+      }
+      if (!originalProjectId) {
+        delete process.env.BROWSERBASE_PROJECT_ID;
+      }
+    });
+
+    it('should handle missing BROWSERBASE_PROJECT_ID', async () => {
+      const originalKey = process.env.BROWSERBASE_API_KEY;
+      const originalProjectId = process.env.BROWSERBASE_PROJECT_ID;
+      
+      // Delete project ID (but keep API key temporarily to avoid early exit)
+      delete process.env.BROWSERBASE_PROJECT_ID;
+      // Ensure API key is set so we can test the project ID check
+      if (!process.env.BROWSERBASE_API_KEY) {
+        process.env.BROWSERBASE_API_KEY = 'test-api-key';
+      }
+
+      const gameUrl = 'https://example.com/game';
+      
+      // runQA catches errors and returns error result, doesn't throw
+      const result = await runQA(gameUrl);
+      
+      expect(result.status).toBe('error');
+      expect(result.issues.length).toBeGreaterThan(0);
+      expect(result.issues[0].description).toContain('Missing required environment variables');
+
+      // Restore
+      if (!originalKey) {
+        delete process.env.BROWSERBASE_API_KEY;
+      }
+      if (originalProjectId) {
+        process.env.BROWSERBASE_PROJECT_ID = originalProjectId;
+      }
+    });
+  });
+
+  describe('Game Type Detection', () => {
+    it('should detect canvas games correctly', async () => {
+      // Clear and set mock before test (don't reset, just clear to keep default implementation)
+      mockGameDetectorInstance.detectType.mockClear();
+      mockGameDetectorInstance.detectType.mockResolvedValueOnce(GameType.CANVAS);
+
+      const gameUrl = 'https://example.com/canvas-game';
+      const result = await runQA(gameUrl);
+
+      expect(result.metadata?.gameType).toBe(GameType.CANVAS);
+      expect(mockGameDetectorInstance.detectType).toHaveBeenCalledTimes(1);
+    });
+
+    it('should detect iframe games correctly', async () => {
+      // Clear and set mock before test
+      mockGameDetectorInstance.detectType.mockClear();
+      mockGameDetectorInstance.detectType.mockResolvedValueOnce(GameType.IFRAME);
+
+      const gameUrl = 'https://example.com/iframe-game';
+      const result = await runQA(gameUrl);
+
+      expect(result.metadata?.gameType).toBe(GameType.IFRAME);
+    });
+
+    it('should detect DOM games correctly', async () => {
+      // Clear and set mock before test
+      mockGameDetectorInstance.detectType.mockClear();
+      mockGameDetectorInstance.detectType.mockResolvedValueOnce(GameType.DOM);
+
+      const gameUrl = 'https://example.com/dom-game';
+      const result = await runQA(gameUrl);
+
+      expect(result.metadata?.gameType).toBe(GameType.DOM);
+    });
+
+    it('should default to UNKNOWN when detection fails', async () => {
+      mockGameDetectorInstance.detectType.mockClear();
+      mockGameDetectorInstance.detectType.mockRejectedValueOnce(new Error('Detection failed'));
+
+      const gameUrl = 'https://example.com/game';
+      const result = await runQA(gameUrl);
+
+      expect(result.metadata?.gameType).toBe(GameType.UNKNOWN);
+    });
+  });
+
+  describe('Comprehensive Flow Tests', () => {
+    it('should complete full flow with metadata.json', async () => {
+      const { loadMetadataFromFile } = await import('../../src/main');
+      const metadataResult = await loadMetadataFromFile('./_game-examples/pong/metadata.json');
+      
+      expect(metadataResult.success).toBe(true);
+      if (metadataResult.success) {
+        // Clear mocks to ensure clean state (don't reset to keep default implementations)
+        mockScreenshotCapturerInstance.capture.mockClear();
+        mockScreenshotCapturerInstance.capture.mockResolvedValue({
+          id: 'test-screenshot',
+          path: '/tmp/test.png',
+          timestamp: Date.now(),
+          stage: 'initial_load' as const,
+        });
+
+        const gameUrl = 'https://example.com/pong';
+        const result = await runQA(gameUrl, { metadata: metadataResult.data });
+
+        expect(result.status).toBeDefined();
+        expect(result.screenshots.length).toBe(3);
+        expect(result.metadata).toBeDefined();
+      }
+    });
+
+    it('should handle metadata with loading indicators', async () => {
+      const { loadMetadataFromFile } = await import('../../src/main');
+      const metadataResult = await loadMetadataFromFile('./_game-examples/pong/metadata.json');
+      
+      if (metadataResult.success) {
+        const gameUrl = 'https://example.com/pong';
+        
+        // Clear and mock screenshot capturer to use captureAtOptimalTime
+        mockScreenshotCapturerInstance.captureAtOptimalTime.mockClear();
+        mockScreenshotCapturerInstance.captureAtOptimalTime.mockResolvedValue({
+          id: 'test-screenshot',
+          path: '/tmp/test.png',
+          timestamp: Date.now(),
+          stage: 'initial_load' as const,
+        });
+
+        await runQA(gameUrl, { metadata: metadataResult.data });
+
+        // Should use captureAtOptimalTime when metadata available
+        expect(mockScreenshotCapturerInstance.captureAtOptimalTime).toHaveBeenCalled();
+      }
+    });
+
+    it('should prioritize critical actions from metadata', async () => {
+      const { loadMetadataFromFile } = await import('../../src/main');
+      const metadataResult = await loadMetadataFromFile('./_game-examples/pong/metadata.json');
+      
+      if (metadataResult.success) {
+        // Clear mocks to ensure clean state
+        mockGameInteractorInstance.simulateGameplayWithMetadata.mockClear();
+        mockGameInteractorInstance.simulateKeyboardInput.mockClear();
+        mockGameInteractorInstance.simulateGameplayWithMetadata.mockResolvedValue(undefined);
+        
+        const gameUrl = 'https://example.com/pong';
+        await runQA(gameUrl, { metadata: metadataResult.data });
+
+        // Should call simulateGameplayWithMetadata (not simulateKeyboardInput)
+        expect(mockGameInteractorInstance.simulateGameplayWithMetadata).toHaveBeenCalled();
+        expect(mockGameInteractorInstance.simulateKeyboardInput).not.toHaveBeenCalled();
+      }
+    });
+  });
+
+  describe('Test Fixtures', () => {
+    it('should load test fixtures correctly', () => {
+      expect(TEST_GAMES.length).toBeGreaterThan(0);
+      expect(getCanvasGames().length).toBeGreaterThan(0);
+      expect(getIframeGames().length).toBeGreaterThan(0);
+      expect(getDOMGames().length).toBeGreaterThan(0);
+    });
+
+    it('should have expected structure for test games', () => {
+      TEST_GAMES.forEach(game => {
+        expect(game.name).toBeDefined();
+        expect(game.url).toBeDefined();
+        expect(game.gameType).toBeDefined();
+        expect(game.expected).toBeDefined();
+        expect(game.expected.shouldLoad).toBeDefined();
+        expect(game.expected.description).toBeDefined();
+      });
+    });
+
+    it('should filter games by type correctly', () => {
+      const canvasGames = getCanvasGames();
+      canvasGames.forEach(game => {
+        expect(game.gameType).toBe(GameType.CANVAS);
+      });
+
+      const iframeGames = getIframeGames();
+      iframeGames.forEach(game => {
+        expect(game.gameType).toBe(GameType.IFRAME);
+      });
+
+      const domGames = getDOMGames();
+      domGames.forEach(game => {
+        expect(game.gameType).toBe(GameType.DOM);
+      });
+    });
+
+    it('should identify edge case games', () => {
+      const edgeCases = getEdgeCaseGames();
+      expect(edgeCases.length).toBeGreaterThan(0);
+      edgeCases.forEach(game => {
+        expect(
+          game.name.includes('Slow') || 
+          game.name.includes('Broken') ||
+          game.name.includes('Edge')
+        ).toBe(true);
+      });
     });
   });
 });

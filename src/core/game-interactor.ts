@@ -293,13 +293,19 @@ export class GameInteractor {
     });
 
     // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
+    // Note: Using ID selectors first (most reliable), then text selectors
+    // Stagehand/Playwright text selectors support partial matching
     const domSelectors = [
-      'button:has-text("Start")',
-      'button:has-text("Play")',
-      'button:has-text("START GAME")',
-      'button:has-text("MORE GAMES")', // Try this too, in case it's the only clickable
-      '[onclick*="start" i]',
-      '[onclick*="play" i]',
+      '#start-btn',              // Common ID pattern
+      '#startBtn',
+      '#start-button',
+      '#play-btn',
+      '#playBtn',
+      'button:has-text("Start")',  // Partial match: "Start", "Start Game", "Start Match", etc.
+      'button:has-text("Play")',   // Partial match: "Play", "Play Game", etc.
+      'button:has-text("BEGIN")',
+      '[onclick*="start" i]',      // Elements with onclick containing "start"
+      '[onclick*="play" i]',       // Elements with onclick containing "play"
       'a:has-text("Start")',
       'a:has-text("Play")',
       'div[role="button"]:has-text("Start")',
