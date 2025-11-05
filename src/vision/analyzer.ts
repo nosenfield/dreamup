@@ -211,18 +211,22 @@ export class VisionAnalyzer {
       ];
 
       // Call GPT-4 Vision with structured output
+      // NOTE: AI SDK requires root schema to be an object, not an array
+      // So we wrap the array in an object with an 'elements' property
       const result = await generateObject({
         model: this.openai('gpt-4-turbo'),
         messages: [{ role: 'user' as const, content }],
-        schema: z.array(clickableElementSchema),
+        schema: z.object({
+          elements: z.array(clickableElementSchema),
+        }),
         temperature: 0.3,
       });
 
       this.logger.info('Clickable elements found', {
-        elementCount: result.object.length,
+        elementCount: result.object.elements.length,
       });
 
-      return result.object;
+      return result.object.elements;
     } catch (error) {
       this.logger.warn('Failed to find clickable elements', {
         error: error instanceof Error ? error.message : String(error),

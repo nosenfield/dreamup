@@ -222,14 +222,16 @@ describe('VisionAnalyzer', () => {
       analyzer = new VisionAnalyzer({ logger, apiKey: 'test-key' });
 
       mockGenerateObject.mockImplementation(() => Promise.resolve({
-        object: [
-          {
-            label: 'Start Button',
-            x: 400,
-            y: 300,
-            confidence: 0.95,
-          },
-        ],
+        object: {
+          elements: [
+            {
+              label: 'Start Button',
+              x: 400,
+              y: 300,
+              confidence: 0.95,
+            },
+          ],
+        },
         usage: {
           promptTokens: 50,
           completionTokens: 20,
