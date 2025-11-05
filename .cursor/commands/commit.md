@@ -4,10 +4,11 @@ You are helping the user create a git commit with proper staging and commit mess
 
 ## Important Rules
 
-1. **NEVER use `git add .` or `git add -A`** - Always stage files individually by name
+1. **NEVER use `git add .` or `git add -A`** - Always stage files with explicit paths
 2. **Always list files explicitly** - Show the user what will be committed
-3. **Create meaningful commit messages** - Follow conventional commit format
-4. **Include Claude Code attribution** - Add the footer to all commits
+3. **Use a single `git add` command** - List all files in one command, not multiple individual commands
+4. **Create meaningful commit messages** - Follow conventional commit format
+5. **Include Claude Code attribution** - Add the footer to all commits
 
 ## Workflow
 
@@ -43,16 +44,17 @@ Deleted:
 Total: X files
 ```
 
-### Step 3: Stage Files Individually
+### Step 3: Stage Files in Single Command
 
-For each file to be committed, run:
+Stage all files in a single `git add` command with explicit file paths:
 ```bash
-git add path/to/file1.ts
-git add path/to/file2.tsx
-git add path/to/file3.ts
+git add path/to/file1.ts path/to/file2.tsx path/to/file3.ts
 ```
 
-**NEVER run `git add .` or `git add -A`**
+**Important:**
+- Use a single `git add` command listing all files explicitly
+- **NEVER run `git add .` or `git add -A`** - This would stage everything including untracked files
+- The single command approach reduces noise while maintaining explicit control over what gets staged
 
 ### Step 4: Draft Commit Message
 
