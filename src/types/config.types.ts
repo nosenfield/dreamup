@@ -36,18 +36,21 @@ export interface FeatureFlags {
 export interface Timeouts {
   /** Maximum duration for the entire test execution (default: 240000ms = 4 minutes) */
   MAX_TEST_DURATION: number;
-  
+
   /** Timeout for waiting for game to load (default: 60000ms = 60 seconds) */
   GAME_LOAD_TIMEOUT: number;
-  
+
   /** Timeout for interaction sequences (default: 90000ms = 90 seconds) */
   INTERACTION_TIMEOUT: number;
-  
+
   /** Timeout for individual screenshot capture (default: 10000ms = 10 seconds) */
   SCREENSHOT_TIMEOUT: number;
-  
+
   /** Timeout for page navigation (default: 30000ms = 30 seconds) */
   PAGE_NAVIGATION_TIMEOUT: number;
+
+  /** Delay after clicking start button to allow game initialization (default: 2000ms = 2 seconds) */
+  POST_START_DELAY: number;
 }
 
 /**

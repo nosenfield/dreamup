@@ -12,13 +12,14 @@ import type { Timeouts, Thresholds } from '../types/config.types';
 
 /**
  * Timeout values in milliseconds for various operations.
- * 
+ *
  * All values can be overridden via environment variables:
  * - MAX_TEST_DURATION: Maximum duration for entire test (default: 240000ms = 4 minutes)
  * - GAME_LOAD_TIMEOUT: Timeout for game loading (default: 60000ms = 60 seconds)
  * - INTERACTION_TIMEOUT: Timeout for interactions (default: 90000ms = 90 seconds)
  * - SCREENSHOT_TIMEOUT: Timeout for screenshot capture (default: 10000ms = 10 seconds)
  * - PAGE_NAVIGATION_TIMEOUT: Timeout for page navigation (default: 30000ms = 30 seconds)
+ * - POST_START_DELAY: Delay after clicking start button (default: 2000ms = 2 seconds)
  */
 export const TIMEOUTS: Timeouts = {
   /** Maximum duration for the entire test execution in milliseconds */
@@ -48,6 +49,12 @@ export const TIMEOUTS: Timeouts = {
   /** Timeout for page navigation in milliseconds */
   PAGE_NAVIGATION_TIMEOUT: parseInt(
     process.env.PAGE_NAVIGATION_TIMEOUT || '30000',
+    10
+  ),
+
+  /** Delay after clicking start button to allow game initialization in milliseconds */
+  POST_START_DELAY: parseInt(
+    process.env.POST_START_DELAY || '2000',
     10
   ),
 };

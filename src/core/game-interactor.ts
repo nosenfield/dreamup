@@ -305,6 +305,13 @@ export class GameInteractor {
           this.logger.info('Start button found using natural language', {
             phrase,
           });
+
+          // Wait for game to initialize after clicking start
+          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+          this.logger.debug('Post-click delay completed (natural language)', {
+            delayMs: TIMEOUTS.POST_START_DELAY,
+          });
+
           return true;
         } else {
           // page.act() doesn't exist, skip natural language
@@ -368,6 +375,12 @@ export class GameInteractor {
 
         this.logger.info('Start button clicked successfully using vision', {
           label: bestElement.label,
+        });
+
+        // Wait for game to initialize after clicking start
+        await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+        this.logger.debug('Post-click delay completed (vision)', {
+          delayMs: TIMEOUTS.POST_START_DELAY,
         });
 
         return true;
