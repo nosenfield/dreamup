@@ -1,0 +1,41 @@
+{
+  "FunctionName": "dreamup-qa-agent",
+  "Runtime": "provided.al2",
+  "Role": "arn:aws:iam::YOUR_ACCOUNT_ID:role/lambda-execution-role",
+  "Handler": "dist/main.handler",
+  "Description": "DreamUp QA Agent - Autonomous game testing agent",
+  "Timeout": 600,
+  "MemorySize": 2048,
+  "Environment": {
+    "Variables": {
+      "BROWSERBASE_API_KEY": "YOUR_BROWSERBASE_API_KEY",
+      "BROWSERBASE_PROJECT_ID": "YOUR_BROWSERBASE_PROJECT_ID",
+      "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY",
+      "DEBUG": "false",
+      "ENABLE_CACHING": "false",
+      "ENABLE_PROGRESS_UPDATES": "false",
+      "ENABLE_ERROR_RECOVERY": "false",
+      "ENABLE_SCREENSHOT_CLEANUP": "false",
+      "MAX_TEST_DURATION": "240000",
+      "GAME_LOAD_TIMEOUT": "60000",
+      "INTERACTION_TIMEOUT": "90000"
+    }
+  },
+  "Layers": [],
+  "VpcConfig": {
+    "SubnetIds": [],
+    "SecurityGroupIds": []
+  },
+  "TracingConfig": {
+    "Mode": "Active"
+  },
+  "DeadLetterConfig": {
+    "TargetArn": ""
+  },
+  "KMSKeyArn": "",
+  "Tags": {
+    "Project": "DreamUp",
+    "Environment": "production"
+  }
+}
+

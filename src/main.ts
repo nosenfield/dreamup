@@ -390,11 +390,14 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
 }
 
 /**
- * Result type for loading metadata from file.
+ * Result interface for loading metadata from file.
  */
 export interface LoadMetadataResult {
+  /** Whether the metadata was successfully loaded and validated */
   success: boolean;
+  /** The parsed and validated GameMetadata (only present if success is true) */
   data?: GameMetadata;
+  /** Error message (only present if success is false) */
   error?: string;
 }
 
