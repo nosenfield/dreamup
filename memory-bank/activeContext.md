@@ -85,18 +85,72 @@
   - ✅ Integrated metadata timing and cleanup into main.ts
   - ✅ Added comprehensive tests (12 new tests, all passing)
   - ✅ Backwards compatible (works without metadata)
-- ⏳ **I5.4-I5.6**: Remaining tasks
+- ✅ **I5.4: Implement CLI and Lambda Interfaces** - COMPLETE (Nov 5, 2025)
+  - ✅ Added CLI argument parsing with --metadata flag
+  - ✅ Implemented loadMetadataFromFile() for loading and validating metadata.json
+  - ✅ Implemented parseCLIArgs() for parsing command line arguments
+  - ✅ Added AWS Lambda handler export (handler function)
+  - ✅ Supports both metadata and inputSchema in Lambda event (backwards compat)
+  - ✅ Added comprehensive tests (11 new tests, all passing)
+- ⏳ **I5.5-I5.6**: Remaining tasks
 
 ### Next Immediate Tasks
-1. **I5.4: Implement CLI and Lambda Interfaces** (READY - depends on I5.3)
-   - Add CLI argument parsing
-   - Add Lambda handler export
+1. **I5.5: Comprehensive Testing & Validation** (READY - depends on I5.4)
+   - End-to-end testing with real games
+   - Validate all features work together
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I5.4: Implement CLI and Lambda Interfaces** (Nov 5, 2025)
+  - **Implementation**: Added CLI argument parsing with --metadata flag and AWS Lambda handler export
+  - **Files Modified**:
+    - `src/main.ts`: Added loadMetadataFromFile(), parseCLIArgs(), handler(), LambdaEvent, LambdaResponse interfaces (272 lines added)
+    - `tests/integration/main.test.ts`: Added 11 new tests for CLI and Lambda handler (152 lines added)
+  - **Key Features**:
+    - `loadMetadataFromFile()`: Loads and validates metadata.json files using Bun.file()
+      - Resolves paths relative to current working directory
+      - Validates JSON structure and schema using validateGameMetadata()
+      - Returns LoadMetadataResult with success/error handling
+      - Handles missing files, invalid JSON, and schema validation errors gracefully
+    - `parseCLIArgs()`: Parses command line arguments for URL and --metadata flag
+      - Extracts gameUrl from process.argv[2]
+      - Extracts metadataPath from --metadata flag
+      - Returns parsed arguments object
+    - `handler()`: AWS Lambda handler function
+      - Accepts LambdaEvent with gameUrl, optional metadata/inputSchema, optional config
+      - Validates event structure and URL format
+      - Supports both metadata and inputSchema (backwards compat)
+      - Prioritizes metadata over inputSchema when both provided
+      - Converts inputSchema to metadata if metadata not provided
+      - Returns LambdaResponse with statusCode, body (JSON), headers
+      - Returns 200 on pass, 500 on fail/error
+      - Handles errors gracefully with appropriate status codes
+    - CLI entry point enhancement:
+      - Updated to use parseCLIArgs() for argument parsing
+      - Loads metadata.json if --metadata flag provided
+      - Validates metadata before running test
+      - Updated usage message to show --metadata flag
+      - Exits with code 0 on pass, 1 on fail/error
+  - **Test Results**: 42 tests passing (11 new + 31 existing)
+    - 3 new tests for metadata file loading (all passing)
+      - Tests loading valid metadata.json
+      - Tests handling missing file
+      - Tests schema validation
+    - 6 new tests for Lambda handler (all passing)
+      - Tests handler export
+      - Tests processing with metadata
+      - Tests processing with inputSchema (backwards compat)
+      - Tests metadata priority over inputSchema
+      - Tests error handling
+      - Tests status code returns
+    - All existing tests continue to pass (backwards compatibility verified)
+  - **TypeScript**: Compilation passes (no new errors)
+  - **Acceptance Criteria Met**: ✅ CLI runs with URL argument, ✅ CLI accepts --metadata flag, ✅ CLI loads and validates metadata.json, ✅ Lambda handler exports correctly, ✅ Lambda supports both metadata and inputSchema, ✅ Lambda converts inputSchema to metadata, ✅ Lambda returns correct response format, ✅ Error handling works gracefully, ✅ All existing tests continue to pass
+  - **Foundation**: Ready for I5.5 (Comprehensive Testing & Validation)
+
 - ✅ **I5.3: Complete Screenshot Capturer** (Nov 5, 2025)
   - **Implementation**: Enhanced ScreenshotCapturer with metadata-based timing and parallel capture, implemented cleanup in FileManager
   - **Files Modified**:

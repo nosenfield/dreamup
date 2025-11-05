@@ -10,13 +10,15 @@
  */
 
 import { nanoid } from 'nanoid';
+import { resolve } from 'path';
 import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType } from './core';
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
-import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema } from './types/game-test.types';
+import { validateGameMetadata } from './schemas/metadata.schema';
+import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig } from './types/game-test.types';
 
 /**
  * Run QA test on a game URL.
@@ -388,22 +390,241 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
 }
 
 /**
+ * Result type for loading metadata from file.
+ */
+export interface LoadMetadataResult {
+  success: boolean;
+  data?: GameMetadata;
+  error?: string;
+}
+
+/**
+ * Load and validate metadata from a JSON file.
+ * 
+ * @param filePath - Path to metadata.json file (relative or absolute)
+ * @returns Promise that resolves to LoadMetadataResult
+ * 
+ * @example
+ * ```typescript
+ * const result = await loadMetadataFromFile('./_game-examples/pong/metadata.json');
+ * if (result.success) {
+ *   console.log('Metadata loaded:', result.data);
+ * }
+ * ```
+ */
+export async function loadMetadataFromFile(filePath: string): Promise<LoadMetadataResult> {
+  try {
+    // Resolve path relative to current working directory
+    const resolvedPath = resolve(process.cwd(), filePath);
+    
+    // Read file using Bun.file()
+    const file = Bun.file(resolvedPath);
+    
+    // Check if file exists
+    if (!(await file.exists())) {
+      return {
+        success: false,
+        error: `Metadata file not found: ${resolvedPath}`,
+      };
+    }
+
+    // Read and parse JSON
+    const content = await file.text();
+    let parsedData: unknown;
+    
+    try {
+      parsedData = JSON.parse(content);
+    } catch (parseError) {
+      return {
+        success: false,
+        error: `Invalid JSON in metadata file: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+      };
+    }
+
+    // Validate against schema
+    const validationResult = validateGameMetadata(parsedData);
+    
+    if (!validationResult.success) {
+      return {
+        success: false,
+        error: `Metadata validation failed: ${validationResult.error.message}`,
+      };
+    }
+
+    return {
+      success: true,
+      data: validationResult.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to load metadata file: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
+ * Parse CLI arguments.
+ * 
+ * @param args - Command line arguments array (defaults to process.argv)
+ * @returns Object with gameUrl and optional metadataPath
+ */
+export function parseCLIArgs(args: string[] = process.argv): { gameUrl: string; metadataPath?: string } {
+  const gameUrl = args[2];
+  let metadataPath: string | undefined;
+
+  // Parse --metadata flag
+  const metadataIndex = args.indexOf('--metadata');
+  if (metadataIndex !== -1 && metadataIndex + 1 < args.length) {
+    metadataPath = args[metadataIndex + 1];
+  }
+
+  return { gameUrl, metadataPath };
+}
+
+/**
+ * Lambda event interface for AWS Lambda handler.
+ */
+export interface LambdaEvent {
+  /** The URL of the game to test */
+  gameUrl: string;
+  
+  /** Optional comprehensive game metadata */
+  metadata?: GameMetadata;
+  
+  /** 
+   * Optional input schema (deprecated, kept for backwards compatibility)
+   * @deprecated Use metadata.inputSchema instead
+   */
+  inputSchema?: InputSchema;
+  
+  /** Optional configuration overrides */
+  config?: Partial<TestConfig>;
+}
+
+/**
+ * Lambda response interface.
+ */
+export interface LambdaResponse {
+  statusCode: number;
+  body: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * AWS Lambda handler for running QA tests.
+ * 
+ * This function is designed to be deployed as an AWS Lambda function.
+ * It accepts a Lambda event containing gameUrl and optional metadata/inputSchema,
+ * runs the QA test, and returns a Lambda-compatible response.
+ * 
+ * @param event - Lambda event containing gameUrl and optional metadata/inputSchema
+ * @returns Promise that resolves to LambdaResponse
+ * 
+ * @example
+ * ```typescript
+ * const event = {
+ *   gameUrl: 'https://example.com/game',
+ *   metadata: { inputSchema: {...} }
+ * };
+ * const response = await handler(event);
+ * // Returns: { statusCode: 200, body: JSON.stringify(result) }
+ * ```
+ */
+export async function handler(event: LambdaEvent): Promise<LambdaResponse> {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    // Validate required fields
+    if (!event.gameUrl) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'Missing required field: gameUrl',
+        }),
+        headers,
+      };
+    }
+
+    // Validate URL format
+    try {
+      new URL(event.gameUrl);
+    } catch {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: `Invalid URL format: ${event.gameUrl}`,
+        }),
+        headers,
+      };
+    }
+
+    // Prepare request object (handle both metadata and inputSchema)
+    const request: Partial<GameTestRequest> = {
+      config: event.config,
+    };
+
+    // Prioritize metadata over inputSchema (backwards compatibility)
+    if (event.metadata) {
+      request.metadata = event.metadata;
+    } else if (event.inputSchema) {
+      // Backwards compatibility: convert inputSchema to metadata
+      request.inputSchema = event.inputSchema;
+    }
+
+    // Run QA test
+    const result = await runQA(event.gameUrl, request);
+
+    // Determine status code based on result status
+    let statusCode = 200;
+    if (result.status === 'fail') {
+      statusCode = 500; // Server error for failed tests
+    } else if (result.status === 'error') {
+      statusCode = 500; // Server error for errors
+    }
+
+    return {
+      statusCode,
+      body: JSON.stringify(result),
+      headers,
+    };
+  } catch (error) {
+    // Handle unexpected errors
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Internal server error',
+        message: errorMessage,
+      }),
+      headers,
+    };
+  }
+}
+
+/**
  * CLI entry point for running QA tests from command line.
  * 
- * Usage: `bun run src/main.ts <game-url>`
+ * Usage: `bun run src/main.ts <game-url> [--metadata <path>]`
  * 
- * Example:
+ * Examples:
  * ```bash
  * bun run src/main.ts https://example.com/game
+ * bun run src/main.ts https://example.com/game --metadata ./_game-examples/pong/metadata.json
  * ```
  */
 if (import.meta.main) {
-  const gameUrl = process.argv[2];
+  // Parse CLI arguments
+  const { gameUrl, metadataPath } = parseCLIArgs();
 
   if (!gameUrl) {
     console.error('Error: Game URL is required');
-    console.log('\nUsage: bun run src/main.ts <game-url>');
+    console.log('\nUsage: bun run src/main.ts <game-url> [--metadata <path>]');
     console.log('Example: bun run src/main.ts https://example.com/game');
+    console.log('Example: bun run src/main.ts https://example.com/game --metadata ./_game-examples/pong/metadata.json');
     process.exit(1);
   }
 
@@ -416,8 +637,21 @@ if (import.meta.main) {
     process.exit(1);
   }
 
+  // Load metadata if provided
+  let request: Partial<GameTestRequest> | undefined;
+  if (metadataPath) {
+    const metadataResult = await loadMetadataFromFile(metadataPath);
+    if (!metadataResult.success) {
+      console.error('Error loading metadata:', metadataResult.error);
+      process.exit(1);
+    }
+    request = {
+      metadata: metadataResult.data,
+    };
+  }
+
   // Run QA test
-  runQA(gameUrl)
+  runQA(gameUrl, request)
     .then((result) => {
       // Print result as formatted JSON
       console.log('\n📊 QA Test Result:');
