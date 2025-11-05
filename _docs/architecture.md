@@ -12,7 +12,7 @@ This document defines the technical architecture, tech stack, directory structur
 ┌─────────────────────────────────────────────────────────────┐
 │                     AWS Lambda Function                      │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │              Game Testing Agent (qa.ts)               │  │
+│  │              Game Testing Agent (main.ts)               │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  │  │
 │  │  │   Browser   │  │   Vision    │  │   Reporter   │  │  │
 │  │  │   Manager   │  │   Analyzer  │  │              │  │  │
