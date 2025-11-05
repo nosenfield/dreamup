@@ -60,6 +60,7 @@ const mockScreenshotCapturerInstance = {
 const mockGameInteractorInstance = {
   simulateKeyboardInput: mock(() => Promise.resolve()),
   clickAtCoordinates: mock(() => Promise.resolve()),
+  findAndClickStart: mock(() => Promise.resolve(true)),
 };
 
 const mockGameDetectorInstance = {
@@ -73,6 +74,21 @@ const mockErrorMonitorInstance = {
   getErrors: mock(() => Promise.resolve([])),
   hasErrors: mock(() => Promise.resolve(false)),
   hasCriticalError: mock(() => Promise.resolve(false)),
+};
+
+const mockVisionAnalyzerInstance = {
+  analyzeScreenshots: mock(() => Promise.resolve({
+    status: 'pass',
+    playability_score: 75,
+    issues: [],
+    screenshots: [],
+    timestamp: new Date().toISOString(),
+    metadata: {
+      visionAnalysisTokens: 1500,
+    },
+  })),
+  findClickableElements: mock(() => Promise.resolve([])),
+  detectCrash: mock(() => Promise.resolve(false)),
 };
 
 // Mock modules
@@ -116,6 +132,12 @@ mock.module('../../src/core/error-monitor', () => ({
   }),
 }));
 
+mock.module('../../src/vision/analyzer', () => ({
+  VisionAnalyzer: mock(function(config: any) {
+    return mockVisionAnalyzerInstance;
+  }),
+}));
+
 mock.module('../../src/utils/file-manager', () => ({
   FileManager: mock(function(sessionId?: string) {
     return mockFileManagerInstance;
@@ -125,6 +147,7 @@ mock.module('../../src/utils/file-manager', () => ({
 // Set environment variables for tests
 process.env.BROWSERBASE_API_KEY = 'test-api-key';
 process.env.BROWSERBASE_PROJECT_ID = 'test-project-id';
+// Don't set OPENAI_API_KEY here - only set it in Vision Analysis Integration tests
 
 // Import after mocks
 import { runQA } from '../../src/main';
@@ -146,14 +169,36 @@ describe('runQA()', () => {
     mockErrorMonitorInstance.startMonitoring.mockClear();
     mockErrorMonitorInstance.stopMonitoring.mockClear();
     mockErrorMonitorInstance.getErrors.mockClear();
+    mockGameInteractorInstance.findAndClickStart.mockClear();
+    mockVisionAnalyzerInstance.analyzeScreenshots.mockClear();
     // Reset mock return values to defaults
     mockGameDetectorInstance.detectType.mockImplementation(() => Promise.resolve('canvas' as any));
     mockErrorMonitorInstance.getErrors.mockImplementation(() => Promise.resolve([]));
+    mockGameInteractorInstance.findAndClickStart.mockImplementation(() => Promise.resolve(true));
+    mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementation(() => Promise.resolve({
+      status: 'pass',
+      playability_score: 75,
+      issues: [],
+      screenshots: [],
+      timestamp: new Date().toISOString(),
+      metadata: {
+        visionAnalysisTokens: 1500,
+      },
+    }));
   });
 
   it('should complete successfully with valid URL', async () => {
+    // Ensure OPENAI_API_KEY is not set for this test (no vision analysis)
+    const originalOpenAIKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    
     const gameUrl = 'https://example.com/game';
     const result = await runQA(gameUrl);
+    
+    // Restore OPENAI_API_KEY for other tests
+    if (originalOpenAIKey) {
+      process.env.OPENAI_API_KEY = originalOpenAIKey;
+    }
 
     // Verify BrowserManager was initialized
     expect(mockBrowserManagerInstance.initialize).toHaveBeenCalledTimes(1);
@@ -456,6 +501,176 @@ describe('runQA()', () => {
 
     expect(result.metadata?.duration).toBeGreaterThanOrEqual(0);
     expect(typeof result.metadata?.duration).toBe('number');
+  });
+
+  describe('Vision Analysis Integration', () => {
+    beforeEach(() => {
+      // Ensure OPENAI_API_KEY is set for vision tests
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+    });
+
+    it('should call findAndClickStart before interaction', async () => {
+      const gameUrl = 'https://example.com/game';
+      
+      await runQA(gameUrl);
+
+      // Verify findAndClickStart is called before simulateKeyboardInput
+      const findStartCall = mockGameInteractorInstance.findAndClickStart.mock.invocationCallOrder[0];
+      const keyboardCall = mockGameInteractorInstance.simulateKeyboardInput.mock.invocationCallOrder[0];
+      
+      expect(mockGameInteractorInstance.findAndClickStart).toHaveBeenCalledTimes(1);
+      expect(mockGameInteractorInstance.findAndClickStart).toHaveBeenCalledWith(mockPage);
+      expect(findStartCall).toBeLessThan(keyboardCall);
+    });
+
+    it('should perform vision analysis after capturing screenshots', async () => {
+      const gameUrl = 'https://example.com/game';
+      
+      await runQA(gameUrl);
+
+      // Verify vision analysis is called after screenshots are captured
+      const screenshotCalls = mockScreenshotCapturerInstance.capture.mock.invocationCallOrder;
+      const visionCall = mockVisionAnalyzerInstance.analyzeScreenshots.mock.invocationCallOrder[0];
+      
+      expect(mockVisionAnalyzerInstance.analyzeScreenshots).toHaveBeenCalledTimes(1);
+      expect(mockVisionAnalyzerInstance.analyzeScreenshots).toHaveBeenCalledWith([
+        expect.objectContaining({ stage: 'initial_load' }),
+        expect.objectContaining({ stage: 'after_interaction' }),
+        expect.objectContaining({ stage: 'final_state' }),
+      ]);
+      expect(screenshotCalls[2]).toBeLessThan(visionCall); // Last screenshot before vision
+    });
+
+    it('should use vision analysis playability score', async () => {
+      const gameUrl = 'https://example.com/game';
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+        status: 'pass',
+        playability_score: 85,
+        issues: [],
+        screenshots: [],
+        timestamp: new Date().toISOString(),
+      });
+
+      const result = await runQA(gameUrl);
+
+      expect(result.playability_score).toBe(85);
+    });
+
+    it('should include vision analysis issues in result', async () => {
+      const gameUrl = 'https://example.com/game';
+      const visionIssues = [
+        {
+          severity: 'major' as const,
+          description: 'Control responsiveness issue detected',
+          timestamp: new Date().toISOString(),
+        },
+        {
+          severity: 'minor' as const,
+          description: 'Visual glitch in UI',
+          timestamp: new Date().toISOString(),
+        },
+      ];
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+        status: 'pass',
+        playability_score: 60,
+        issues: visionIssues,
+        screenshots: [],
+        timestamp: new Date().toISOString(),
+      });
+
+      const result = await runQA(gameUrl);
+
+      expect(result.issues).toEqual(visionIssues);
+    });
+
+    it('should determine pass/fail based on vision score (>= 50 = pass)', async () => {
+      const gameUrl = 'https://example.com/game';
+      
+      // Test pass case
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+        status: 'pass',
+        playability_score: 75,
+        issues: [],
+        screenshots: [],
+        timestamp: new Date().toISOString(),
+      });
+
+      const passResult = await runQA(gameUrl);
+      expect(passResult.status).toBe('pass');
+      expect(passResult.playability_score).toBe(75);
+
+      // Reset mocks
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockClear();
+
+      // Test fail case
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+        status: 'fail',
+        playability_score: 35,
+        issues: [],
+        screenshots: [],
+        timestamp: new Date().toISOString(),
+      });
+
+      const failResult = await runQA(gameUrl);
+      expect(failResult.status).toBe('fail');
+      expect(failResult.playability_score).toBe(35);
+    });
+
+    it('should include vision analysis tokens in metadata', async () => {
+      const gameUrl = 'https://example.com/game';
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+        status: 'pass',
+        playability_score: 75,
+        issues: [],
+        screenshots: [],
+        timestamp: new Date().toISOString(),
+        metadata: {
+          visionAnalysisTokens: 2500,
+        },
+      });
+
+      const result = await runQA(gameUrl);
+
+      expect(result.metadata?.visionAnalysisTokens).toBe(2500);
+    });
+
+    it('should gracefully handle missing OPENAI_API_KEY', async () => {
+      const gameUrl = 'https://example.com/game';
+      delete process.env.OPENAI_API_KEY;
+
+      const result = await runQA(gameUrl);
+
+      // Should use default score (50) and pass status
+      expect(result.playability_score).toBe(50);
+      expect(result.status).toBe('pass');
+      expect(mockVisionAnalyzerInstance.analyzeScreenshots).not.toHaveBeenCalled();
+
+      // Restore for other tests
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+    });
+
+    it('should gracefully handle vision analysis failures', async () => {
+      const gameUrl = 'https://example.com/game';
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockRejectedValueOnce(new Error('Vision API error'));
+
+      const result = await runQA(gameUrl);
+
+      // Should use default score (50) and pass status
+      expect(result.playability_score).toBe(50);
+      expect(result.status).toBe('pass');
+      expect(mockVisionAnalyzerInstance.analyzeScreenshots).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still work if findAndClickStart fails', async () => {
+      const gameUrl = 'https://example.com/game';
+      mockGameInteractorInstance.findAndClickStart.mockResolvedValueOnce(false);
+
+      const result = await runQA(gameUrl);
+
+      // Should continue execution and complete successfully
+      expect(result.status).toBe('pass');
+      expect(mockGameInteractorInstance.simulateKeyboardInput).toHaveBeenCalled();
+    });
   });
 });
 

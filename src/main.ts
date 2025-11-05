@@ -11,6 +11,7 @@
 
 import { nanoid } from 'nanoid';
 import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType } from './core';
+import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
@@ -48,6 +49,7 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
   let browserManager: BrowserManager | null = null;
   let errorMonitor: ErrorMonitor | null = null;
   let gameType: GameType = GameType.UNKNOWN;
+  let visionAnalyzer: VisionAnalyzer | null = null;
 
   try {
     // Validate environment variables
@@ -110,9 +112,44 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
       // Continue anyway - game may still be functional
     }
 
+    // Initialize vision analyzer (optional - requires OPENAI_API_KEY)
+    try {
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      if (openaiApiKey) {
+        visionAnalyzer = new VisionAnalyzer({ logger, apiKey: openaiApiKey });
+        logger.info('Vision analyzer initialized', {});
+      } else {
+        logger.warn('OPENAI_API_KEY not found - vision analysis will be skipped', {});
+      }
+    } catch (error) {
+      logger.warn('Failed to initialize vision analyzer', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      visionAnalyzer = null;
+    }
+
     // Initialize screenshot capturer and game interactor
     const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
-    const gameInteractor = new GameInteractor({ logger });
+    const gameInteractor = new GameInteractor({
+      logger,
+      visionAnalyzer: visionAnalyzer ?? undefined,
+      screenshotCapturer,
+    });
+
+    // Try to find and click start button before interaction
+    try {
+      const startButtonClicked = await gameInteractor.findAndClickStart(page);
+      if (startButtonClicked) {
+        logger.info('Start button found and clicked', {});
+      } else {
+        logger.warn('Start button not found - continuing with test anyway', {});
+      }
+    } catch (error) {
+      logger.warn('Failed to find and click start button', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue anyway - start button may not be required
+    }
 
     // Capture initial screenshot
     logger.info('Capturing initial screenshot', {});
@@ -156,14 +193,51 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
       }
     }
 
+    // Perform vision analysis if available
+    let playabilityScore = 50; // Default score
+    let visionIssues: Issue[] = [];
+    let visionAnalysisTokens: number | undefined;
+
+    if (visionAnalyzer) {
+      try {
+        logger.info('Starting vision analysis', {
+          screenshotCount: 3,
+        });
+
+        const visionResult = await visionAnalyzer.analyzeScreenshots([
+          initialScreenshot,
+          afterInteractionScreenshot,
+          finalScreenshot,
+        ]);
+
+        playabilityScore = visionResult.playability_score;
+        visionIssues = visionResult.issues;
+        visionAnalysisTokens = visionResult.metadata?.visionAnalysisTokens;
+
+        logger.info('Vision analysis completed', {
+          playabilityScore,
+          issueCount: visionIssues.length,
+          tokens: visionAnalysisTokens,
+        });
+      } catch (error) {
+        logger.warn('Vision analysis failed - using default score', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with default score
+      }
+    }
+
+    // Determine pass/fail status based on score
+    const status: 'pass' | 'fail' = playabilityScore >= 50 ? 'pass' : 'fail';
+
     // Calculate test duration
     const duration = Date.now() - startTime;
 
     // Create result with all screenshots and metadata
     const result: GameTestResult = {
-      status: 'pass',
-      playability_score: 50, // Placeholder score for I2.3
-      issues: [],
+      status,
+      playability_score: playabilityScore,
+      issues: visionIssues,
       screenshots: [
         initialScreenshot.path,
         afterInteractionScreenshot.path,
@@ -176,6 +250,7 @@ export async function runQA(gameUrl: string): Promise<GameTestResult> {
         duration,
         gameType,
         consoleErrors,
+        ...(visionAnalysisTokens !== undefined && { visionAnalysisTokens }),
       },
     };
 

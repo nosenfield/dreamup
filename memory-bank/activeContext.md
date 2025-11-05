@@ -42,23 +42,62 @@
 - ✅ I3.2: Implement Error Monitor - COMPLETE
 - ✅ I3.3: Expand Main Orchestration - COMPLETE
 
-🔄 **Iteration 4: Vision Analysis** - In Progress
+✅ **Iteration 4: Vision Analysis** - COMPLETE
 - ✅ I4.1: Create Vision Prompts - COMPLETE
 - ✅ I4.2: Implement Vision Analyzer - COMPLETE
 - ✅ I4.3: Complete Game Interactor with Vision - COMPLETE
-- [ ] I4.4: Expand Main Orchestration
+- ✅ I4.4: Expand Main Orchestration - COMPLETE
 
 ### Next Immediate Tasks
-1. **I4.4: Expand Main Orchestration** (Iteration 4)
-   - Integrate VisionAnalyzer into main.ts
-   - Use vision analysis for playability scoring
-   - Call findAndClickStart() before interaction
+1. **I5.1: Implement Input Schema Parser** (Iteration 5)
+   - Parse JavaScript input schemas
+   - Parse semantic descriptions
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I4.4: Expand Main Orchestration** (Nov 5, 2025)
+  - Updated `src/main.ts` to integrate VisionAnalyzer and `findAndClickStart()`
+  - Added VisionAnalyzer initialization (optional, requires OPENAI_API_KEY)
+    - Initializes with logger and API key from environment
+    - Logs warning if API key missing (graceful fallback)
+    - Handles initialization errors gracefully
+  - Updated GameInteractor initialization
+    - Passes `visionAnalyzer` and `screenshotCapturer` to enable vision fallback
+  - Added `findAndClickStart()` call before interaction
+    - Called after game ready state confirmed
+    - Before initial screenshot capture
+    - Logs success/failure (non-critical operation)
+    - Continues execution regardless of result
+  - Integrated vision analysis after screenshot capture
+    - Calls `visionAnalyzer.analyzeScreenshots()` with 3 screenshots
+    - Extracts `playability_score`, `issues`, and `visionAnalysisTokens`
+    - Handles errors gracefully (uses default score if analysis fails)
+  - Implemented pass/fail determination
+    - Score >= 50 = 'pass', else 'fail'
+    - Uses vision score if available, defaults to 50 otherwise
+  - Updated result object
+    - Uses vision `playability_score` instead of placeholder
+    - Includes vision `issues` array in result
+    - Sets `status` based on score (pass/fail)
+    - Includes `visionAnalysisTokens` in metadata if available
+  - Updated `tests/integration/main.test.ts` - Added 9 new tests for vision integration
+    - Tests for findAndClickStart() being called
+    - Tests for vision analysis execution
+    - Tests for playability score usage
+    - Tests for issues inclusion
+    - Tests for pass/fail determination
+    - Tests for token tracking
+    - Tests for graceful fallback when OPENAI_API_KEY missing
+    - Tests for graceful error handling
+  - All 28 tests passing (9 new + 19 existing)
+  - TypeScript compilation passes
+  - Backward compatible (works without OPENAI_API_KEY)
+  - Comprehensive error handling throughout
+  - **Acceptance Criteria Met**: ✅ Start button found and clicked automatically, ✅ Vision analysis provides playability score, ✅ Pass/fail determined correctly, ✅ Result includes issues from vision analysis, ✅ Works gracefully when OPENAI_API_KEY missing, ✅ Vision analysis failures don't crash test
+
 - ✅ **I4.3: Complete Game Interactor with Vision** (Nov 4, 2025)
   - Updated `src/core/game-interactor.ts` with `findAndClickStart()` method
   - Added optional `visionAnalyzer` and `screenshotCapturer` to `GameInteractorConfig`
