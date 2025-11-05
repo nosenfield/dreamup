@@ -197,6 +197,25 @@
   - Version bump: 1.0.0 → 1.1.0
   - Tested with Pacman game (funhtml5games.com/pacman)
 
+### Selector Enhancement (Migration Plan Phase 1)
+**Status**: ✅ Complete (Nov 5, 2025)
+**Related**: `_docs/migration-plan-adaptive-agent.md` Phase 1
+
+- [x] **Three-Tier DOM Selector Strategy** ✅ IMPLEMENTED & TESTED
+  - **Tier 1**: Exact IDs (#start-btn, #play-btn, #begin-btn) - Fast path for game engine standard
+  - **Tier 2**: Attribute wildcards with case-insensitive matching
+    - 12 selectors covering id, class, name, onclick attributes
+    - Pattern: `[id*="start" i]`, `[class*="play" i]`, etc.
+  - **Tier 3**: Text-based fallback using lowercase :has-text()
+    - 7 selectors for buttons, links, and role="button" elements
+  - **Impact**:
+    - Reduced brittleness: handles "Start", "Start Match", "Play Now", etc.
+    - No cost increase: $0.00 (DOM selection, no LLM calls)
+    - No speed degradation: <1s to find start button
+    - Successfully tested with Pong game ("Start Match" button found)
+  - **File Modified**: `src/core/game-interactor.ts:295-326`
+  - **Pattern Documented**: See `memory-bank/systemPatterns.md` Pattern 11
+
 ---
 
 ## Completed Foundation (Phases 0-2)

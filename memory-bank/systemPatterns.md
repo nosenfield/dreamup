@@ -457,6 +457,92 @@ visionAnalyzer.findClickableElements.mockResolvedValueOnce([...]);
 
 ---
 
+### Pattern 11: Three-Tier DOM Selection Strategy
+**When to use**: Finding interactive elements (buttons, links) with unknown exact selectors
+**Why**: Balances speed (fast path for known patterns) with coverage (handles variations) without LLM costs
+**Context**: Implemented in Migration Plan Phase 1 (Nov 5, 2025)
+
+**Strategy Overview**:
+```typescript
+// Tier 1: Exact IDs (fast path for standardized patterns)
+// Tier 2: Attribute wildcards (broad coverage)
+// Tier 3: Text-based fallback (human-readable labels)
+```
+
+**Example Implementation**:
+```typescript
+const domSelectors = [
+  // Tier 1: Exact IDs (fast path for our game engine standard)
+  '#start-btn',
+  '#play-btn',
+  '#begin-btn',
+
+  // Tier 2: Attribute wildcards (case-insensitive with 'i' flag)
+  '[id*="start" i]',      // Matches: id="start-btn", id="game-start", id="START"
+  '[id*="play" i]',       // Matches: id="play-button", id="playGame"
+  '[id*="begin" i]',
+  '[class*="start" i]',   // Matches: class="btn-start", class="start-game"
+  '[class*="play" i]',
+  '[class*="begin" i]',
+  '[name*="start" i]',    // Matches: name="start", name="startGame"
+  '[name*="play" i]',
+  '[name*="begin" i]',
+  '[onclick*="start" i]', // Matches: onclick="startGame()", onclick="START()"
+  '[onclick*="play" i]',
+  '[onclick*="begin" i]',
+
+  // Tier 3: Text-based fallback (case-insensitive, partial match)
+  'button:has-text("start")',           // Matches: "Start", "Start Match", "START"
+  'button:has-text("play")',            // Matches: "Play", "Play Now", "PLAY"
+  'button:has-text("begin")',
+  'a:has-text("start")',                // Links with start text
+  'a:has-text("play")',
+  'div[role="button"]:has-text("start")', // Divs acting as buttons
+  'div[role="button"]:has-text("play")',
+];
+
+for (const selector of domSelectors) {
+  const element = await page.locator(selector).first();
+  if (element && await element.isVisible({ timeout: 1000 })) {
+    await element.click();
+    return true;
+  }
+}
+```
+
+**Why Three Tiers**:
+1. **Tier 1** (Exact IDs): Optimized for known patterns (e.g., your game engine standard)
+   - Fastest matching
+   - Most reliable for first-party games
+   - Example: `#start-btn` matches Pong's `<button id="start-btn">`
+
+2. **Tier 2** (Attribute Wildcards): Broad coverage for third-party games
+   - Case-insensitive matching (`i` flag)
+   - Partial string matching (`*=`)
+   - Covers common naming patterns across different engines
+   - Finds buttons even without visible text (icon-only buttons)
+
+3. **Tier 3** (Text-based): Human-readable fallback
+   - `:has-text()` is case-insensitive by default
+   - Partial matching (finds "Start" in "Start Match")
+   - Works when developers don't use semantic IDs/classes
+
+**Performance**:
+- Cost: $0.00 (no LLM calls)
+- Speed: <1s (DOM queries)
+- Coverage: Handles "Start", "Start Match", "Start Game", "Play Now", etc.
+
+**Benefits over hardcoded selectors**:
+- **Before**: Brittle exact matches (`'button:has-text("Start")'` fails on "Start Match")
+- **After**: Flexible patterns handle variations while preserving fast path
+
+**Related**:
+- Implementation: `src/core/game-interactor.ts:295-326`
+- Migration Plan: `_docs/migration-plan-adaptive-agent.md` Phase 1
+- Progress: `memory-bank/progress.md` Selector Enhancement section
+
+---
+
 ## Key Invariants
 
 ### Invariant 1: Every Test Returns a Report
