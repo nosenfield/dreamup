@@ -63,7 +63,7 @@ Follow this format:
 
 <detailed description if needed>
 
-<list of key changes>
+<succinct list of key changes>
 ```
 
 **Commit Types:**
@@ -96,7 +96,7 @@ chore: Update dependencies to latest versions
 - Install @supabase/ssr for Next.js 16 compatibility
 ```
 
-### Step 6: Create Commit
+### Step 5: Create Commit
 
 Run the commit command using heredoc for proper formatting:
 
@@ -107,7 +107,7 @@ EOF
 )"
 ```
 
-### Step 7: Verify Commit
+### Step 6: Verify Commit
 
 After committing:
 1. Show the commit hash and message
