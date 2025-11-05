@@ -431,51 +431,117 @@ bun run src/main.ts https://example-game.com
 
 **Goal**: Parse InputSchema, polish features, prepare for production
 
-**Time**: 6-8 hours
+**Time**: 8-10 hours (updated from 6-8 to include I5.0)
 
 ### Tasks
+
+#### I5.0: Define GameMetadata Type System
+**Effort**: S (1-2 hours)
+**Status**: `[ ]`
+**New Task**: Foundation for I5.1 and I5.2
+
+**Implementation**:
+- [ ] Update `src/types/game-test.types.ts`
+  - [ ] Create `GameMetadata` interface (container for all metadata)
+  - [ ] Create `InputAction` interface (structured action with keys)
+  - [ ] Create `InputAxis` interface (structured axis with keys)
+  - [ ] Create `LoadingIndicator` interface (hints for ready detection)
+  - [ ] Create `SuccessIndicator` interface (hints for validation)
+  - [ ] Create `TestingStrategy` interface (timing and priorities)
+  - [ ] Update `InputSchema` to use `InputAction[]` and `InputAxis[]`
+  - [ ] Update `GameTestRequest` to add `metadata?: GameMetadata`
+  - [ ] Mark `inputSchema` as deprecated (keep for backwards compat)
+- [ ] Create Zod schemas in `src/schemas/metadata.schema.ts`
+  - [ ] `gameMetadataSchema` for validation
+  - [ ] Export inferred types for consistency
+- [ ] Update `src/types/index.ts` to export new types
+- [ ] Create example metadata files
+  - [ ] `_game-examples/pong/metadata.json`
+  - [ ] `_game-examples/snake/metadata.json`
+- [ ] Write unit tests in `tests/unit/types.test.ts`
+  - [ ] Test GameMetadata type imports
+  - [ ] Test Zod schema validation
+  - [ ] Test backwards compatibility with old inputSchema
+
+**Acceptance Criteria**:
+- [ ] All new types exported and importable
+- [ ] Zod schemas validate example metadata files
+- [ ] TypeScript compilation passes with no errors
+- [ ] Unit tests verify type structure
+- [ ] Example metadata files follow schema exactly
+- [ ] Backwards compatible with existing inputSchema usage
+
+**Example GameMetadata Structure**:
+```json
+{
+  "metadataVersion": "1.0.0",
+  "genre": "arcade",
+  "inputSchema": {
+    "type": "javascript",
+    "actions": [{"name": "Pause", "keys": ["Escape"]}],
+    "axes": [{"name": "MoveVertical", "keys": ["ArrowDown", "ArrowUp"]}]
+  },
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 30000,
+    "criticalActions": ["Pause"]
+  }
+}
+```
+
+---
 
 #### I5.1: Implement Input Schema Parser
 **Effort**: M (2-3 hours)
 **Status**: `[ ]`
-**New Feature**: Not in original waterfall plan
+**Depends On**: I5.0 (metadata types must exist first)
 
 **Implementation**:
 - [ ] Create `src/core/input-schema-parser.ts`
 - [ ] Implement `InputSchemaParser` class
-  - [ ] `parse(inputSchema)` - Extract actions and axes
-  - [ ] `getActionsToTest()` - Return list of actions (e.g., ['Jump', 'Shoot'])
-  - [ ] `getAxesToTest()` - Return list of axes (e.g., ['MoveHorizontal'])
-  - [ ] `inferKeybindings()` - Parse JavaScript snippets for key bindings
-  - [ ] `parseSemanticDescription()` - Extract controls from text
-- [ ] Write unit tests with example input schemas
+  - [ ] `parse(metadata: GameMetadata)` - Extract actions and axes from metadata
+  - [ ] `parseJavaScript(content: string)` - Parse GameBuilder API calls from JS code
+  - [ ] `parseSemantic(content: string)` - Extract controls from semantic text
+  - [ ] `inferKeybindings(actions, axes)` - Flatten to key list for testing
+- [ ] Write unit tests with Pong/Snake metadata files
+- [ ] Update `src/core/index.ts` to export InputSchemaParser
 
 **Acceptance Criteria**:
-- [ ] Can parse JavaScript input schemas
-- [ ] Can parse semantic descriptions
-- [ ] Returns testable actions and axes
-- [ ] Handles missing or malformed schemas gracefully
+- [ ] Can parse GameMetadata with JavaScript input schemas
+- [ ] Can parse GameMetadata with semantic descriptions
+- [ ] Returns structured InputAction[] and InputAxis[]
+- [ ] Handles missing or malformed metadata gracefully
+- [ ] Works with both metadata.json files (Pong/Snake)
 
 ---
 
-#### I5.2: Integrate Input Schema into Interactor
-**Effort**: M (2 hours)
+#### I5.2: Integrate Metadata into GameInteractor
+**Effort**: M (2-3 hours)
 **Status**: `[ ]`
+**Depends On**: I5.0, I5.1
 
 **Implementation**:
 - [ ] Update `src/core/game-interactor.ts`
-- [ ] Add `simulateGameplayWithSchema(page, inputSchema, duration)` method
-  - [ ] Parse inputSchema to get expected controls
-  - [ ] Test specific actions (send key bindings)
-  - [ ] Test specific axes (send directional inputs)
-  - [ ] Fallback to generic inputs if no schema provided
-- [ ] Update vision prompts to include input schema context
+- [ ] Add `simulateGameplayWithMetadata(page, metadata, duration)` method
+  - [ ] Parse metadata.inputSchema to get controls (use InputSchemaParser)
+  - [ ] Test critical actions first (from testingStrategy.criticalActions)
+  - [ ] Test critical axes first (from testingStrategy.criticalAxes)
+  - [ ] Test remaining inputs
+  - [ ] Fallback to generic inputs if no metadata provided
+- [ ] Update `src/main.ts` to pass metadata
+  - [ ] Extract metadata from request.metadata || request.inputSchema (backwards compat)
+  - [ ] Pass metadata to GameInteractor
+- [ ] Update `src/vision/prompts.ts` to include expectedControls from metadata
+  - [ ] Add metadata.expectedControls to GAME_ANALYSIS_PROMPT context
+  - [ ] Add metadata.genre to prompt for better context
 
 **Acceptance Criteria**:
-- [ ] Tests actions from input schema
-- [ ] Tests axes from input schema
-- [ ] Gracefully handles missing schema
-- [ ] Vision prompts reference expected controls
+- [ ] Tests actions from metadata.inputSchema
+- [ ] Tests axes from metadata.inputSchema
+- [ ] Prioritizes criticalActions/criticalAxes from testingStrategy
+- [ ] Gracefully handles missing metadata
+- [ ] Vision prompts reference metadata.expectedControls
+- [ ] Backwards compatible with old inputSchema field (converts to metadata)
 
 ---
 
@@ -503,22 +569,27 @@ bun run src/main.ts https://example-game.com
 **Original Reference**: P5.2, P5.3 (full implementation) in `task-list-waterfall-original.md`
 
 **Implementation**:
-- [ ] Add CLI interface to `src/main.ts`
-  - [ ] Parse command line arguments
-  - [ ] Support: `bun run src/main.ts <game-url> [--input-schema <path>]`
+- [ ] Add CLI argument parsing to `src/main.ts`
+  - [ ] Parse command line arguments with proper flags
+  - [ ] Support: `bun run src/main.ts <game-url> [--metadata <path>]`
+  - [ ] Load metadata.json from file path if provided
   - [ ] Print formatted results to console
   - [ ] Exit with appropriate code (0 = pass, 1 = fail/error)
 - [ ] Add Lambda handler to `src/main.ts`
   - [ ] Export `handler` function
-  - [ ] Parse Lambda event (gameUrl, inputSchema, config)
+  - [ ] Parse Lambda event (gameUrl, metadata?, inputSchema?, config)
+  - [ ] Support both metadata and inputSchema in event (backwards compat for Lambda)
+  - [ ] Convert inputSchema to metadata if metadata not provided
   - [ ] Return formatted Lambda response
 - [ ] Add package.json scripts
 
 **Acceptance Criteria**:
-- [ ] CLI runs from command line
+- [ ] CLI runs from command line with URL argument
+- [ ] CLI accepts optional --metadata flag to load metadata.json
 - [ ] Lambda handler exports correctly
-- [ ] Input schema can be passed via CLI or Lambda event
+- [ ] Lambda supports both metadata and inputSchema in event (converts inputSchema to metadata)
 - [ ] Exit codes work correctly
+- [ ] Helpful error messages for missing arguments
 
 ---
 

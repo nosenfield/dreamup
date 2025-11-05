@@ -563,3 +563,106 @@ No application state. All state is local to single invocation:
 - **Cost scaling**: Linear with test volume ($0.05 per test)
 - **Rate limit scaling**: Browserbase and OpenAI rate limits are bottleneck
 - **Mitigation**: Implement queue (SQS) if approaching rate limits
+
+---
+
+## Pattern 10: Metadata-Driven Testing
+
+**When to use**: When game metadata is available (static files or scan agent)
+**Why**: Improves test accuracy and efficiency by targeting specific controls instead of random inputs
+**Context**: Introduced in Iteration 5 (I5.0-I5.2)
+
+**Example (CORRECT)**:
+```typescript
+// With metadata - targeted testing
+const metadata: GameMetadata = {
+  inputSchema: {
+    type: 'javascript',
+    content: '// GameBuilder code...',
+    actions: [
+      { name: 'Pause', keys: ['Escape'], description: 'Pause the game' }
+    ],
+    axes: [
+      { name: 'MoveVertical', keys: ['ArrowDown', 'ArrowUp'], description: 'Move paddle' }
+    ]
+  },
+  genre: 'arcade',
+  testingStrategy: {
+    waitBeforeInteraction: 2000,
+    interactionDuration: 30000,
+    criticalActions: ['Pause'],
+    criticalAxes: ['MoveVertical']
+  }
+};
+
+// GameInteractor uses metadata for targeted testing
+await gameInteractor.simulateGameplayWithMetadata(page, metadata, 30000);
+// Result: Tests Escape key (Pause), ArrowDown/Up (Move), prioritizes critical inputs
+```
+
+**Anti-pattern (INCORRECT - Random Testing)**:
+```typescript
+// Without metadata - random inputs
+await gameInteractor.simulateKeyboardInput(page, 30000);
+// Result: Tests WASD, arrows, space, enter - may miss game-specific controls
+```
+
+**Key concepts**:
+- **GameMetadata**: Container for all game information (input schema, genre, hints, strategy)
+- **InputAction**: Discrete button press (e.g., Jump, Pause) with key bindings
+- **InputAxis**: Continuous input -1 to 1 (e.g., MoveHorizontal) with key bindings
+- **TestingStrategy**: Timing and priority hints for the agent
+- **Backwards Compatibility**: Old `inputSchema` field still works, converted to metadata internally
+
+**Metadata Sources**:
+- **Option A (MVP)**: Static `metadata.json` files alongside game files
+- **Option C (Future)**: Scan agent generates metadata dynamically from game code
+- **Hybrid (Production)**: Cache scan results, fallback to static files
+
+**Benefits**:
+- **Accuracy**: Test controls that actually exist in game
+- **Efficiency**: Skip unnecessary key combinations
+- **Context**: Provide genre and controls to vision analysis
+- **Validation**: Check for expected success indicators
+- **Prioritization**: Test critical controls first
+
+**Usage in Request**:
+```typescript
+// Provide metadata directly
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/pong',
+  metadata: {
+    inputSchema: { /* ... */ },
+    genre: 'arcade',
+    testingStrategy: { /* ... */ }
+  }
+};
+
+// CLI usage
+// $ bun run src/main.ts https://example.com/pong --metadata ./pong/metadata.json
+
+// Backwards compatible (deprecated)
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/pong',
+  inputSchema: { /* ... */ } // Converted to metadata.inputSchema internally
+};
+```
+
+**Metadata Structure**:
+```typescript
+interface GameMetadata {
+  inputSchema: InputSchema;           // Required: Input controls
+  genre?: string;                     // Optional: Game genre (arcade, puzzle, etc.)
+  description?: string;               // Optional: Game description
+  expectedControls?: string;          // Optional: Human-readable control description
+  loadingIndicators?: LoadingIndicator[]; // Optional: Hints for ready detection
+  successIndicators?: SuccessIndicator[]; // Optional: Hints for validation
+  testingStrategy?: TestingStrategy;  // Optional: Timing and priorities
+  metadataVersion?: string;           // Optional: Schema version (e.g., "1.0.0")
+}
+```
+
+**See also**:
+- Pattern 6 (Input Schema Support) - Original design, now part of GameMetadata
+- `_docs/architecture.md` - Full metadata system documentation
+- `_game-examples/*/metadata.json` - Example metadata files
