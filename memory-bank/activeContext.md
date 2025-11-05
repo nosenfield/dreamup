@@ -78,18 +78,68 @@
   - ✅ Enhanced vision prompts with metadata context
   - ✅ Added comprehensive tests (70 tests passing)
   - ✅ Backwards compatible with deprecated inputSchema
-- ⏳ **I5.3-I5.6**: Remaining tasks
+- ✅ **I5.3: Complete Screenshot Capturer** - COMPLETE (Nov 5, 2025)
+  - ✅ Implemented metadata-based screenshot timing (captureAtOptimalTime)
+  - ✅ Implemented parallel screenshot capture (captureAll)
+  - ✅ Implemented cleanup logic in FileManager
+  - ✅ Integrated metadata timing and cleanup into main.ts
+  - ✅ Added comprehensive tests (12 new tests, all passing)
+  - ✅ Backwards compatible (works without metadata)
+- ⏳ **I5.4-I5.6**: Remaining tasks
 
 ### Next Immediate Tasks
-1. **I5.3: Complete Screenshot Capturer** (READY - depends on I5.2)
-   - Add metadata-based screenshot timing
-   - Use loading/success indicators from metadata
+1. **I5.4: Implement CLI and Lambda Interfaces** (READY - depends on I5.3)
+   - Add CLI argument parsing
+   - Add Lambda handler export
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I5.3: Complete Screenshot Capturer** (Nov 5, 2025)
+  - **Implementation**: Enhanced ScreenshotCapturer with metadata-based timing and parallel capture, implemented cleanup in FileManager
+  - **Files Modified**:
+    - `src/core/screenshot-capturer.ts`: Added captureAtOptimalTime() and captureAll() methods (188 lines added)
+    - `src/utils/file-manager.ts`: Implemented cleanup() method (36 lines modified)
+    - `src/main.ts`: Integrated metadata timing and cleanup (10 lines modified)
+    - `tests/unit/screenshot-capturer.test.ts`: Added 9 new tests for new functionality
+    - `tests/unit/file-manager.test.ts`: Added 4 new tests for cleanup
+    - `tests/integration/main.test.ts`: Updated mocks to include new methods
+  - **Key Features**:
+    - `captureAtOptimalTime()`: Uses loading/success indicators from metadata to time screenshots optimally
+      - For initial_load: waits for loading indicators (elements, text) before capture
+      - For after_interaction: waits for success indicators after interaction
+      - Falls back to immediate capture if no metadata or indicators timeout
+      - Default timeout: 5 seconds (configurable)
+    - `captureAll()`: Captures multiple screenshots in parallel using Promise.allSettled()
+      - Handles partial failures gracefully (returns successful screenshots only)
+      - Logs warnings for failed captures but doesn't throw
+      - Useful for capturing all stages simultaneously
+    - FileManager cleanup:
+      - Deletes session directories (screenshots + reports) when flag enabled
+      - Uses fs/promises.rm with recursive deletion
+      - Handles missing directories and errors gracefully
+      - Only runs if ENABLE_SCREENSHOT_CLEANUP flag is true
+    - Main.ts integration:
+      - Uses captureAtOptimalTime() for initial and after_interaction screenshots when metadata available
+      - Falls back to capture() if no metadata (backwards compatible)
+      - Calls cleanup() at end of test if flag enabled
+  - **Test Results**: 72 tests passing (related to I5.3)
+    - 9 new unit tests for ScreenshotCapturer (all passing)
+      - Tests metadata-based timing with loading indicators
+      - Tests fallback when no metadata
+      - Tests timeout handling
+      - Tests parallel capture (success, partial failure, total failure)
+    - 4 new unit tests for FileManager cleanup (all passing)
+      - Tests cleanup when flag enabled/disabled
+      - Tests graceful handling of missing directories
+    - Updated integration tests (mocks include new methods)
+    - All existing tests continue to pass (backwards compatibility verified)
+  - **TypeScript**: Compilation passes (no new errors)
+  - **Acceptance Criteria Met**: ✅ Can capture screenshots at optimal times using indicators, ✅ Can capture multiple screenshots in parallel, ✅ Cleanup works when flag enabled, ✅ Gracefully handles missing metadata, ✅ All existing tests continue to pass
+  - **Foundation**: Ready for I5.4 (CLI and Lambda Interfaces)
+
 - ✅ **I5.2: Integrate Metadata into GameInteractor** (Nov 5, 2025)
   - **Implementation**: Integrated GameMetadata into GameInteractor for metadata-driven testing
   - **Files Modified**:

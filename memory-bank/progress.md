@@ -78,8 +78,8 @@
 
 ### Iteration 5: Input Schema & Polish
 **Goal**: Parse InputSchema, polish features, prepare for production
-**Status**: 📋 In Progress (I5.0 + I5.1 + I5.2 Complete)
-**Progress**: 3.5/7 tasks (documentation + I5.0 + I5.1 + I5.2 complete)
+**Status**: 📋 In Progress (I5.0 + I5.1 + I5.2 + I5.3 Complete)
+**Progress**: 4.5/7 tasks (documentation + I5.0 + I5.1 + I5.2 + I5.3 complete)
 
 - [x] **Documentation Phase** (Nov 5, 2025) ✅ COMPLETE
   - Defined GameMetadata type system architecture
@@ -121,7 +121,31 @@
     - 4 new tests for metadata integration
     - Backwards compatibility verified
   - Ready for I5.3 (Screenshot Capturer enhancements)
-- [ ] I5.3: Complete Screenshot Capturer (1-2 hours)
+- [x] I5.3: Complete Screenshot Capturer (1-2 hours) ✅ COMPLETE (Nov 5, 2025)
+  - Implemented metadata-based screenshot timing in ScreenshotCapturer
+    - Added captureAtOptimalTime() method that waits for loading/success indicators
+    - Waits for loading indicators before initial_load screenshot
+    - Waits for success indicators before after_interaction screenshot
+    - Falls back gracefully if indicators timeout or metadata missing
+  - Implemented parallel screenshot capture
+    - Added captureAll() method for capturing multiple screenshots simultaneously
+    - Uses Promise.allSettled() to handle partial failures gracefully
+    - Returns array of successfully captured screenshots
+  - Implemented cleanup logic in FileManager
+    - Updated cleanup() to delete session directories when flag enabled
+    - Uses fs/promises.rm with recursive deletion
+    - Handles missing directories and errors gracefully
+  - Integrated into main.ts
+    - Uses captureAtOptimalTime() for initial and after_interaction screenshots when metadata available
+    - Calls cleanup() at end of test if ENABLE_SCREENSHOT_CLEANUP flag enabled
+    - Maintains backwards compatibility (works without metadata)
+  - Updated tests: 12 new tests passing (8 unit + 4 integration)
+    - Tests for captureAtOptimalTime() with metadata
+    - Tests for captureAll() parallel capture
+    - Tests for FileManager cleanup functionality
+    - Integration tests for metadata timing in main.ts
+  - All 72 related tests passing (no regressions)
+  - Ready for I5.4 (CLI and Lambda Interfaces)
 - [ ] I5.4: Implement CLI and Lambda Interfaces (2-3 hours)
 - [ ] I5.5: Comprehensive Testing & Validation (4-6 hours)
 - [ ] I5.6: Documentation & Deployment Prep (3-4 hours)

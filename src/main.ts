@@ -15,6 +15,7 @@ import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
+import { getFeatureFlags } from './config/feature-flags';
 import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema } from './types/game-test.types';
 
 /**
@@ -172,9 +173,11 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       // Continue anyway - start button may not be required
     }
 
-    // Capture initial screenshot
-    logger.info('Capturing initial screenshot', {});
-    const initialScreenshot = await screenshotCapturer.capture(page, 'initial_load');
+    // Capture initial screenshot (using metadata-based timing if available)
+    logger.info('Capturing initial screenshot', { hasMetadata: !!metadata });
+    const initialScreenshot = metadata
+      ? await screenshotCapturer.captureAtOptimalTime(page, 'initial_load', metadata)
+      : await screenshotCapturer.capture(page, 'initial_load');
     logger.info('Initial screenshot captured', {
       screenshotId: initialScreenshot.id,
       screenshotPath: initialScreenshot.path,
@@ -195,9 +198,11 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     
     logger.info('Gameplay simulation completed', {});
 
-    // Capture screenshot after interaction
-    logger.info('Capturing screenshot after interaction', {});
-    const afterInteractionScreenshot = await screenshotCapturer.capture(page, 'after_interaction');
+    // Capture screenshot after interaction (using metadata-based timing if available)
+    logger.info('Capturing screenshot after interaction', { hasMetadata: !!metadata });
+    const afterInteractionScreenshot = metadata
+      ? await screenshotCapturer.captureAtOptimalTime(page, 'after_interaction', metadata)
+      : await screenshotCapturer.capture(page, 'after_interaction');
     logger.info('Screenshot after interaction captured', {
       screenshotId: afterInteractionScreenshot.id,
       screenshotPath: afterInteractionScreenshot.path,
@@ -349,6 +354,20 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       } catch (error) {
         logger.warn('Failed to stop error monitoring', {
           error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Cleanup files if cleanup flag is enabled
+    const flags = getFeatureFlags();
+    if (flags.enableScreenshotCleanup) {
+      try {
+        logger.info('Cleaning up session files', { sessionId });
+        await fileManager.cleanup(flags.enableScreenshotCleanup);
+        logger.info('Session files cleaned up', {});
+      } catch (cleanupError) {
+        logger.warn('Error during file cleanup', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
         });
       }
     }

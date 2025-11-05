@@ -56,6 +56,20 @@ const mockScreenshotCapturerInstance = {
     timestamp: Date.now(),
     stage: stage as any,
   })),
+  captureAtOptimalTime: mock((page: any, stage: string, metadata?: any) => Promise.resolve({
+    id: `test-screenshot-${stage}`,
+    path: `/tmp/game-qa-output/screenshots/test-session/test-screenshot-${stage}.png`,
+    timestamp: Date.now(),
+    stage: stage as any,
+  })),
+  captureAll: mock((page: any, stages: string[]) => Promise.resolve(
+    stages.map(stage => ({
+      id: `test-screenshot-${stage}`,
+      path: `/tmp/game-qa-output/screenshots/test-session/test-screenshot-${stage}.png`,
+      timestamp: Date.now(),
+      stage: stage as any,
+    }))
+  )),
 };
 
 const mockGameInteractorInstance = {
