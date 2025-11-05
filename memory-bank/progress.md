@@ -349,10 +349,16 @@
 - 15 config tests passing
 - 5 type definition tests passing (including InputSchema)
 - 18 game-interactor unit tests passing
-- 9 screenshot-capturer unit tests passing (NEW)
+- 9 screenshot-capturer unit tests passing
 - 11 browser-manager integration tests passing
-- 11 main orchestration integration tests passing (updated for I2.3)
-- **Total: 152 tests passing** (9 new tests added)
+- 28 main orchestration integration tests passing (updated for I3.3)
+- 23 error-monitor unit tests passing
+- 23 game-detector unit tests passing
+- 14 vision-analyzer unit tests passing
+- **Total: 230+ tests passing**
+- **Type Safety**: Fixed 25 TypeScript type errors across test suite (Nov 5, 2025)
+  - Bun mock system requires explicit type assertions
+  - See Pattern 9 in systemPatterns.md for best practices
 
 ---
 

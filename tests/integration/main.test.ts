@@ -1,10 +1,11 @@
 /**
  * Integration tests for main orchestration (I2.3).
- * 
+ *
  * Tests the runQA() function with GameInteractor and ScreenshotCapturer integration.
  */
 
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import type { ConsoleError } from '../../src/types/game-test.types';
 
 // Mock dependencies before importing main
 const mockPage = {
@@ -71,14 +72,14 @@ const mockGameDetectorInstance = {
 const mockErrorMonitorInstance = {
   startMonitoring: mock(() => Promise.resolve()),
   stopMonitoring: mock(() => Promise.resolve()),
-  getErrors: mock(() => Promise.resolve([])),
+  getErrors: mock(() => Promise.resolve([] as ConsoleError[])),
   hasErrors: mock(() => Promise.resolve(false)),
   hasCriticalError: mock(() => Promise.resolve(false)),
 };
 
 const mockVisionAnalyzerInstance = {
   analyzeScreenshots: mock(() => Promise.resolve({
-    status: 'pass',
+    status: 'pass' as const,
     playability_score: 75,
     issues: [],
     screenshots: [],
@@ -86,7 +87,7 @@ const mockVisionAnalyzerInstance = {
     metadata: {
       visionAnalysisTokens: 1500,
     },
-  })),
+  } as any)),
   findClickableElements: mock(() => Promise.resolve([])),
   detectCrash: mock(() => Promise.resolve(false)),
 };
@@ -151,7 +152,7 @@ process.env.BROWSERBASE_PROJECT_ID = 'test-project-id';
 
 // Import after mocks
 import { runQA } from '../../src/main';
-import type { GameTestResult } from '../../src/types';
+import { GameType } from '../../src/core/game-detector';
 
 describe('runQA()', () => {
   beforeEach(() => {
@@ -257,7 +258,7 @@ describe('runQA()', () => {
     
     // Verify metadata includes game type and errors
     expect(result.metadata).toBeDefined();
-    expect(result.metadata?.gameType).toBe('canvas');
+    expect(result.metadata?.gameType).toBe(GameType.CANVAS);
     expect(result.metadata?.consoleErrors).toEqual([]);
     expect(result.metadata?.sessionId).toBeDefined();
     expect(result.metadata?.gameUrl).toBe(gameUrl);
@@ -411,7 +412,7 @@ describe('runQA()', () => {
     const result = await runQA(gameUrl);
 
     expect(mockGameDetectorInstance.detectType).toHaveBeenCalledWith(mockPage);
-    expect(result.metadata?.gameType).toBe('iframe');
+    expect(result.metadata?.gameType).toBe(GameType.IFRAME);
   });
 
   it('should wait for game ready before interaction', async () => {
@@ -442,7 +443,7 @@ describe('runQA()', () => {
         level: 'warning' as const,
       },
     ];
-    mockErrorMonitorInstance.getErrors.mockResolvedValueOnce(mockErrors);
+    mockErrorMonitorInstance.getErrors.mockImplementationOnce(() => Promise.resolve(mockErrors));
 
     const result = await runQA(gameUrl);
 
@@ -482,7 +483,7 @@ describe('runQA()', () => {
     const result = await runQA(gameUrl);
 
     // Should continue with UNKNOWN game type
-    expect(result.metadata?.gameType).toBe('unknown');
+    expect(result.metadata?.gameType).toBe(GameType.UNKNOWN);
   });
 
   it('should handle error monitoring failures gracefully', async () => {
@@ -543,13 +544,13 @@ describe('runQA()', () => {
 
     it('should use vision analysis playability score', async () => {
       const gameUrl = 'https://example.com/game';
-      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementationOnce(() => Promise.resolve({
         status: 'pass',
         playability_score: 85,
         issues: [],
         screenshots: [],
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       const result = await runQA(gameUrl);
 
@@ -570,13 +571,13 @@ describe('runQA()', () => {
           timestamp: new Date().toISOString(),
         },
       ];
-      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementationOnce(() => Promise.resolve({
         status: 'pass',
         playability_score: 60,
         issues: visionIssues,
         screenshots: [],
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       const result = await runQA(gameUrl);
 
@@ -587,13 +588,13 @@ describe('runQA()', () => {
       const gameUrl = 'https://example.com/game';
       
       // Test pass case
-      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementationOnce(() => Promise.resolve({
         status: 'pass',
         playability_score: 75,
         issues: [],
         screenshots: [],
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       const passResult = await runQA(gameUrl);
       expect(passResult.status).toBe('pass');
@@ -603,13 +604,13 @@ describe('runQA()', () => {
       mockVisionAnalyzerInstance.analyzeScreenshots.mockClear();
 
       // Test fail case
-      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementationOnce(() => Promise.resolve({
         status: 'fail',
         playability_score: 35,
         issues: [],
         screenshots: [],
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       const failResult = await runQA(gameUrl);
       expect(failResult.status).toBe('fail');
@@ -618,7 +619,7 @@ describe('runQA()', () => {
 
     it('should include vision analysis tokens in metadata', async () => {
       const gameUrl = 'https://example.com/game';
-      mockVisionAnalyzerInstance.analyzeScreenshots.mockResolvedValueOnce({
+      mockVisionAnalyzerInstance.analyzeScreenshots.mockImplementationOnce(() => Promise.resolve({
         status: 'pass',
         playability_score: 75,
         issues: [],
@@ -627,7 +628,7 @@ describe('runQA()', () => {
         metadata: {
           visionAnalysisTokens: 2500,
         },
-      });
+      }));
 
       const result = await runQA(gameUrl);
 

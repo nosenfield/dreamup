@@ -331,6 +331,110 @@ If you see these errors, you're using Playwright/Puppeteer API on a Stagehand Pa
 
 ---
 
+### Pattern 9: Bun Test Mocking Best Practices
+**When to use**: Writing tests with Bun's mock system
+**Why**: Bun's type inference differs from Jest/Vitest; requires explicit type hints
+**Context**: Fixed 25 type errors across test suite (Nov 5, 2025)
+
+**Best Practice 1: Enum Usage**
+Always use enum constants instead of string literals when the type is an enum.
+
+```typescript
+import { GameType } from '../../src/core/game-detector';
+
+// ❌ Bad - TypeScript type error
+expect(result.metadata?.gameType).toBe('canvas');
+
+// ✅ Good - Use enum constant
+expect(result.metadata?.gameType).toBe(GameType.CANVAS);
+```
+
+**Best Practice 2: Mock Return Types**
+Type mock return values explicitly when they contain arrays or complex types.
+
+```typescript
+import type { ConsoleError } from '../../src/types/game-test.types';
+
+// ❌ Bad - TypeScript infers never[]
+getErrors: mock(() => Promise.resolve([]))
+
+// ✅ Good - Explicit type assertion
+getErrors: mock(() => Promise.resolve([] as ConsoleError[]))
+```
+
+**Best Practice 3: Mock Method Calls**
+Use `mockImplementationOnce` instead of `mockResolvedValueOnce` for type-cast mocks.
+
+```typescript
+// ❌ Bad - Type errors with cast mocks
+mockErrorMonitor.getErrors.mockResolvedValueOnce(mockErrors);
+
+// ✅ Good - mockImplementationOnce provides better type flexibility
+mockErrorMonitor.getErrors.mockImplementationOnce(() =>
+  Promise.resolve(mockErrors)
+);
+```
+
+**Best Practice 4: Array Type Inference in Mocks**
+Provide type hints when mapping over mock call arrays.
+
+```typescript
+// ❌ Bad - TypeScript infers any[] or undefined[]
+const pressedKeys = mockPage.keyPress.mock.calls.map((call) => call[0]);
+
+// ✅ Good - Explicit type assertions
+const pressedKeys = mockPage.keyPress.mock.calls.map(
+  (call: any[]) => call[0] as string
+);
+```
+
+**Best Practice 5: Flexible Mock Return Structures**
+Use `as any` on mock return values when tests need different return type structures.
+
+```typescript
+// ✅ Good - Allows flexible return types across different tests
+const mockVisionAnalyzer = {
+  analyzeScreenshots: mock(() => Promise.resolve({
+    status: 'pass' as const,  // const assertion for literal types
+    playability_score: 75,
+    issues: [],
+    screenshots: [],
+    timestamp: new Date().toISOString(),
+  } as any)),  // Flexible typing for test variations
+};
+```
+
+**Best Practice 6: Accessing Mock Methods on Cast Objects**
+When mocks are cast to specific types, use `as any` to access Bun mock methods.
+
+```typescript
+// ❌ Bad - Mock methods hidden by type cast
+visionAnalyzer.findClickableElements.mockResolvedValueOnce([...]);
+
+// ✅ Good - Cast to any to access mock methods
+(visionAnalyzer.findClickableElements as any).mockImplementationOnce(() =>
+  Promise.resolve([...])
+);
+```
+
+**Why this pattern matters**:
+- Bun's mock system has different type inference than Jest/Vitest
+- TypeScript often infers empty arrays as `never[]`
+- Mock return types must be explicitly typed for complex objects
+- Type-cast mocks hide their mock methods from TypeScript
+- `mockImplementationOnce` provides better type compatibility than `mockResolvedValueOnce`
+
+**Common mistakes to avoid**:
+1. Using string literals instead of enum constants → Always import enums
+2. Leaving array types implicit → Always add type assertions
+3. Using `mockResolvedValueOnce` with cast mocks → Use `mockImplementationOnce`
+4. Missing `as const` on literal types → Add for proper type inference
+5. Not using `as any` on flexible mock structures → Blocks test variations
+
+**Testing impact**: Following these patterns eliminated 25 type errors across 5 test files, ensuring 90+ tests compile and run cleanly.
+
+---
+
 ## Key Invariants
 
 ### Invariant 1: Every Test Returns a Report

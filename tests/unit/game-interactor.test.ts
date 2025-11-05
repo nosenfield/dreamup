@@ -66,7 +66,7 @@ describe('GameInteractor', () => {
       await interactor.simulateKeyboardInput(page, 50);
 
       const calls = mockPage.keyPress.mock.calls;
-      const pressedKeys = calls.map((call) => call[0]);
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
 
       const wasdKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
       const hasWASD = wasdKeys.some((key) => pressedKeys.includes(key));
@@ -80,7 +80,7 @@ describe('GameInteractor', () => {
       await interactor.simulateKeyboardInput(page, 50);
 
       const calls = mockPage.keyPress.mock.calls;
-      const pressedKeys = calls.map((call) => call[0]);
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
 
       const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
       const hasArrows = arrowKeys.some((key) => pressedKeys.includes(key));
@@ -94,7 +94,7 @@ describe('GameInteractor', () => {
       await interactor.simulateKeyboardInput(page, 50);
 
       const calls = mockPage.keyPress.mock.calls;
-      const pressedKeys = calls.map((call) => call[0]);
+      const pressedKeys = calls.map((call: any[]) => call[0] as string);
 
       const specialKeys = ['Space', 'Enter'];
       const hasSpecial = specialKeys.some((key) => pressedKeys.includes(key));
@@ -266,15 +266,15 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      
-      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+
+      (visionAnalyzer.findClickableElements as any).mockImplementationOnce(() => Promise.resolve([
         {
           label: 'Start Game Button',
           x: 400,
           y: 300,
           confidence: 0.95,
         },
-      ]);
+      ]));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 
@@ -296,7 +296,7 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      visionAnalyzer.findClickableElements.mockResolvedValueOnce([]);
+      (visionAnalyzer.findClickableElements as any).mockImplementationOnce(() => Promise.resolve([]));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 
@@ -346,8 +346,8 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      
-      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+
+      (visionAnalyzer.findClickableElements as any).mockImplementationOnce(() => Promise.resolve([
         {
           label: 'Settings Button',
           x: 100,
@@ -366,7 +366,7 @@ describe('GameInteractor', () => {
           y: 200,
           confidence: 0.85,
         },
-      ]);
+      ]));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 
@@ -385,8 +385,8 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      
-      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+
+      (visionAnalyzer.findClickableElements as any).mockImplementationOnce(() => Promise.resolve([
         {
           label: 'Play Button',
           x: 350,
@@ -399,7 +399,7 @@ describe('GameInteractor', () => {
           y: 300,
           confidence: 0.95,
         },
-      ]);
+      ]));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 
@@ -418,15 +418,15 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      
-      visionAnalyzer.findClickableElements.mockResolvedValueOnce([
+
+      (visionAnalyzer.findClickableElements as any).mockImplementationOnce(() => Promise.resolve([
         {
           label: 'Start Button',
           x: 400,
           y: 300,
           confidence: 0.65,
         },
-      ]);
+      ]));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 
@@ -445,7 +445,7 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      visionAnalyzer.findClickableElements.mockRejectedValueOnce(new Error('Vision API error'));
+      (visionAnalyzer.findClickableElements as any).mockImplementationOnce(() => Promise.reject(new Error('Vision API error')));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 
@@ -464,7 +464,7 @@ describe('GameInteractor', () => {
       const page = createMockPage();
 
       page.act.mockRejectedValue(new Error('Not found'));
-      screenshotCapturer.capture.mockRejectedValueOnce(new Error('Screenshot failed'));
+      (screenshotCapturer.capture as any).mockImplementationOnce(() => Promise.reject(new Error('Screenshot failed')));
 
       const result = await interactor.findAndClickStart(page as unknown as AnyPage);
 

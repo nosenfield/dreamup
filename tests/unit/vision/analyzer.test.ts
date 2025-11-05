@@ -220,7 +220,7 @@ describe('VisionAnalyzer', () => {
   describe('findClickableElements', () => {
     beforeEach(() => {
       analyzer = new VisionAnalyzer({ logger, apiKey: 'test-key' });
-      
+
       mockGenerateObject.mockImplementation(() => Promise.resolve({
         object: [
           {
@@ -234,7 +234,7 @@ describe('VisionAnalyzer', () => {
           promptTokens: 50,
           completionTokens: 20,
         },
-      }));
+      } as any));
     });
 
     it('should find clickable elements and return array', async () => {

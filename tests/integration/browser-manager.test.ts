@@ -66,7 +66,7 @@ describe('BrowserManager', () => {
 
       expect(mockStagehand.init).toHaveBeenCalledTimes(1);
       expect(page).toBeDefined();
-      expect(page).toBe(mockPage);
+      expect(page as any).toBe(mockPage);
     });
 
     it('should handle initialization errors', async () => {

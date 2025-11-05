@@ -8,6 +8,7 @@ import { PATHS } from '../../src/config/constants';
 import { existsSync, rmSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { Screenshot, GameTestResult } from '../../src/types/game-test.types';
+import { GameType } from '../../src/core/game-detector';
 
 describe('FileManager', () => {
   let fileManager: FileManager;
@@ -210,7 +211,7 @@ describe('FileManager', () => {
           sessionId: testSessionId,
           gameUrl: 'https://example.com/game',
           duration: 5000,
-          gameType: 'canvas',
+          gameType: GameType.CANVAS,
           consoleErrors: [],
         },
       };
