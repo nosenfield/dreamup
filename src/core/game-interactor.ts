@@ -293,23 +293,36 @@ export class GameInteractor {
     });
 
     // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
-    // Note: Using ID selectors first (most reliable), then text selectors
-    // Stagehand/Playwright text selectors support partial matching
+    // Three-tier approach: exact IDs -> attribute wildcards -> text-based fallback
+    // Note: :has-text() is case-insensitive by default (matches "Start", "START", "start")
     const domSelectors = [
-      '#start-btn',              // Common ID pattern
-      '#startBtn',
-      '#start-button',
+      // Tier 1: Exact IDs (fast path for our game engine standard)
+      '#start-btn',
       '#play-btn',
-      '#playBtn',
-      'button:has-text("Start")',  // Partial match: "Start", "Start Game", "Start Match", etc.
-      'button:has-text("Play")',   // Partial match: "Play", "Play Game", etc.
-      'button:has-text("BEGIN")',
-      '[onclick*="start" i]',      // Elements with onclick containing "start"
-      '[onclick*="play" i]',       // Elements with onclick containing "play"
-      'a:has-text("Start")',
-      'a:has-text("Play")',
-      'div[role="button"]:has-text("Start")',
-      'div[role="button"]:has-text("Play")',
+      '#begin-btn',
+
+      // Tier 2: Attribute wildcards (broad coverage, case-insensitive with 'i' flag)
+      '[id*="start" i]',
+      '[id*="play" i]',
+      '[id*="begin" i]',
+      '[class*="start" i]',
+      '[class*="play" i]',
+      '[class*="begin" i]',
+      '[name*="start" i]',
+      '[name*="play" i]',
+      '[name*="begin" i]',
+      '[onclick*="start" i]',
+      '[onclick*="play" i]',
+      '[onclick*="begin" i]',
+
+      // Tier 3: Text-based fallback (case-insensitive, partial match)
+      'button:has-text("start")',
+      'button:has-text("play")',
+      'button:has-text("begin")',
+      'a:has-text("start")',
+      'a:has-text("play")',
+      'div[role="button"]:has-text("start")',
+      'div[role="button"]:has-text("play")',
     ];
 
     for (const selector of domSelectors) {
