@@ -30,7 +30,7 @@ This document defines the technical architecture, tech stack, directory structur
 
 ### Request Flow
 ```
-1. Lambda invoked with game URL
+1. Lambda invoked with game URL (optionally with metadata)
 2. Initialize Browserbase session with Stagehand
 3. Navigate to game URL
 4. Detect game type (canvas/iframe/DOM)
@@ -39,16 +39,138 @@ This document defines the technical architecture, tech stack, directory structur
 7. Execute interaction sequence
    - Find start button (vision or DOM)
    - Click to start game
-   - Simulate gameplay inputs
+   - Simulate gameplay inputs (using metadata if provided)
    - Capture interaction screenshots
 8. Monitor for errors/crashes
 9. Capture final state screenshot
-10. Analyze all screenshots with GPT-4 Vision
+10. Analyze all screenshots with GPT-4 Vision (using metadata context)
 11. Generate structured JSON report
 12. Save screenshots and report to /tmp
 13. Return report to caller
 14. Cleanup: Close browser session
 ```
+
+---
+
+## Game Metadata System
+
+### Overview
+
+The agent supports comprehensive game metadata to improve testing accuracy and efficiency. Metadata includes input controls, testing hints, and strategy recommendations.
+
+### Metadata Architecture
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                     Metadata Sources                            │
+├────────────────────┬───────────────────────────────────────────┤
+│                    │                                            │
+│  Option A          │  Option C (Future)                        │
+│  Static Files      │  Scan Agent                               │
+│  (JSON)            │  (Dynamic)                                │
+│                    │                                            │
+└─────────┬──────────┴──────────────┬─────────────────────────────┘
+          │                         │
+          └──────────┬──────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │   GameMetadata       │
+          │   ┌────────────────┐ │
+          │   │ InputSchema    │ │ ← Actions + Axes + Keys
+          │   │ Genre          │ │ ← Context
+          │   │ Indicators     │ │ ← Loading/Success hints
+          │   │ Strategy       │ │ ← Timing + Priorities
+          │   └────────────────┘ │
+          └──────────┬───────────┘
+                     │
+          ┌──────────┴───────────┐
+          │                      │
+          ▼                      ▼
+┌──────────────────┐   ┌──────────────────────┐
+│ InputSchema      │   │ GameDetector         │
+│ Parser           │   │ (uses indicators)    │
+│ (I5.1)           │   │                      │
+└────────┬─────────┘   └──────────────────────┘
+         │
+         ▼
+┌──────────────────────┐
+│ GameInteractor       │
+│ (uses parsed inputs) │
+│ (I5.2)               │
+└──────────────────────┘
+```
+
+### Metadata Schema
+
+**Complete type definitions**: See `src/types/game-test.types.ts`
+
+**Core Interfaces**:
+- `GameMetadata` - Top-level container for all metadata
+- `InputSchema` - Input controls (actions + axes with key bindings)
+- `InputAction` - Discrete button events (e.g., Jump, Pause)
+- `InputAxis` - Continuous inputs returning -1 to 1 (e.g., MoveHorizontal)
+- `LoadingIndicator` - Hints for GameDetector ready state detection
+- `SuccessIndicator` - Hints for VisionAnalyzer validation
+- `TestingStrategy` - Timing, priorities, and instructions
+
+### Metadata Flow in Request
+
+```typescript
+// Option 1: Provide metadata directly
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/pong',
+  metadata: {
+    inputSchema: { /* ... */ },
+    genre: 'arcade',
+    testingStrategy: { /* ... */ }
+  }
+};
+
+// Option 2: Load from file (CLI)
+// $ bun run src/main.ts https://example.com/pong --metadata ./pong/metadata.json
+
+// Option 3: Backwards compatible (deprecated)
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/pong',
+  inputSchema: { /* ... */ } // Converted to metadata internally
+};
+```
+
+### Example Metadata File
+
+See `_game-examples/pong/metadata.json` and `_game-examples/snake/metadata.json` for complete examples.
+
+**Minimal Example**:
+```json
+{
+  "metadataVersion": "1.0.0",
+  "genre": "arcade",
+  "inputSchema": {
+    "type": "javascript",
+    "actions": [
+      {"name": "Pause", "keys": ["Escape"]}
+    ],
+    "axes": [
+      {"name": "MoveVertical", "keys": ["ArrowDown", "ArrowUp"]}
+    ]
+  },
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 30000,
+    "criticalActions": ["Pause"]
+  }
+}
+```
+
+### Benefits
+
+1. **Targeted Testing**: Test specific controls instead of random inputs
+2. **Faster Tests**: Skip unnecessary waiting with loading indicators
+3. **Better Validation**: Check for expected success indicators
+4. **Context for Vision**: Provide game genre and controls to GPT-4V
+5. **Prioritization**: Test critical actions first
+6. **Extensibility**: Easy to add new metadata fields in future
 
 ---
 
@@ -130,11 +252,14 @@ game-qa-agent/
 │   │   ├── game-detector.ts       # Detect canvas/iframe/DOM games
 │   │   ├── game-interactor.ts     # Execute interaction sequences
 │   │   ├── error-monitor.ts       # Console errors, crash detection
-│   │   └── screenshot-capturer.ts # Orchestrate screenshot timing
+│   │   ├── screenshot-capturer.ts # Orchestrate screenshot timing
+│   │   └── input-schema-parser.ts # NEW (I5.1): Parse metadata.inputSchema
 │   ├── vision/
 │   │   ├── analyzer.ts            # GPT-4 Vision integration
 │   │   ├── prompts.ts             # Vision prompt templates
 │   │   └── schema.ts              # Zod schemas for structured output
+│   ├── schemas/                   # NEW: Zod validation schemas
+│   │   └── metadata.schema.ts     # NEW (I5.0): GameMetadata validation
 │   ├── utils/
 │   │   ├── logger.ts              # Structured logging
 │   │   ├── timeout.ts             # Timeout helpers with p-timeout
@@ -143,8 +268,19 @@ game-qa-agent/
 │   │   ├── constants.ts           # Timeout values, thresholds
 │   │   └── feature-flags.ts       # Future feature toggles
 │   └── types/
-│       ├── game-test.types.ts     # Core type definitions
+│       ├── game-test.types.ts     # UPDATED (I5.0): +GameMetadata interfaces
 │       └── config.types.ts        # Configuration interfaces
+├── _game-examples/                # NEW: Example games with metadata
+│   ├── pong/
+│   │   ├── game.js
+│   │   ├── game.xml
+│   │   ├── index.html
+│   │   └── metadata.json          # NEW (I5.0): Static metadata
+│   └── snake/
+│       ├── game.js
+│       ├── game.xml
+│       ├── index.html
+│       └── metadata.json          # NEW (I5.0): Static metadata
 ├── output/                        # Local dev output (gitignored)
 │   └── .gitkeep
 ├── tests/

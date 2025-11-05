@@ -9,7 +9,7 @@
  */
 
 import { nanoid } from 'nanoid';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, writeFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { PATHS } from '../config/constants';
 import type { Screenshot, GameTestResult } from '../types/game-test.types';
@@ -201,24 +201,41 @@ export class FileManager {
   }
 
   /**
-   * Cleanup files (stub for future implementation).
+   * Cleanup files for this session.
    * 
-   * This method is a placeholder for future cleanup functionality.
-   * Currently does nothing, but will be implemented to delete screenshots
-   * and reports when the enableScreenshotCleanup feature flag is enabled.
+   * Deletes all screenshots and reports for this session if the cleanup flag
+   * is enabled. Handles missing directories gracefully.
    * 
+   * @param enableCleanup - Whether cleanup is enabled (from feature flag)
    * @returns Promise that resolves to void
    * 
    * @example
    * ```typescript
-   * await fileManager.cleanup();
-   * // Currently does nothing, future: deletes files if cleanup enabled
+   * const flags = getFeatureFlags();
+   * await fileManager.cleanup(flags.enableScreenshotCleanup);
    * ```
    */
-  async cleanup(): Promise<void> {
-    // Stub for future implementation
-    // Future: Delete screenshots and reports if enableScreenshotCleanup is true
-    return Promise.resolve();
+  async cleanup(enableCleanup: boolean): Promise<void> {
+    if (!enableCleanup) {
+      return;
+    }
+
+    const screenshotsDir = join(PATHS.OUTPUT_DIR, PATHS.SCREENSHOTS_SUBDIR, this.sessionId);
+    const reportsDir = join(PATHS.OUTPUT_DIR, PATHS.REPORTS_SUBDIR, this.sessionId);
+
+    try {
+      // Delete both directories in parallel
+      await Promise.allSettled([
+        rm(screenshotsDir, { recursive: true, force: true }).catch(() => {
+          // Directory doesn't exist or permission error - ignore
+        }),
+        rm(reportsDir, { recursive: true, force: true }).catch(() => {
+          // Directory doesn't exist or permission error - ignore
+        }),
+      ]);
+    } catch {
+      // Ignore any errors during cleanup - don't fail the test
+    }
   }
 }
 

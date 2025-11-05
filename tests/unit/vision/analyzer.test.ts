@@ -33,10 +33,8 @@ const mockGenerateText = mock(() => Promise.resolve({
   },
 }));
 
-// Mock OpenAI client - returns a function that returns a model object
-const mockOpenAIClient = mock(() => ({
-  // Model object placeholder (not used directly in tests)
-}));
+// Mock OpenAI client - must return a callable function that returns model identifier
+const mockOpenAIClient = (modelId: string) => modelId;
 
 const mockCreateOpenAI = mock(() => mockOpenAIClient);
 

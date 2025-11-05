@@ -284,13 +284,65 @@ describe('FileManager', () => {
   });
 
   describe('cleanup()', () => {
-    it('should be a stub (does not throw)', async () => {
-      await expect(fileManager.cleanup()).resolves.toBeUndefined();
+    it('should delete session directories when flag enabled', async () => {
+      // Create some files first
+      await fileManager.ensureOutputDirectory();
+      const pngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      await fileManager.saveScreenshot(pngBuffer, 'initial_load');
+      
+      const report: GameTestResult = {
+        status: 'pass',
+        playability_score: 85,
+        issues: [],
+        screenshots: [],
+        timestamp: new Date().toISOString(),
+      };
+      await fileManager.saveReport(report);
+
+      // Verify files exist
+      const screenshotsDir = join(PATHS.OUTPUT_DIR, PATHS.SCREENSHOTS_SUBDIR, testSessionId);
+      const reportsDir = join(PATHS.OUTPUT_DIR, PATHS.REPORTS_SUBDIR, testSessionId);
+      expect(existsSync(screenshotsDir)).toBe(true);
+      expect(existsSync(reportsDir)).toBe(true);
+
+      // Cleanup with flag enabled
+      await fileManager.cleanup(true);
+
+      // Verify directories are deleted
+      expect(existsSync(screenshotsDir)).toBe(false);
+      expect(existsSync(reportsDir)).toBe(false);
     });
 
-    it('should return void', async () => {
-      const result = await fileManager.cleanup();
-      expect(result).toBeUndefined();
+    it('should not delete directories when flag disabled', async () => {
+      // Create some files first
+      await fileManager.ensureOutputDirectory();
+      const pngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      await fileManager.saveScreenshot(pngBuffer, 'initial_load');
+
+      const screenshotsDir = join(PATHS.OUTPUT_DIR, PATHS.SCREENSHOTS_SUBDIR, testSessionId);
+      expect(existsSync(screenshotsDir)).toBe(true);
+
+      // Cleanup with flag disabled
+      await fileManager.cleanup(false);
+
+      // Verify directories still exist
+      expect(existsSync(screenshotsDir)).toBe(true);
+    });
+
+    it('should handle missing directories gracefully', async () => {
+      // Don't create any files
+      const newManager = new FileManager('non-existent-session');
+
+      // Should not throw even if directories don't exist
+      await expect(newManager.cleanup(true)).resolves.toBeUndefined();
+    });
+
+    it('should handle cleanup errors gracefully', async () => {
+      await fileManager.ensureOutputDirectory();
+      
+      // Cleanup should not throw even if there are permission issues
+      // (in most test environments, this will succeed)
+      await expect(fileManager.cleanup(true)).resolves.toBeUndefined();
     });
   });
 

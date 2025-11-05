@@ -45,7 +45,8 @@ temp/
 *.tmp
 
 # Context summaries (ephemeral session notes)
-_context-summaries/
+_context-summaries/*
+!_context-summaries/.gitkeep
 
 # Project output (screenshots, reports)
 # Ignore everything in output/

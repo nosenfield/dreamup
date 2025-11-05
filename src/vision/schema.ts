@@ -156,3 +156,82 @@ export function validateGameTestResult(
   return { success: false, error: result.error };
 }
 
+/**
+ * Schema for validating ActionRecommendation objects.
+ * 
+ * Represents an action recommendation from LLM state analysis
+ * with reasoning, confidence, and alternative actions.
+ */
+export const alternativeActionSchema = z.object({
+  /** Type of alternative action */
+  action: z.enum(['click', 'keypress', 'wait']),
+  
+  /** Target of the alternative action (coordinates, key name, or duration) */
+  target: z.union([
+    z.string(),
+    z.object({ x: z.number(), y: z.number() }),
+    z.number(),
+  ]),
+  
+  /** Reasoning for this alternative */
+  reasoning: z.string(),
+});
+
+export const actionRecommendationSchema = z.object({
+  /** Type of action to perform */
+  action: z.enum(['click', 'keypress', 'wait', 'complete']),
+  
+  /** 
+   * Target of the action:
+   * - For 'click': { x: number, y: number } coordinates
+   * - For 'keypress': string key name
+   * - For 'wait': number duration in milliseconds
+   * - For 'complete': not used
+   */
+  target: z.union([
+    z.string(),
+    z.object({ x: z.number(), y: z.number() }),
+    z.number(),
+  ]),
+  
+  /** Human-readable reasoning for this recommendation */
+  reasoning: z.string(),
+  
+  /** Confidence score from 0-1 indicating recommendation certainty */
+  confidence: z.number().min(0).max(1),
+  
+  /** Array of alternative actions if primary recommendation fails */
+  alternatives: z.array(alternativeActionSchema),
+});
+
+/**
+ * TypeScript type inferred from alternativeActionSchema.
+ */
+export type AlternativeActionFromSchema = z.infer<typeof alternativeActionSchema>;
+
+/**
+ * TypeScript type inferred from actionRecommendationSchema.
+ * 
+ * This type matches the runtime schema validation and can be used
+ * interchangeably with the ActionRecommendation interface from types.
+ */
+export type ActionRecommendationFromSchema = z.infer<typeof actionRecommendationSchema>;
+
+/**
+ * Validate an ActionRecommendation object using the actionRecommendationSchema.
+ * 
+ * @param data - The data to validate (unknown type for safety)
+ * @returns Validation result with success flag and data or error
+ */
+export function validateActionRecommendation(
+  data: unknown
+): ValidationResult<ActionRecommendationFromSchema> {
+  const result = actionRecommendationSchema.safeParse(data);
+  
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  
+  return { success: false, error: result.error };
+}
+

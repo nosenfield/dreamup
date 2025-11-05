@@ -18,8 +18,11 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
+import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
+import type { StateAnalyzer } from './state-analyzer';
+import type { GameMetadata, ActionRecommendation } from '../types';
 
 /**
  * Configuration for GameInteractor.
@@ -36,6 +39,12 @@ export interface GameInteractorConfig {
   
   /** Optional ScreenshotCapturer for taking screenshots for vision analysis */
   screenshotCapturer?: ScreenshotCapturer;
+  
+  /** Optional StateAnalyzer for LLM-powered state analysis (Strategy 3) */
+  stateAnalyzer?: StateAnalyzer;
+  
+  /** Optional game metadata for context in state analysis */
+  metadata?: GameMetadata;
 }
 
 /**
@@ -59,6 +68,9 @@ export class GameInteractor {
   private readonly interactionTimeout: number;
   private readonly visionAnalyzer?: VisionAnalyzer;
   private readonly screenshotCapturer?: ScreenshotCapturer;
+  private readonly stateAnalyzer?: StateAnalyzer;
+  private readonly metadata?: GameMetadata;
+  private readonly inputSchemaParser: InputSchemaParser;
 
   /**
    * Available keyboard keys for game input simulation.
@@ -91,6 +103,9 @@ export class GameInteractor {
     this.interactionTimeout = config.interactionTimeout ?? TIMEOUTS.INTERACTION_TIMEOUT;
     this.visionAnalyzer = config.visionAnalyzer;
     this.screenshotCapturer = config.screenshotCapturer;
+    this.stateAnalyzer = config.stateAnalyzer;
+    this.metadata = config.metadata;
+    this.inputSchemaParser = new InputSchemaParser({ logger: config.logger });
   }
 
   /**
@@ -289,17 +304,36 @@ export class GameInteractor {
     });
 
     // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
+    // Three-tier approach: exact IDs -> attribute wildcards -> text-based fallback
+    // Note: :has-text() is case-insensitive by default (matches "Start", "START", "start")
     const domSelectors = [
-      'button:has-text("Start")',
-      'button:has-text("Play")',
-      'button:has-text("START GAME")',
-      'button:has-text("MORE GAMES")', // Try this too, in case it's the only clickable
+      // Tier 1: Exact IDs (fast path for our game engine standard)
+      '#start-btn',
+      '#play-btn',
+      '#begin-btn',
+
+      // Tier 2: Attribute wildcards (broad coverage, case-insensitive with 'i' flag)
+      '[id*="start" i]',
+      '[id*="play" i]',
+      '[id*="begin" i]',
+      '[class*="start" i]',
+      '[class*="play" i]',
+      '[class*="begin" i]',
+      '[name*="start" i]',
+      '[name*="play" i]',
+      '[name*="begin" i]',
       '[onclick*="start" i]',
       '[onclick*="play" i]',
-      'a:has-text("Start")',
-      'a:has-text("Play")',
-      'div[role="button"]:has-text("Start")',
-      'div[role="button"]:has-text("Play")',
+      '[onclick*="begin" i]',
+
+      // Tier 3: Text-based fallback (case-insensitive, partial match)
+      'button:has-text("start")',
+      'button:has-text("play")',
+      'button:has-text("begin")',
+      'a:has-text("start")',
+      'a:has-text("play")',
+      'div[role="button"]:has-text("start")',
+      'div[role="button"]:has-text("play")',
     ];
 
     for (const selector of domSelectors) {
@@ -441,14 +475,367 @@ export class GameInteractor {
       }
     }
 
+    // Strategy 3: LLM State Analysis (fallback when DOM and natural language fail)
+    if (this.stateAnalyzer && this.screenshotCapturer) {
+      try {
+        this.logger.info('DOM and natural language failed, using LLM state analysis');
+
+        // Capture HTML and screenshot for state analysis
+        // @ts-ignore - Code runs in browser context where document exists
+        const html = await (page as any).evaluate(() => document.documentElement.outerHTML);
+        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
+
+        // Get sanitized HTML
+        const sanitizedHTML = this.stateAnalyzer.sanitizeHTML(html);
+
+        // Analyze state and get recommendation
+        const recommendation = await this.stateAnalyzer.analyzeAndRecommendAction({
+          html: sanitizedHTML,
+          screenshot: screenshot.path,
+          previousActions: [],
+          metadata: this.metadata,
+          goal: 'Find and click the start/play button to begin the game',
+        });
+
+        // Execute recommendation
+        const success = await this.executeRecommendation(page, recommendation);
+        
+        if (success) {
+          // Wait for game to initialize after clicking start
+          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+          this.logger.debug('Post-click delay completed (state analysis)', {
+            delayMs: TIMEOUTS.POST_START_DELAY,
+          });
+          return true;
+        }
+
+        // Try alternatives if primary recommendation failed
+        if (recommendation.alternatives.length > 0) {
+          this.logger.info('Primary recommendation failed, trying alternatives', {
+            alternativeCount: recommendation.alternatives.length,
+          });
+
+          for (const alternative of recommendation.alternatives) {
+            const altSuccess = await this.executeRecommendation(page, {
+              action: alternative.action,
+              target: alternative.target,
+              reasoning: alternative.reasoning,
+              confidence: 0.5, // Lower confidence for alternatives
+              alternatives: [],
+            });
+
+            if (altSuccess) {
+              await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
+              return true;
+            }
+          }
+        }
+
+        return false;
+      } catch (error) {
+        this.logger.warn('LLM state analysis failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+
     // All strategies failed or fallback not available
     this.logger.warn('Could not find start button', {
       domSelectionFailed: true,
       naturalLanguageFailed: true,
       visionFallbackAvailable: !!(this.visionAnalyzer && this.screenshotCapturer),
+      stateAnalysisAvailable: !!(this.stateAnalyzer && this.screenshotCapturer),
     });
 
     return false;
+  }
+
+  /**
+   * Execute an action recommendation.
+   * 
+   * Executes the recommended action (click, keypress, wait, or complete)
+   * based on the ActionRecommendation from StateAnalyzer.
+   * 
+   * @param page - The Stagehand page object
+   * @param recommendation - Action recommendation to execute
+   * @returns Promise that resolves to `true` if action executed successfully, `false` otherwise
+   */
+  private async executeRecommendation(
+    page: AnyPage,
+    recommendation: ActionRecommendation
+  ): Promise<boolean> {
+    try {
+      if (recommendation.action === 'complete') {
+        this.logger.info('Recommendation indicates goal complete', {
+          reasoning: recommendation.reasoning,
+        });
+        return true;
+      }
+
+      if (recommendation.action === 'wait') {
+        const duration = typeof recommendation.target === 'number' ? recommendation.target : 1000;
+        this.logger.info('Executing wait recommendation', {
+          duration,
+          reasoning: recommendation.reasoning,
+        });
+        await new Promise(resolve => setTimeout(resolve, duration));
+        return true;
+      }
+
+      if (recommendation.action === 'click') {
+        if (typeof recommendation.target === 'object' && 'x' in recommendation.target && 'y' in recommendation.target) {
+          const { x, y } = recommendation.target;
+          this.logger.info('Executing click recommendation', {
+            coordinates: { x, y },
+            reasoning: recommendation.reasoning,
+            confidence: recommendation.confidence,
+          });
+          await this.clickAtCoordinates(page, x, y);
+          return true;
+        } else {
+          this.logger.warn('Invalid click recommendation target', {
+            target: recommendation.target,
+          });
+          return false;
+        }
+      }
+
+      if (recommendation.action === 'keypress') {
+        if (typeof recommendation.target === 'string') {
+          const key = recommendation.target;
+          this.logger.info('Executing keypress recommendation', {
+            key,
+            reasoning: recommendation.reasoning,
+            confidence: recommendation.confidence,
+          });
+          await withTimeout(
+            (page as any).keyPress(key, { delay: 0 }),
+            this.interactionTimeout,
+            `Keypress "${key}" timed out after ${this.interactionTimeout}ms`
+          );
+          return true;
+        } else {
+          this.logger.warn('Invalid keypress recommendation target', {
+            target: recommendation.target,
+          });
+          return false;
+        }
+      }
+
+      this.logger.warn('Unknown recommendation action', {
+        action: recommendation.action,
+      });
+      return false;
+    } catch (error) {
+      this.logger.warn('Failed to execute recommendation', {
+        action: recommendation.action,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Simulate gameplay using metadata-driven input testing.
+   * 
+   * Uses GameMetadata to extract targeted controls and test them in priority order:
+   * 1. Critical actions (from testingStrategy.criticalActions)
+   * 2. Critical axes (from testingStrategy.criticalAxes)
+   * 3. Remaining actions
+   * 4. Remaining axes
+   * 
+   * Falls back to generic inputs if metadata is missing or has no keys.
+   * 
+   * @param page - The Stagehand page object
+   * @param metadata - Optional GameMetadata containing input schema and testing strategy
+   * @param duration - Optional duration in milliseconds (overrides testingStrategy.interactionDuration if provided)
+   * @throws {TimeoutError} If interaction exceeds timeout
+   * 
+   * @example
+   * ```typescript
+   * await interactor.simulateGameplayWithMetadata(page, metadata);
+   * // Uses testingStrategy.interactionDuration from metadata
+   * 
+   * await interactor.simulateGameplayWithMetadata(page, metadata, 15000);
+   * // Uses provided duration instead
+   * ```
+   */
+  async simulateGameplayWithMetadata(
+    page: AnyPage,
+    metadata?: GameMetadata,
+    duration?: number
+  ): Promise<void> {
+    // Determine duration: use provided duration, or testingStrategy.interactionDuration, or default
+    const actualDuration = duration ?? 
+      metadata?.testingStrategy?.interactionDuration ?? 
+      30000;
+
+    this.logger.info('Starting metadata-driven gameplay simulation', {
+      duration: actualDuration,
+      hasMetadata: !!metadata,
+      timeout: this.interactionTimeout,
+    });
+
+    // If no metadata provided, fallback to generic inputs
+    if (!metadata) {
+      this.logger.info('No metadata provided - using generic inputs', {});
+      return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    // Parse metadata to extract actions and axes
+    const parsed = this.inputSchemaParser.parse(metadata);
+    const allKeys = this.inputSchemaParser.inferKeybindings(parsed.actions, parsed.axes);
+
+    // If no keys found, fallback to generic inputs
+    if (allKeys.length === 0) {
+      this.logger.warn('No keys found in metadata - using generic inputs', {});
+      return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    // Extract critical inputs from testingStrategy
+    const criticalActions = metadata.testingStrategy?.criticalActions ?? [];
+    const criticalAxes = metadata.testingStrategy?.criticalAxes ?? [];
+
+    // Build priority key list: critical first, then others
+    const criticalKeys: string[] = [];
+    const regularKeys: string[] = [];
+
+    // Collect critical action keys
+    for (const action of parsed.actions) {
+      if (criticalActions.includes(action.name)) {
+        criticalKeys.push(...action.keys.map(k => this.mapKeyToStagehandKey(k)));
+      } else {
+        regularKeys.push(...action.keys.map(k => this.mapKeyToStagehandKey(k)));
+      }
+    }
+
+    // Collect critical axis keys
+    for (const axis of parsed.axes) {
+      if (criticalAxes.includes(axis.name)) {
+        criticalKeys.push(...axis.keys.map(k => this.mapKeyToStagehandKey(k)));
+      } else {
+        regularKeys.push(...axis.keys.map(k => this.mapKeyToStagehandKey(k)));
+      }
+    }
+
+    // Remove duplicates
+    const uniqueCriticalKeys = [...new Set(criticalKeys)];
+    const uniqueRegularKeys = [...new Set(regularKeys)];
+
+    // Combine: critical first, then regular
+    const priorityKeys = [...uniqueCriticalKeys, ...uniqueRegularKeys];
+
+    if (priorityKeys.length === 0) {
+      this.logger.warn('No valid keys after mapping - using generic inputs', {});
+      return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    this.logger.info('Testing keys from metadata', {
+      criticalKeys: uniqueCriticalKeys.length,
+      regularKeys: uniqueRegularKeys.length,
+      totalKeys: priorityKeys.length,
+    });
+
+    // Cast to any to access Stagehand Page methods
+    const pageAny = page as any;
+
+    try {
+      // Wrap entire simulation in timeout
+      await withTimeout(
+        this._performMetadataKeyboardSimulation(pageAny, priorityKeys, actualDuration),
+        this.interactionTimeout,
+        `Metadata-driven simulation timed out after ${this.interactionTimeout}ms`
+      );
+
+      this.logger.info('Metadata-driven gameplay simulation completed', {
+        duration: actualDuration,
+        keysTested: priorityKeys.length,
+      });
+    } catch (error) {
+      this.logger.error('Metadata-driven gameplay simulation failed', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Map key name from metadata to Stagehand key code.
+   * 
+   * Maps common key names to their Stagehand equivalents:
+   * - 'w', 'a', 's', 'd' → 'KeyW', 'KeyA', 'KeyS', 'KeyD'
+   * - Arrow keys remain as-is
+   * - Space, Escape, Enter remain as-is
+   * 
+   * @param key - Key name from metadata (e.g., 'w', 'ArrowUp', 'Space')
+   * @returns Stagehand key code (e.g., 'KeyW', 'ArrowUp', 'Space')
+   */
+  private mapKeyToStagehandKey(key: string): string {
+    const keyMap: Record<string, string> = {
+      'w': 'KeyW',
+      'a': 'KeyA',
+      's': 'KeyS',
+      'd': 'KeyD',
+      'W': 'KeyW',
+      'A': 'KeyA',
+      'S': 'KeyS',
+      'D': 'KeyD',
+    };
+
+    // Return mapped key if exists, otherwise return original (for Arrow keys, Space, etc.)
+    return keyMap[key.toLowerCase()] ?? key;
+  }
+
+  /**
+   * Internal method to perform metadata-driven keyboard simulation.
+   *
+   * Cycles through provided keys in priority order.
+   *
+   * @param page - Stagehand Page object (AnyPage type)
+   * @param keys - Array of keys to test (in priority order)
+   * @param duration - Duration in milliseconds
+   */
+  private async _performMetadataKeyboardSimulation(
+    page: any,
+    keys: string[],
+    duration: number
+  ): Promise<void> {
+    const startTime = Date.now();
+    let keyIndex = 0;
+
+    while (Date.now() - startTime < duration) {
+      // Get next key to press (cycle through provided keys)
+      const key = keys[keyIndex % keys.length];
+      keyIndex++;
+
+      try {
+        // Use Stagehand's keyPress() method
+        await page.keyPress(key, { delay: 0 });
+      } catch (error) {
+        this.logger.warn('Key press failed, continuing simulation', {
+          key,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with next key rather than failing entire simulation
+      }
+
+      // Wait before next key press
+      const remainingTime = duration - (Date.now() - startTime);
+      if (remainingTime <= 0) {
+        break;
+      }
+
+      // Use smaller delay if we're near the end
+      const delay = Math.min(this.keyPressDelay, remainingTime);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    this.logger.debug('Metadata-driven keyboard simulation loop completed', {
+      keysPressed: keyIndex,
+      duration: Date.now() - startTime,
+    });
   }
 }
 

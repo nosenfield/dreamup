@@ -1,0 +1,59 @@
+{
+  "metadataVersion": "1.0.0",
+  "genre": "arcade",
+  "description": "Classic Pong game with two paddles and a ball. Player 1 (left) is AI-controlled, Player 2 (right) is controlled by arrow keys.",
+  "expectedControls": "Player 1: W/S keys (AI-controlled), Player 2: Arrow keys, Escape to pause",
+  "inputSchema": {
+    "type": "javascript",
+    "content": "gameBuilder.createAxis('RightPaddleVertical').bindKeys('ArrowDown', 'ArrowUp')\ngameBuilder.createAction('Pause').bindKey('Escape')",
+    "actions": [
+      {
+        "name": "Pause",
+        "keys": ["Escape"],
+        "description": "Pause the game and open pause menu"
+      }
+    ],
+    "axes": [
+      {
+        "name": "RightPaddleVertical",
+        "keys": ["ArrowDown", "ArrowUp"],
+        "description": "Control right paddle (Player 2) vertical movement"
+      }
+    ]
+  },
+  "loadingIndicators": [
+    {
+      "type": "element",
+      "pattern": "#start-btn",
+      "description": "Start button appears when game is ready"
+    },
+    {
+      "type": "text",
+      "pattern": "PONG",
+      "description": "Game title displays on main menu"
+    }
+  ],
+  "successIndicators": [
+    {
+      "type": "score_change",
+      "description": "Score should increment when ball crosses paddle",
+      "selector": "#hud-left-score, #hud-right-score"
+    },
+    {
+      "type": "animation",
+      "description": "Ball should move across screen smoothly"
+    },
+    {
+      "type": "element_visible",
+      "description": "Paddles should be visible and respond to input",
+      "selector": "canvas"
+    }
+  ],
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 30000,
+    "criticalActions": ["Pause"],
+    "criticalAxes": ["RightPaddleVertical"],
+    "instructions": "Click start button, wait for ball to serve, test paddle movement with arrow keys, verify score changes when ball crosses paddle, test pause functionality with Escape key"
+  }
+}

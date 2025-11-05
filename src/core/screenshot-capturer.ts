@@ -14,7 +14,7 @@ import { Logger } from '../utils/logger';
 import { FileManager } from '../utils/file-manager';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
-import type { Screenshot } from '../types/game-test.types';
+import type { Screenshot, GameMetadata, LoadingIndicator, SuccessIndicator } from '../types/game-test.types';
 
 /**
  * Configuration for ScreenshotCapturer.
@@ -128,6 +128,194 @@ export class ScreenshotCapturer {
       });
       throw error;
     }
+  }
+
+  /**
+   * Capture multiple screenshots in parallel.
+   * 
+   * Captures screenshots for all provided stages simultaneously using Promise.allSettled()
+   * to handle partial failures gracefully. Returns array of successfully captured screenshots.
+   * 
+   * @param page - The Stagehand page object
+   * @param stages - Array of stages to capture screenshots for
+   * @returns Promise that resolves to array of Screenshot objects (may be fewer than stages if some fail)
+   * 
+   * @example
+   * ```typescript
+   * const screenshots = await capturer.captureAll(page, ['initial_load', 'after_interaction', 'final_state']);
+   * // Returns: [{ id: '...', stage: 'initial_load', ... }, ...]
+   * ```
+   */
+  async captureAll(page: AnyPage, stages: Screenshot['stage'][]): Promise<Screenshot[]> {
+    this.logger.info('Capturing multiple screenshots in parallel', {
+      stageCount: stages.length,
+      stages,
+    });
+
+    const capturePromises = stages.map(stage => 
+      this.capture(page, stage).catch(error => {
+        this.logger.warn('Screenshot capture failed in parallel capture', {
+          stage,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null; // Return null for failed captures
+      })
+    );
+
+    const results = await Promise.all(capturePromises);
+    const successfulScreenshots = results.filter((s): s is Screenshot => s !== null);
+
+    this.logger.info('Parallel screenshot capture completed', {
+      requested: stages.length,
+      successful: successfulScreenshots.length,
+      failed: stages.length - successfulScreenshots.length,
+    });
+
+    return successfulScreenshots;
+  }
+
+  /**
+   * Capture a screenshot at optimal time based on metadata indicators.
+   * 
+   * For initial_load stage: Waits for loading indicators before capturing.
+   * For after_interaction stage: Waits for success indicators after interaction.
+   * Falls back to immediate capture if no metadata provided or indicators timeout.
+   * 
+   * @param page - The Stagehand page object
+   * @param stage - Stage of the test when screenshot is taken
+   * @param metadata - Optional game metadata with loading/success indicators
+   * @param indicatorTimeout - Optional timeout for waiting for indicators (default: 5000ms)
+   * @returns Promise that resolves to Screenshot object
+   * 
+   * @example
+   * ```typescript
+   * const metadata = {
+   *   inputSchema: {...},
+   *   loadingIndicators: [{ type: 'element', pattern: '#start-btn', ... }],
+   * };
+   * const screenshot = await capturer.captureAtOptimalTime(page, 'initial_load', metadata);
+   * ```
+   */
+  async captureAtOptimalTime(
+    page: AnyPage,
+    stage: Screenshot['stage'],
+    metadata?: GameMetadata,
+    indicatorTimeout: number = 5000
+  ): Promise<Screenshot> {
+    // If no metadata, fall back to immediate capture
+    if (!metadata) {
+      this.logger.debug('No metadata provided, capturing immediately', { stage });
+      return this.capture(page, stage);
+    }
+
+    try {
+      if (stage === 'initial_load' && metadata.loadingIndicators) {
+        // Wait for loading indicators before capturing initial screenshot
+        this.logger.info('Waiting for loading indicators before capture', {
+          stage,
+          indicatorCount: metadata.loadingIndicators.length,
+        });
+        await this.waitForIndicators(page, metadata.loadingIndicators, indicatorTimeout);
+      } else if (stage === 'after_interaction' && metadata.successIndicators) {
+        // Wait for success indicators after interaction
+        this.logger.info('Waiting for success indicators after interaction', {
+          stage,
+          indicatorCount: metadata.successIndicators.length,
+        });
+        await this.waitForIndicators(page, metadata.successIndicators, indicatorTimeout);
+      }
+    } catch (error) {
+      // If indicator wait fails or times out, log warning but proceed with capture
+      this.logger.warn('Indicator wait failed or timed out, proceeding with capture', {
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Capture screenshot (either after indicators appear or immediately if wait failed)
+    return this.capture(page, stage);
+  }
+
+  /**
+   * Wait for loading or success indicators to appear.
+   * 
+   * Checks for indicators with appropriate timeouts and falls back gracefully
+   * if indicators don't appear within the timeout.
+   * 
+   * @param page - The Stagehand page object
+   * @param indicators - Array of loading or success indicators to wait for
+   * @param timeout - Maximum time to wait in milliseconds
+   * @private
+   */
+  private async waitForIndicators(
+    page: AnyPage,
+    indicators: (LoadingIndicator | SuccessIndicator)[],
+    timeout: number
+  ): Promise<void> {
+    const pageAny = page as any;
+    const waitPromises: Promise<void>[] = [];
+
+    for (const indicator of indicators) {
+      if (indicator.type === 'element') {
+        // Wait for DOM element to appear
+        const selector = indicator.pattern || indicator.selector;
+        if (selector && pageAny.waitForSelector) {
+          waitPromises.push(
+            withTimeout(
+              pageAny.waitForSelector(selector, { timeout }).catch(() => {
+                // Element not found, continue
+              }),
+              timeout,
+              `Timeout waiting for element: ${selector}`
+            ).then(() => {})
+          );
+        }
+      } else if (indicator.type === 'text') {
+        // Wait for text content to appear
+        if (pageAny.evaluate) {
+          waitPromises.push(
+            withTimeout(
+              this.waitForText(pageAny, indicator.pattern, timeout),
+              timeout,
+              `Timeout waiting for text: ${indicator.pattern}`
+            ).catch(() => {
+              // Text not found, continue
+            })
+          );
+        }
+      }
+      // 'network' type is handled by GameDetector, skip here
+      // Other types (score_change, animation, etc.) are visual and checked by VisionAnalyzer
+    }
+
+    // Wait for at least one indicator to appear (or timeout)
+    if (waitPromises.length > 0) {
+      await Promise.race(waitPromises);
+    }
+  }
+
+  /**
+   * Wait for text content to appear on the page.
+   * 
+   * @param page - The page object
+   * @param text - Text pattern to search for
+   * @param timeout - Maximum time to wait
+   * @private
+   */
+  private async waitForText(page: any, text: string, timeout: number): Promise<void> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+      try {
+        const pageText = await page.evaluate(() => document.body.innerText);
+        if (pageText && pageText.includes(text)) {
+          return;
+        }
+      } catch {
+        // Evaluation failed, continue polling
+      }
+      await new Promise(resolve => setTimeout(resolve, 500)); // Poll every 500ms
+    }
+    throw new Error(`Text "${text}" not found within timeout`);
   }
 }
 

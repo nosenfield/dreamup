@@ -457,6 +457,92 @@ visionAnalyzer.findClickableElements.mockResolvedValueOnce([...]);
 
 ---
 
+### Pattern 11: Three-Tier DOM Selection Strategy
+**When to use**: Finding interactive elements (buttons, links) with unknown exact selectors
+**Why**: Balances speed (fast path for known patterns) with coverage (handles variations) without LLM costs
+**Context**: Implemented in Migration Plan Phase 1 (Nov 5, 2025)
+
+**Strategy Overview**:
+```typescript
+// Tier 1: Exact IDs (fast path for standardized patterns)
+// Tier 2: Attribute wildcards (broad coverage)
+// Tier 3: Text-based fallback (human-readable labels)
+```
+
+**Example Implementation**:
+```typescript
+const domSelectors = [
+  // Tier 1: Exact IDs (fast path for our game engine standard)
+  '#start-btn',
+  '#play-btn',
+  '#begin-btn',
+
+  // Tier 2: Attribute wildcards (case-insensitive with 'i' flag)
+  '[id*="start" i]',      // Matches: id="start-btn", id="game-start", id="START"
+  '[id*="play" i]',       // Matches: id="play-button", id="playGame"
+  '[id*="begin" i]',
+  '[class*="start" i]',   // Matches: class="btn-start", class="start-game"
+  '[class*="play" i]',
+  '[class*="begin" i]',
+  '[name*="start" i]',    // Matches: name="start", name="startGame"
+  '[name*="play" i]',
+  '[name*="begin" i]',
+  '[onclick*="start" i]', // Matches: onclick="startGame()", onclick="START()"
+  '[onclick*="play" i]',
+  '[onclick*="begin" i]',
+
+  // Tier 3: Text-based fallback (case-insensitive, partial match)
+  'button:has-text("start")',           // Matches: "Start", "Start Match", "START"
+  'button:has-text("play")',            // Matches: "Play", "Play Now", "PLAY"
+  'button:has-text("begin")',
+  'a:has-text("start")',                // Links with start text
+  'a:has-text("play")',
+  'div[role="button"]:has-text("start")', // Divs acting as buttons
+  'div[role="button"]:has-text("play")',
+];
+
+for (const selector of domSelectors) {
+  const element = await page.locator(selector).first();
+  if (element && await element.isVisible({ timeout: 1000 })) {
+    await element.click();
+    return true;
+  }
+}
+```
+
+**Why Three Tiers**:
+1. **Tier 1** (Exact IDs): Optimized for known patterns (e.g., your game engine standard)
+   - Fastest matching
+   - Most reliable for first-party games
+   - Example: `#start-btn` matches Pong's `<button id="start-btn">`
+
+2. **Tier 2** (Attribute Wildcards): Broad coverage for third-party games
+   - Case-insensitive matching (`i` flag)
+   - Partial string matching (`*=`)
+   - Covers common naming patterns across different engines
+   - Finds buttons even without visible text (icon-only buttons)
+
+3. **Tier 3** (Text-based): Human-readable fallback
+   - `:has-text()` is case-insensitive by default
+   - Partial matching (finds "Start" in "Start Match")
+   - Works when developers don't use semantic IDs/classes
+
+**Performance**:
+- Cost: $0.00 (no LLM calls)
+- Speed: <1s (DOM queries)
+- Coverage: Handles "Start", "Start Match", "Start Game", "Play Now", etc.
+
+**Benefits over hardcoded selectors**:
+- **Before**: Brittle exact matches (`'button:has-text("Start")'` fails on "Start Match")
+- **After**: Flexible patterns handle variations while preserving fast path
+
+**Related**:
+- Implementation: `src/core/game-interactor.ts:295-326`
+- Migration Plan: `_docs/migration-plan-adaptive-agent.md` Phase 1
+- Progress: `memory-bank/progress.md` Selector Enhancement section
+
+---
+
 ## Key Invariants
 
 ### Invariant 1: Every Test Returns a Report
@@ -563,3 +649,106 @@ No application state. All state is local to single invocation:
 - **Cost scaling**: Linear with test volume ($0.05 per test)
 - **Rate limit scaling**: Browserbase and OpenAI rate limits are bottleneck
 - **Mitigation**: Implement queue (SQS) if approaching rate limits
+
+---
+
+## Pattern 10: Metadata-Driven Testing
+
+**When to use**: When game metadata is available (static files or scan agent)
+**Why**: Improves test accuracy and efficiency by targeting specific controls instead of random inputs
+**Context**: Introduced in Iteration 5 (I5.0-I5.2)
+
+**Example (CORRECT)**:
+```typescript
+// With metadata - targeted testing
+const metadata: GameMetadata = {
+  inputSchema: {
+    type: 'javascript',
+    content: '// GameBuilder code...',
+    actions: [
+      { name: 'Pause', keys: ['Escape'], description: 'Pause the game' }
+    ],
+    axes: [
+      { name: 'MoveVertical', keys: ['ArrowDown', 'ArrowUp'], description: 'Move paddle' }
+    ]
+  },
+  genre: 'arcade',
+  testingStrategy: {
+    waitBeforeInteraction: 2000,
+    interactionDuration: 30000,
+    criticalActions: ['Pause'],
+    criticalAxes: ['MoveVertical']
+  }
+};
+
+// GameInteractor uses metadata for targeted testing
+await gameInteractor.simulateGameplayWithMetadata(page, metadata, 30000);
+// Result: Tests Escape key (Pause), ArrowDown/Up (Move), prioritizes critical inputs
+```
+
+**Anti-pattern (INCORRECT - Random Testing)**:
+```typescript
+// Without metadata - random inputs
+await gameInteractor.simulateKeyboardInput(page, 30000);
+// Result: Tests WASD, arrows, space, enter - may miss game-specific controls
+```
+
+**Key concepts**:
+- **GameMetadata**: Container for all game information (input schema, genre, hints, strategy)
+- **InputAction**: Discrete button press (e.g., Jump, Pause) with key bindings
+- **InputAxis**: Continuous input -1 to 1 (e.g., MoveHorizontal) with key bindings
+- **TestingStrategy**: Timing and priority hints for the agent
+- **Backwards Compatibility**: Old `inputSchema` field still works, converted to metadata internally
+
+**Metadata Sources**:
+- **Option A (MVP)**: Static `metadata.json` files alongside game files
+- **Option C (Future)**: Scan agent generates metadata dynamically from game code
+- **Hybrid (Production)**: Cache scan results, fallback to static files
+
+**Benefits**:
+- **Accuracy**: Test controls that actually exist in game
+- **Efficiency**: Skip unnecessary key combinations
+- **Context**: Provide genre and controls to vision analysis
+- **Validation**: Check for expected success indicators
+- **Prioritization**: Test critical controls first
+
+**Usage in Request**:
+```typescript
+// Provide metadata directly
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/pong',
+  metadata: {
+    inputSchema: { /* ... */ },
+    genre: 'arcade',
+    testingStrategy: { /* ... */ }
+  }
+};
+
+// CLI usage
+// $ bun run src/main.ts https://example.com/pong --metadata ./pong/metadata.json
+
+// Backwards compatible (deprecated)
+const request: GameTestRequest = {
+  gameUrl: 'https://example.com/pong',
+  inputSchema: { /* ... */ } // Converted to metadata.inputSchema internally
+};
+```
+
+**Metadata Structure**:
+```typescript
+interface GameMetadata {
+  inputSchema: InputSchema;           // Required: Input controls
+  genre?: string;                     // Optional: Game genre (arcade, puzzle, etc.)
+  description?: string;               // Optional: Game description
+  expectedControls?: string;          // Optional: Human-readable control description
+  loadingIndicators?: LoadingIndicator[]; // Optional: Hints for ready detection
+  successIndicators?: SuccessIndicator[]; // Optional: Hints for validation
+  testingStrategy?: TestingStrategy;  // Optional: Timing and priorities
+  metadataVersion?: string;           // Optional: Schema version (e.g., "1.0.0")
+}
+```
+
+**See also**:
+- Pattern 6 (Input Schema Support) - Original design, now part of GameMetadata
+- `_docs/architecture.md` - Full metadata system documentation
+- `_game-examples/*/metadata.json` - Example metadata files

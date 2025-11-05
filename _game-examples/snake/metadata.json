@@ -1,0 +1,57 @@
+{
+  "metadataVersion": "1.0.0",
+  "genre": "arcade",
+  "description": "Classic Snake game where the player controls a snake that grows longer by eating food. The game ends if the snake hits walls or itself.",
+  "expectedControls": "Use Arrow Keys, WASD, or virtual D-pad to move the snake",
+  "inputSchema": {
+    "type": "javascript",
+    "content": "gameBuilder.createAxis2D('Move').bindWASD().bindArrowKeys().bindVirtualDPad('#dpad')",
+    "axes": [
+      {
+        "name": "Move",
+        "keys": ["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"],
+        "description": "Control snake movement direction (2D axis)",
+        "is2D": true
+      }
+    ]
+  },
+  "loadingIndicators": [
+    {
+      "type": "element",
+      "pattern": "#start-btn",
+      "description": "Start button appears when game is ready"
+    },
+    {
+      "type": "text",
+      "pattern": "SNAKE",
+      "description": "Game title displays on main menu"
+    }
+  ],
+  "successIndicators": [
+    {
+      "type": "score_change",
+      "description": "Score should increment when snake eats food",
+      "selector": "#score"
+    },
+    {
+      "type": "animation",
+      "description": "Snake should move across the play area"
+    },
+    {
+      "type": "element_visible",
+      "description": "Snake head and body segments should be visible",
+      "selector": "canvas"
+    },
+    {
+      "type": "element_visible",
+      "description": "Food should be visible on the play area",
+      "selector": "canvas"
+    }
+  ],
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 30000,
+    "criticalAxes": ["Move"],
+    "instructions": "Click start button, test directional movement with arrow keys and WASD, verify snake moves in response to input, verify score increases when food is collected, ensure game doesn't crash on wall collision"
+  }
+}

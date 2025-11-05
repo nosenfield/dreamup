@@ -169,5 +169,145 @@ describe('ScreenshotCapturer', () => {
       expect(errorSpy).toHaveBeenCalled();
     });
   });
+
+  describe('captureAll()', () => {
+    it('should capture multiple screenshots in parallel', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      const stages: Screenshot['stage'][] = ['initial_load', 'after_interaction', 'final_state'];
+      const screenshots = await capturer.captureAll(page, stages);
+
+      expect(screenshots).toHaveLength(3);
+      expect(mockPage.screenshot).toHaveBeenCalledTimes(3);
+      expect(screenshots[0].stage).toBe('initial_load');
+      expect(screenshots[1].stage).toBe('after_interaction');
+      expect(screenshots[2].stage).toBe('final_state');
+    });
+
+    it('should handle partial failures gracefully', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock second screenshot to fail
+      let callCount = 0;
+      mockPage.screenshot.mockImplementation(() => {
+        callCount++;
+        if (callCount === 2) {
+          throw new Error('Screenshot failed');
+        }
+        return Promise.resolve(Buffer.from('fake-png-data'));
+      });
+
+      const stages: Screenshot['stage'][] = ['initial_load', 'after_interaction', 'final_state'];
+      const screenshots = await capturer.captureAll(page, stages);
+
+      // Should return successful screenshots only
+      expect(screenshots.length).toBeGreaterThan(0);
+      expect(screenshots.length).toBeLessThan(3);
+    });
+
+    it('should return empty array if all screenshots fail', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      mockPage.screenshot.mockImplementation(() => {
+        throw new Error('All screenshots failed');
+      });
+
+      const stages: Screenshot['stage'][] = ['initial_load', 'after_interaction'];
+      const screenshots = await capturer.captureAll(page, stages);
+
+      expect(screenshots).toHaveLength(0);
+    });
+  });
+
+  describe('captureAtOptimalTime()', () => {
+    it('should wait for loading indicators before capture', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock page.evaluate to simulate loading indicator detection
+      const evaluateMock = mock(() => Promise.resolve(true));
+      (page as any).evaluate = evaluateMock;
+
+      const metadata = {
+        inputSchema: {
+          type: 'javascript' as const,
+          content: 'test',
+        },
+        loadingIndicators: [
+          {
+            type: 'element' as const,
+            pattern: '#start-btn',
+            description: 'Start button appears',
+          },
+        ],
+      };
+
+      // Mock waitForElement to resolve quickly
+      (page as any).waitForSelector = mock(() => Promise.resolve());
+      (page as any).waitForTimeout = mock(() => Promise.resolve());
+
+      const screenshot = await capturer.captureAtOptimalTime(
+        page,
+        'initial_load',
+        metadata
+      );
+
+      expect(screenshot).toBeDefined();
+      expect(screenshot.stage).toBe('initial_load');
+    });
+
+    it('should fall back to immediate capture if no metadata', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      const screenshot = await capturer.captureAtOptimalTime(
+        page,
+        'initial_load',
+        undefined
+      );
+
+      expect(screenshot).toBeDefined();
+      expect(mockPage.screenshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('should timeout and capture anyway if indicators never appear', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock waitForSelector to timeout
+      (page as any).waitForSelector = mock(() => {
+        return new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Timeout')), 100);
+        });
+      });
+
+      const metadata = {
+        inputSchema: {
+          type: 'javascript' as const,
+          content: 'test',
+        },
+        loadingIndicators: [
+          {
+            type: 'element' as const,
+            pattern: '#never-appears',
+            description: 'Element that never appears',
+          },
+        ],
+      };
+
+      // Should still capture after timeout
+      const screenshot = await capturer.captureAtOptimalTime(
+        page,
+        'initial_load',
+        metadata,
+        5000 // 5 second timeout
+      );
+
+      expect(screenshot).toBeDefined();
+    });
+  });
 });
 

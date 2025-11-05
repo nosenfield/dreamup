@@ -19,6 +19,16 @@ export type {
   Screenshot,
   ConsoleError,
   InputSchema,
+  GameMetadata,
+  InputAction,
+  InputAxis,
+  LoadingIndicator,
+  SuccessIndicator,
+  TestingStrategy,
+  Action,
+  GameState,
+  AlternativeAction,
+  ActionRecommendation,
 } from './game-test.types';
 
 // Export all configuration types
