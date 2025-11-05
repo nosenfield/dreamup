@@ -78,8 +78,8 @@
 
 ### Iteration 5: Input Schema & Polish
 **Goal**: Parse InputSchema, polish features, prepare for production
-**Status**: 📋 In Progress (I5.0 Complete)
-**Progress**: 1.5/7 tasks (documentation + I5.0 complete)
+**Status**: 📋 In Progress (I5.0 + I5.1 Complete)
+**Progress**: 2.5/7 tasks (documentation + I5.0 + I5.1 complete)
 
 - [x] **Documentation Phase** (Nov 5, 2025) ✅ COMPLETE
   - Defined GameMetadata type system architecture
@@ -95,7 +95,13 @@
   - 48 tests passing (15 type tests + 33 schema validation tests)
   - Validated example metadata files (Pong, Snake) against schemas
   - Foundation ready for I5.1 and I5.2
-- [ ] I5.1: Implement Input Schema Parser (2-3 hours)
+- [x] I5.1: Implement Input Schema Parser (2-3 hours) ✅ COMPLETE (Nov 5, 2025)
+  - Created InputSchemaParser class with parse(), parseJavaScript(), parseSemantic(), inferKeybindings()
+  - Parses GameBuilder API calls (createAction, createAxis, createAxis2D patterns)
+  - Parses semantic natural language descriptions (arrow keys, WASD, spacebar, etc.)
+  - Handles structured arrays, string[] arrays, and content-only schemas
+  - 24 tests passing (comprehensive coverage)
+  - Ready for I5.2 (GameInteractor integration)
 - [ ] I5.2: Integrate Metadata into GameInteractor (2-3 hours)
 - [ ] I5.3: Complete Screenshot Capturer (1-2 hours)
 - [ ] I5.4: Implement CLI and Lambda Interfaces (2-3 hours)

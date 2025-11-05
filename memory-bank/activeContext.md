@@ -64,20 +64,51 @@
   - ✅ Added comprehensive unit tests (48 tests, all passing)
   - ✅ Validated example metadata files (Pong, Snake)
   - ✅ Backwards compatible with old `inputSchema` field
-- ⏳ **I5.1-I5.6**: Remaining tasks
+- ✅ **I5.1: Implement Input Schema Parser** - COMPLETE (Nov 5, 2025)
+  - ✅ Created InputSchemaParser class in `src/core/input-schema-parser.ts`
+  - ✅ Implemented parse() for GameMetadata extraction
+  - ✅ Implemented parseJavaScript() for GameBuilder API parsing
+  - ✅ Implemented parseSemantic() for natural language parsing
+  - ✅ Implemented inferKeybindings() for key list generation
+  - ✅ Added comprehensive unit tests (24 tests, all passing)
+  - ✅ Updated `src/core/index.ts` to export parser
+- ⏳ **I5.2-I5.6**: Remaining tasks
 
 ### Next Immediate Tasks
-1. **I5.1: Implement Input Schema Parser** (READY - depends on I5.0)
-   - Parse JavaScript input schemas
-   - Parse semantic descriptions
-2. **I5.2: Integrate Metadata into GameInteractor** (depends on I5.1)
+1. **I5.2: Integrate Metadata into GameInteractor** (READY - depends on I5.1)
    - Use metadata for targeted testing
+   - Prioritize critical actions/axes
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **I5.1: Implement Input Schema Parser** (Nov 5, 2025)
+  - **Implementation**: Created InputSchemaParser class for extracting structured actions and axes from GameMetadata
+  - **Files Created**:
+    - `src/core/input-schema-parser.ts`: Parser implementation with JavaScript and semantic parsing (285 lines)
+    - `tests/unit/input-schema-parser.test.ts`: Comprehensive parser tests (24 tests)
+  - **Files Modified**:
+    - `src/core/index.ts`: Exported InputSchemaParser and types
+  - **Key Features**:
+    - `parse()`: Main entry point that extracts actions/axes from GameMetadata
+      - Handles structured arrays (returns as-is)
+      - Handles string[] arrays (converts to structured format)
+      - Parses from JavaScript/semantic content if arrays missing
+    - `parseJavaScript()`: Parses GameBuilder API calls
+      - Supports `createAction().bindKey()` and `createAction().bindKeys()`
+      - Supports `createAxis().bindKeys()`
+      - Supports `createAxis2D().bindWASD().bindArrowKeys()` chained calls
+    - `parseSemantic()`: Extracts controls from natural language
+      - Pattern matching for "arrow keys", "WASD", "spacebar", "Escape"
+      - Best-effort extraction for semantic descriptions
+    - `inferKeybindings()`: Flattens actions/axes to unique key list
+  - **Test Results**: 24 tests passing (100% coverage of parser functionality)
+  - **TypeScript**: Compilation passes (pre-existing node_modules warnings are intentional)
+  - **Acceptance Criteria Met**: ✅ Parses JavaScript schemas, ✅ Parses semantic descriptions, ✅ Returns structured arrays, ✅ Handles missing/malformed metadata gracefully, ✅ Works with Pong/Snake metadata files
+  - **Foundation**: Ready for I5.2 (GameInteractor integration)
+
 - ✅ **I5.0: Define GameMetadata Type System** (Nov 5, 2025)
   - **Implementation**: Created complete GameMetadata type system with Zod validation
   - **Files Created**:

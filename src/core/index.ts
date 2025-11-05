@@ -19,3 +19,6 @@ export type { GameDetectorConfig } from './game-detector';
 export { ErrorMonitor } from './error-monitor';
 export type { ErrorMonitorConfig } from './error-monitor';
 
+export { InputSchemaParser } from './input-schema-parser';
+export type { InputSchemaParserConfig, ParsedInputSchema } from './input-schema-parser';
+
