@@ -16,21 +16,33 @@
 export interface FeatureFlags {
   /** Enable caching of test results (future: DynamoDB/Redis cache) */
   enableCaching: boolean;
-  
+
   /** Enable real-time progress updates (future: EventBridge/WebSocket streaming) */
   enableProgressUpdates: boolean;
-  
+
   /** Enable error recovery with retry logic (future: exponential backoff retries) */
   enableErrorRecovery: boolean;
-  
+
   /** Enable automatic cleanup of screenshots after test (future: delete from /tmp) */
   enableScreenshotCleanup: boolean;
-  
+
   /** Enable detailed debug logging (controlled by DEBUG environment variable) */
   enableDetailedLogging: boolean;
-  
+
   /** Enable adaptive QA mode (iterative action loop with LLM) */
   enableAdaptiveQA: boolean;
+
+  /** Enable DOM selector strategy for start button detection (default: true) */
+  enableDOMStrategy: boolean;
+
+  /** Enable natural language strategy for start button detection (default: true) */
+  enableNaturalLanguageStrategy: boolean;
+
+  /** Enable vision-based strategy for start button detection (default: true) */
+  enableVisionStrategy: boolean;
+
+  /** Enable LLM state analysis strategy for start button detection (default: false, Phase 2 feature) */
+  enableStateAnalysisStrategy: boolean;
 }
 
 /**

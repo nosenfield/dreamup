@@ -31,9 +31,21 @@ export const DEFAULT_FLAGS: FeatureFlags = {
 
   /** Enable detailed debug logging (controlled by DEBUG environment variable) */
   enableDetailedLogging: false,
-  
+
   /** Enable adaptive QA mode (iterative action loop with LLM) */
   enableAdaptiveQA: false,
+
+  /** Enable DOM selector strategy for start button detection */
+  enableDOMStrategy: true,
+
+  /** Enable natural language strategy for start button detection */
+  enableNaturalLanguageStrategy: true,
+
+  /** Enable vision-based strategy for start button detection */
+  enableVisionStrategy: true,
+
+  /** Enable LLM state analysis strategy for start button detection */
+  enableStateAnalysisStrategy: false,
 };
 
 /**
@@ -49,7 +61,7 @@ function parseBoolean(value: string | undefined): boolean {
 
 /**
  * Get feature flags configuration with environment variable overrides.
- * 
+ *
  * Feature flags can be set via environment variables:
  * - DEBUG: Enable detailed logging (default: false)
  * - ENABLE_CACHING: Enable result caching (default: false)
@@ -57,7 +69,11 @@ function parseBoolean(value: string | undefined): boolean {
  * - ENABLE_ERROR_RECOVERY: Enable error recovery (default: false)
  * - ENABLE_SCREENSHOT_CLEANUP: Enable screenshot cleanup (default: false)
  * - ENABLE_ADAPTIVE_QA: Enable adaptive QA mode (default: false)
- * 
+ * - ENABLE_DOM_STRATEGY: Enable DOM selector strategy (default: true)
+ * - ENABLE_NATURAL_LANGUAGE_STRATEGY: Enable natural language strategy (default: true)
+ * - ENABLE_VISION_STRATEGY: Enable vision-based strategy (default: true)
+ * - ENABLE_STATE_ANALYSIS_STRATEGY: Enable LLM state analysis strategy (default: false)
+ *
  * @returns FeatureFlags object with environment variable overrides applied
  */
 export function getFeatureFlags(): FeatureFlags {
@@ -69,6 +85,18 @@ export function getFeatureFlags(): FeatureFlags {
     enableErrorRecovery: parseBoolean(process.env.ENABLE_ERROR_RECOVERY),
     enableScreenshotCleanup: parseBoolean(process.env.ENABLE_SCREENSHOT_CLEANUP),
     enableAdaptiveQA: parseBoolean(process.env.ENABLE_ADAPTIVE_QA),
+    enableDOMStrategy: process.env.ENABLE_DOM_STRATEGY !== undefined
+      ? parseBoolean(process.env.ENABLE_DOM_STRATEGY)
+      : DEFAULT_FLAGS.enableDOMStrategy,
+    enableNaturalLanguageStrategy: process.env.ENABLE_NATURAL_LANGUAGE_STRATEGY !== undefined
+      ? parseBoolean(process.env.ENABLE_NATURAL_LANGUAGE_STRATEGY)
+      : DEFAULT_FLAGS.enableNaturalLanguageStrategy,
+    enableVisionStrategy: process.env.ENABLE_VISION_STRATEGY !== undefined
+      ? parseBoolean(process.env.ENABLE_VISION_STRATEGY)
+      : DEFAULT_FLAGS.enableVisionStrategy,
+    enableStateAnalysisStrategy: process.env.ENABLE_STATE_ANALYSIS_STRATEGY !== undefined
+      ? parseBoolean(process.env.ENABLE_STATE_ANALYSIS_STRATEGY)
+      : DEFAULT_FLAGS.enableStateAnalysisStrategy,
   };
 }
 

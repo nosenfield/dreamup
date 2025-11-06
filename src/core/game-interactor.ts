@@ -18,6 +18,7 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
+import { getFeatureFlags } from '../config/feature-flags';
 import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
@@ -297,16 +298,24 @@ export class GameInteractor {
   async findAndClickStart(page: AnyPage, timeout?: number): Promise<boolean> {
     const operationTimeout = timeout ?? this.interactionTimeout;
     const pageAny = page as any;
+    const featureFlags = getFeatureFlags();
 
     this.logger.info('Finding and clicking start button', {
       timeout: operationTimeout,
       hasVisionFallback: !!(this.visionAnalyzer && this.screenshotCapturer),
+      enabledStrategies: {
+        dom: featureFlags.enableDOMStrategy,
+        naturalLanguage: featureFlags.enableNaturalLanguageStrategy,
+        vision: featureFlags.enableVisionStrategy,
+        stateAnalysis: featureFlags.enableStateAnalysisStrategy,
+      },
     });
 
     // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
     // Three-tier approach: exact IDs -> attribute wildcards -> text-based fallback
     // Note: :has-text() is case-insensitive by default (matches "Start", "START", "start")
-    const domSelectors = [
+    if (featureFlags.enableDOMStrategy) {
+      const domSelectors = [
       // Tier 1: Exact IDs (fast path for our game engine standard)
       '#start-btn',
       '#play-btn',
@@ -367,8 +376,10 @@ export class GameInteractor {
         // Continue to next selector
       }
     }
+    }
 
     // Strategy 2: Try natural language commands
+    if (featureFlags.enableNaturalLanguageStrategy) {
     const naturalLanguagePhrases = [
       'click start button',
       'click play button',
@@ -408,9 +419,10 @@ export class GameInteractor {
         // Continue to next phrase or fallback
       }
     }
+    }
 
     // Strategy 3: Fallback to vision-based detection
-    if (this.visionAnalyzer && this.screenshotCapturer) {
+    if (featureFlags.enableVisionStrategy && this.visionAnalyzer && this.screenshotCapturer) {
       this.logger.info('Falling back to vision-based start button detection', {});
 
       try {
@@ -475,8 +487,8 @@ export class GameInteractor {
       }
     }
 
-    // Strategy 3: LLM State Analysis (fallback when DOM and natural language fail)
-    if (this.stateAnalyzer && this.screenshotCapturer) {
+    // Strategy 4: LLM State Analysis (fallback when DOM and natural language fail)
+    if (featureFlags.enableStateAnalysisStrategy && this.stateAnalyzer && this.screenshotCapturer) {
       try {
         this.logger.info('DOM and natural language failed, using LLM state analysis');
 
