@@ -527,11 +527,6 @@ export async function runAdaptiveQA(
     if (request) {
       if (request.metadata) {
         metadata = request.metadata;
-      } else if (request.inputSchema) {
-        // Backwards compatibility
-        metadata = {
-          inputSchema: request.inputSchema,
-        };
       }
     }
 
