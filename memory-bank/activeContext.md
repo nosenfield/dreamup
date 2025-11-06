@@ -116,6 +116,35 @@
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **Phase 3: Iterative Action Loop** (Nov 5, 2025)
+  - **Implementation**: Full adaptive QA mode with iterative action loop
+  - **Files Created**:
+    - `src/utils/adaptive-qa.ts`: Helper functions for budget calculation, cost estimation, screenshot distribution (180+ lines)
+    - `tests/unit/adaptive-qa.test.ts`: Comprehensive unit tests (16 tests, all passing)
+  - **Files Modified**:
+    - `src/types/config.types.ts`: Added AdaptiveTestConfig interface
+    - `src/types/game-test.types.ts`: Added CapturedState interface, enhanced TestMetadata with actionHistory, adaptiveConfig, estimatedCost
+    - `src/config/feature-flags.ts`: Added enableAdaptiveQA flag (default: false)
+    - `src/config/constants.ts`: Added ADAPTIVE_DEFAULTS and ADAPTIVE_COSTS constants
+    - `src/core/game-interactor.ts`: Added captureCurrentState() and executeRecommendationPublic() methods
+    - `src/main.ts`: Added runAdaptiveQA() function (450+ lines), updated CLI entry point to support adaptive mode
+    - `src/utils/index.ts`: Export adaptive-qa helpers
+    - `src/types/index.ts`: Export CapturedState and AdaptiveTestConfig types
+    - `src/config/index.ts`: Export ADAPTIVE_DEFAULTS and ADAPTIVE_COSTS
+  - **Key Features**:
+    - Iterative action loop: Up to maxActions iterations with LLM-powered recommendations
+    - State progression detection: Compares screenshots to detect stuck states
+    - Budget awareness: Stops at 90% of configured budget (default $0.50)
+    - Duration limits: Respects maxDuration timeout (default 4 minutes)
+    - Stuck state recovery: Tries alternatives when state doesn't progress
+    - Action history tracking: Prevents repetition of failed actions
+    - Final vision analysis: Analyzes all screenshots with action history context
+    - Feature flag control: `ENABLE_ADAPTIVE_QA=true` to enable (default: disabled)
+  - **Test Results**: 16 unit tests passing (all helper functions tested)
+  - **TypeScript**: Compilation passes (pre-existing DOM type warnings are intentional)
+  - **Acceptance Criteria Met**: ✅ Iterative action loop implemented, ✅ Budget limits respected, ✅ Duration limits respected, ✅ State progression detected, ✅ Action history tracked, ✅ Feature flag controls enable/disable, ✅ Backwards compatible with existing runQA()
+  - **Impact**: Enables adaptive gameplay with automatic navigation through 2-3 screens/levels, configurable budget and duration, comprehensive cost tracking and action history in results
+
 - ✅ **Phase 2: LLM State Analyzer** (Nov 5, 2025)
   - **Implementation**: Added intelligent LLM fallback for complex UIs when heuristics fail
   - **Files Created**:

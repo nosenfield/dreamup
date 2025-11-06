@@ -286,6 +286,57 @@
     - `src/types/index.ts` (export new types)
   - **Pattern Documented**: See `_docs/migration-plan-adaptive-agent.md` Phase 2
 
+### Iterative Action Loop (Migration Plan Phase 3)
+**Status**: ✅ Complete (Nov 5, 2025)
+**Related**: `_docs/migration-plan-adaptive-agent.md` Phase 3
+
+- [x] **Full Adaptive QA Implementation** ✅ IMPLEMENTED
+  - Created `runAdaptiveQA()` function in `src/main.ts` with iterative action loop
+  - Added AdaptiveTestConfig interface for budget/duration/action limits
+  - Added CapturedState interface for state snapshots
+  - Created adaptive QA helper functions (`src/utils/adaptive-qa.ts`)
+    - `calculateScreenshotBudget()` - Calculate max screenshots based on budget
+    - `calculateEstimatedCost()` - Estimate cost from actions/screenshots
+    - `distributeScreenshotsOverTime()` - Calculate screenshot timestamps
+    - `mergeAdaptiveConfig()` - Merge config with defaults
+  - Added `captureCurrentState()` method to GameInteractor
+  - Added `executeRecommendationPublic()` wrapper for public access
+  - Added `ENABLE_ADAPTIVE_QA` feature flag (default: false)
+  - Added ADAPTIVE_DEFAULTS and ADAPTIVE_COSTS constants
+  - Updated CLI entry point to support adaptive mode via feature flag
+  - **Key Features**:
+    - Iterative action loop (up to maxActions iterations)
+    - LLM-powered action recommendations (StateAnalyzer)
+    - State progression detection (screenshot comparison)
+    - Budget awareness (stops at 90% of budget)
+    - Duration limits (respects maxDuration timeout)
+    - Stuck state detection (tries alternatives)
+    - Action history tracking (prevents repetition)
+    - Final vision analysis with all screenshots
+  - **Impact**:
+    - Enables adaptive gameplay with automatic navigation
+    - Can progress through 2-3 screens/levels automatically
+    - Configurable budget (default $0.50, range $0.10-$2.00)
+    - Configurable duration (default 4 minutes)
+    - Cost tracking in result metadata
+    - Action history included in result metadata
+  - **Test Results**: 16 unit tests passing (helper functions)
+  - **Files Created**:
+    - `src/utils/adaptive-qa.ts` (helper functions, 180+ lines)
+    - `tests/unit/adaptive-qa.test.ts` (16 tests, all passing)
+  - **Files Modified**:
+    - `src/types/config.types.ts` (added AdaptiveTestConfig interface)
+    - `src/types/game-test.types.ts` (added CapturedState interface, enhanced TestMetadata)
+    - `src/config/feature-flags.ts` (added enableAdaptiveQA flag)
+    - `src/config/constants.ts` (added ADAPTIVE_DEFAULTS and ADAPTIVE_COSTS)
+    - `src/core/game-interactor.ts` (added captureCurrentState, executeRecommendationPublic)
+    - `src/main.ts` (added runAdaptiveQA function, updated CLI entry point)
+    - `src/utils/index.ts` (export adaptive-qa helpers)
+    - `src/types/index.ts` (export new types)
+    - `src/config/index.ts` (export new constants)
+  - **Usage**: Set `ENABLE_ADAPTIVE_QA=true` environment variable to enable
+  - **Pattern Documented**: See `_docs/migration-plan-adaptive-agent.md` Phase 3
+
 ---
 
 ## Completed Foundation (Phases 0-2)

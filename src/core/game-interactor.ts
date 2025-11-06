@@ -22,7 +22,7 @@ import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
 import type { StateAnalyzer } from './state-analyzer';
-import type { GameMetadata, ActionRecommendation } from '../types';
+import type { GameMetadata, ActionRecommendation, CapturedState } from '../types';
 
 /**
  * Configuration for GameInteractor.
@@ -634,6 +634,66 @@ export class GameInteractor {
       });
       return false;
     }
+  }
+
+  /**
+   * Execute an action recommendation (public wrapper).
+   * 
+   * Public wrapper for executeRecommendation used by adaptive QA loop.
+   * 
+   * @param page - The Stagehand page object
+   * @param recommendation - Action recommendation to execute
+   * @returns Promise that resolves to `true` if action executed successfully, `false` otherwise
+   */
+  async executeRecommendationPublic(
+    page: AnyPage,
+    recommendation: ActionRecommendation
+  ): Promise<boolean> {
+    return this.executeRecommendation(page, recommendation);
+  }
+
+  /**
+   * Capture current game state (HTML + screenshot).
+   * 
+   * Captures a snapshot of the current game state including sanitized HTML
+   * and a screenshot. Used for adaptive QA loops to track state progression.
+   * 
+   * @param page - The Stagehand page object
+   * @returns Promise that resolves to CapturedState
+   * @throws {Error} If screenshotCapturer or stateAnalyzer not available
+   * 
+   * @example
+   * ```typescript
+   * const state = await interactor.captureCurrentState(page);
+   * // Returns: { html: '...', screenshot: {...}, timestamp: 1234567890 }
+   * ```
+   */
+  async captureCurrentState(page: AnyPage): Promise<CapturedState> {
+    if (!this.screenshotCapturer) {
+      throw new Error('ScreenshotCapturer required for state capture');
+    }
+    
+    if (!this.stateAnalyzer) {
+      throw new Error('StateAnalyzer required for state capture');
+    }
+
+    this.logger.debug('Capturing current game state', {});
+
+    // Capture screenshot (use 'after_interaction' stage as placeholder)
+    const screenshot = await this.screenshotCapturer.capture(page, 'after_interaction');
+
+    // Capture and sanitize HTML using Stagehand's evaluate method
+    const html = await (page as any).evaluate(() => {
+      // @ts-ignore - Code runs in browser context where document exists
+      return document.documentElement.outerHTML;
+    }) as string;
+    const sanitizedHTML = this.stateAnalyzer.sanitizeHTML(html);
+
+    return {
+      html: sanitizedHTML,
+      screenshot,
+      timestamp: Date.now(),
+    };
   }
 
   /**

@@ -28,6 +28,9 @@ export interface FeatureFlags {
   
   /** Enable detailed debug logging (controlled by DEBUG environment variable) */
   enableDetailedLogging: boolean;
+  
+  /** Enable adaptive QA mode (iterative action loop with LLM) */
+  enableAdaptiveQA: boolean;
 }
 
 /**
@@ -65,5 +68,28 @@ export interface Thresholds {
   
   /** Default number of screenshots to capture during a test (default: 3) */
   SCREENSHOT_COUNT: number;
+}
+
+/**
+ * Configuration for adaptive QA testing mode.
+ * 
+ * Controls the iterative action loop behavior, including budget limits,
+ * action limits, and screenshot strategy.
+ */
+export interface AdaptiveTestConfig {
+  /** Maximum budget in USD per test (default: 0.50) */
+  maxBudget: number;
+  
+  /** Maximum duration in milliseconds (default: 240000 = 4 minutes) */
+  maxDuration: number;
+  
+  /** Maximum number of actions to perform (default: 20) */
+  maxActions: number;
+  
+  /** Screenshot capture strategy: 'fixed' (distribute evenly) or 'adaptive' (based on state changes) */
+  screenshotStrategy: 'fixed' | 'adaptive';
+  
+  /** LLM call strategy: 'eager' (call every iteration) or 'lazy' (skip if state unchanged) */
+  llmCallStrategy: 'eager' | 'lazy';
 }
 

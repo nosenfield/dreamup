@@ -29,6 +29,9 @@ export interface GameTestRequest {
   /** Optional configuration overrides for this test */
   config?: Partial<TestConfig>;
   
+  /** Optional adaptive test configuration (enables iterative action loop) */
+  adaptiveConfig?: import('../types/config.types').AdaptiveTestConfig;
+  
   /** 
    * Optional comprehensive game metadata.
    * 
@@ -130,6 +133,15 @@ export interface TestMetadata {
   
   /** Optional number of tokens used in vision API calls */
   visionAnalysisTokens?: number;
+  
+  /** Optional action history from adaptive QA loop */
+  actionHistory?: Action[];
+  
+  /** Optional adaptive test configuration used */
+  adaptiveConfig?: import('../types/config.types').AdaptiveTestConfig;
+  
+  /** Optional estimated cost in USD for this test */
+  estimatedCost?: number;
 }
 
 /**
@@ -458,5 +470,22 @@ export interface ActionRecommendation {
   
   /** Array of alternative actions if primary recommendation fails */
   alternatives: AlternativeAction[];
+}
+
+/**
+ * Captured game state for adaptive QA loop.
+ * 
+ * Represents a snapshot of the game state at a point in time,
+ * including HTML structure and screenshot.
+ */
+export interface CapturedState {
+  /** Sanitized HTML content (scripts removed, structure preserved) */
+  html: string;
+  
+  /** File path to screenshot */
+  screenshot: Screenshot;
+  
+  /** Timestamp when state was captured */
+  timestamp: number;
 }
 

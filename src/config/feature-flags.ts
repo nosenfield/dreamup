@@ -31,6 +31,9 @@ export const DEFAULT_FLAGS: FeatureFlags = {
 
   /** Enable detailed debug logging (controlled by DEBUG environment variable) */
   enableDetailedLogging: false,
+  
+  /** Enable adaptive QA mode (iterative action loop with LLM) */
+  enableAdaptiveQA: false,
 };
 
 /**
@@ -53,6 +56,7 @@ function parseBoolean(value: string | undefined): boolean {
  * - ENABLE_PROGRESS_UPDATES: Enable progress streaming (default: false)
  * - ENABLE_ERROR_RECOVERY: Enable error recovery (default: false)
  * - ENABLE_SCREENSHOT_CLEANUP: Enable screenshot cleanup (default: false)
+ * - ENABLE_ADAPTIVE_QA: Enable adaptive QA mode (default: false)
  * 
  * @returns FeatureFlags object with environment variable overrides applied
  */
@@ -64,6 +68,7 @@ export function getFeatureFlags(): FeatureFlags {
     enableProgressUpdates: parseBoolean(process.env.ENABLE_PROGRESS_UPDATES),
     enableErrorRecovery: parseBoolean(process.env.ENABLE_ERROR_RECOVERY),
     enableScreenshotCleanup: parseBoolean(process.env.ENABLE_SCREENSHOT_CLEANUP),
+    enableAdaptiveQA: parseBoolean(process.env.ENABLE_ADAPTIVE_QA),
   };
 }
 

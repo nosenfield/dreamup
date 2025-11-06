@@ -8,7 +8,7 @@
  * @module config.constants
  */
 
-import type { Timeouts, Thresholds } from '../types/config.types';
+import type { Timeouts, Thresholds, AdaptiveTestConfig } from '../types/config.types';
 
 /**
  * Timeout values in milliseconds for various operations.
@@ -89,5 +89,46 @@ export const PATHS = {
 
   /** Subdirectory for test reports */
   REPORTS_SUBDIR: 'reports',
+} as const;
+
+/**
+ * Default adaptive test configuration values.
+ * 
+ * These can be overridden via AdaptiveTestConfig in GameTestRequest.
+ */
+export const ADAPTIVE_DEFAULTS: AdaptiveTestConfig = {
+  /** Maximum budget in USD per test (default: 0.50) */
+  maxBudget: 0.50,
+  
+  /** Maximum duration in milliseconds (default: 240000 = 4 minutes) */
+  maxDuration: 240000,
+  
+  /** Maximum number of actions to perform (default: 20) */
+  maxActions: 20,
+  
+  /** Screenshot capture strategy */
+  screenshotStrategy: 'fixed',
+  
+  /** LLM call strategy */
+  llmCallStrategy: 'eager',
+};
+
+/**
+ * Cost calculation constants for adaptive QA.
+ * 
+ * Used to estimate costs and manage budget limits.
+ */
+export const ADAPTIVE_COSTS = {
+  /** Cost per screenshot analysis in USD (GPT-4V with 1 image) */
+  COST_PER_SCREENSHOT: 0.02,
+  
+  /** Cost per LLM action recommendation in USD (GPT-4V with 1 image + HTML) */
+  COST_PER_ACTION_RECOMMENDATION: 0.02,
+  
+  /** Cost per state progression check in USD (GPT-4V with 2 images) */
+  COST_PER_STATE_CHECK: 0.03,
+  
+  /** Budget reserved for final multi-image analysis in USD */
+  RESERVED_FOR_FINAL_ANALYSIS: 0.10,
 } as const;
 

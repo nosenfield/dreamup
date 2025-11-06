@@ -18,7 +18,8 @@ import { Logger } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
-import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig } from './types/game-test.types';
+import { calculateEstimatedCost, mergeAdaptiveConfig } from './utils/adaptive-qa';
+import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig, Action, Screenshot } from './types/game-test.types';
 
 /**
  * Run QA test on a game URL.
@@ -399,6 +400,462 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
 }
 
 /**
+ * Run adaptive QA test on a game URL using iterative action loop.
+ * 
+ * This function implements Phase 3 of the migration plan: full adaptive gameplay
+ * with state progression awareness. It uses LLM to recommend actions iteratively,
+ * tracks state progression, and respects budget limits.
+ * 
+ * @param gameUrl - The URL of the game to test
+ * @param request - Optional GameTestRequest containing metadata and adaptiveConfig
+ * @returns Promise that resolves to GameTestResult
+ * 
+ * @example
+ * ```typescript
+ * const result = await runAdaptiveQA('https://example.com/game', {
+ *   metadata: { ... },
+ *   adaptiveConfig: { maxBudget: 0.50, maxActions: 20 }
+ * });
+ * ```
+ */
+export async function runAdaptiveQA(
+  gameUrl: string,
+  request?: Partial<GameTestRequest>
+): Promise<GameTestResult> {
+  const startTime = Date.now();
+  const sessionId = nanoid();
+  const logger = new Logger({
+    module: 'qa-agent',
+    op: 'runAdaptiveQA',
+    correlationId: sessionId,
+  });
+
+  logger.info('Starting adaptive QA test', { gameUrl, sessionId });
+
+  const fileManager = new FileManager(sessionId);
+  let browserManager: BrowserManager | null = null;
+  let errorMonitor: ErrorMonitor | null = null;
+  let gameType: GameType = GameType.UNKNOWN;
+  let visionAnalyzer: VisionAnalyzer | null = null;
+  let stateAnalyzer: StateAnalyzer | null = null;
+
+  try {
+    // Validate environment variables
+    const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
+    const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+
+    if (!browserbaseApiKey || !browserbaseProjectId) {
+      throw new Error('Missing required environment variables: BROWSERBASE_API_KEY and/or BROWSERBASE_PROJECT_ID');
+    }
+
+    if (!openaiApiKey) {
+      throw new Error('OPENAI_API_KEY required for adaptive QA mode');
+    }
+
+    // Merge adaptive config with defaults
+    const adaptiveConfig = mergeAdaptiveConfig(request?.adaptiveConfig);
+    logger.info('Adaptive config', {
+      maxBudget: adaptiveConfig.maxBudget,
+      maxDuration: adaptiveConfig.maxDuration,
+      maxActions: adaptiveConfig.maxActions,
+      screenshotStrategy: adaptiveConfig.screenshotStrategy,
+      llmCallStrategy: adaptiveConfig.llmCallStrategy,
+    });
+
+    // Initialize browser
+    logger.info('Initializing browser manager', {});
+    browserManager = new BrowserManager({
+      apiKey: browserbaseApiKey,
+      projectId: browserbaseProjectId,
+      logger,
+    });
+
+    const page = await browserManager.initialize();
+    logger.info('Browser initialized successfully', {});
+
+    // Navigate to game URL
+    logger.info('Navigating to game URL', { gameUrl });
+    await browserManager.navigate(gameUrl);
+    logger.info('Navigation completed', {});
+
+    // Initialize game detector and error monitor
+    const gameDetector = new GameDetector({ logger });
+    errorMonitor = new ErrorMonitor({ logger });
+
+    // Start error monitoring
+    try {
+      await errorMonitor.startMonitoring(page);
+      logger.info('Error monitoring started', {});
+    } catch (error) {
+      logger.warn('Failed to start error monitoring', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Detect game type
+    try {
+      gameType = await gameDetector.detectType(page);
+      logger.info('Game type detected', { gameType });
+    } catch (error) {
+      logger.warn('Failed to detect game type', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      gameType = GameType.UNKNOWN;
+    }
+
+    // Wait for game to be ready
+    try {
+      await gameDetector.waitForGameReady(page, TIMEOUTS.GAME_LOAD_TIMEOUT);
+      logger.info('Game ready state confirmed', {});
+    } catch (error) {
+      logger.warn('Failed to confirm game ready state', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Initialize vision and state analyzers (required for adaptive mode)
+    visionAnalyzer = new VisionAnalyzer({ logger, apiKey: openaiApiKey });
+    stateAnalyzer = new StateAnalyzer({ logger, apiKey: openaiApiKey });
+    logger.info('Vision and state analyzers initialized', {});
+
+    // Initialize screenshot capturer and game interactor
+    const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
+
+    // Extract metadata from request
+    let metadata: GameMetadata | undefined = undefined;
+    if (request) {
+      if (request.metadata) {
+        metadata = request.metadata;
+      } else if (request.inputSchema) {
+        // Backwards compatibility
+        metadata = {
+          inputSchema: request.inputSchema,
+        };
+      }
+    }
+
+    const gameInteractor = new GameInteractor({
+      logger,
+      visionAnalyzer,
+      screenshotCapturer,
+      stateAnalyzer,
+      metadata,
+    });
+
+    // Wait before interaction if specified
+    const waitBeforeInteraction = metadata?.testingStrategy?.waitBeforeInteraction ?? 0;
+    if (waitBeforeInteraction > 0) {
+      logger.info('Waiting before interaction', { waitMs: waitBeforeInteraction });
+      await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
+    }
+
+    // Capture initial state
+    logger.info('Capturing initial state', {});
+    let currentState = await gameInteractor.captureCurrentState(page);
+    const screenshots: string[] = [currentState.screenshot.path];
+    const actionHistory: Action[] = [];
+
+    // Adaptive loop
+    const loopStartTime = Date.now();
+    let stateCheckCount = 0;
+
+    for (let i = 0; i < adaptiveConfig.maxActions; i++) {
+      // Check duration limit
+      const elapsed = Date.now() - loopStartTime;
+      if (elapsed >= adaptiveConfig.maxDuration) {
+        logger.info('Max duration reached, stopping adaptive loop', {
+          elapsed,
+          maxDuration: adaptiveConfig.maxDuration,
+        });
+        break;
+      }
+
+      logger.info('Adaptive loop iteration', {
+        iteration: i + 1,
+        actionsPerformed: actionHistory.length,
+        elapsed,
+      });
+
+      // Check budget
+      const estimatedCost = calculateEstimatedCost(
+        actionHistory.length,
+        screenshots.length,
+        stateCheckCount
+      );
+      if (estimatedCost >= adaptiveConfig.maxBudget * 0.9) {
+        logger.warn('Approaching budget limit, stopping adaptive loop', {
+          estimatedCost,
+          maxBudget: adaptiveConfig.maxBudget,
+        });
+        break;
+      }
+
+      // Ask LLM: "What should I do next?"
+      const goal = i === 0
+        ? 'Start the game and begin playing'
+        : 'Continue playing and progress through the game';
+
+      const recommendation = await stateAnalyzer.analyzeAndRecommendAction({
+        html: currentState.html,
+        screenshot: currentState.screenshot.path,
+        previousActions: actionHistory,
+        metadata,
+        goal,
+      });
+
+      // Check if LLM says we're done
+      if (recommendation.action === 'complete') {
+        logger.info('LLM recommends completing test', {
+          reasoning: recommendation.reasoning,
+        });
+        break;
+      }
+
+      // Execute recommended action
+      const executed = await gameInteractor.executeRecommendationPublic(page, recommendation);
+
+      if (executed) {
+        actionHistory.push({
+          action: recommendation.action,
+          target: recommendation.target,
+          reasoning: recommendation.reasoning,
+          timestamp: Date.now(),
+        });
+      } else {
+        logger.warn('Recommendation execution failed, trying alternative', {
+          action: recommendation.action,
+        });
+
+        // Try alternative if available
+        if (recommendation.alternatives.length > 0) {
+          const alternative = recommendation.alternatives[0];
+          logger.info('Trying alternative action', {
+            alternative: alternative.action,
+          });
+          const altExecuted = await gameInteractor.executeRecommendationPublic(page, {
+            ...alternative,
+            confidence: 0.5, // Lower confidence for alternatives
+            alternatives: [],
+          });
+          if (altExecuted) {
+            actionHistory.push({
+              action: alternative.action,
+              target: alternative.target,
+              reasoning: alternative.reasoning,
+              timestamp: Date.now(),
+            });
+          }
+        }
+      }
+
+      // Wait for state change
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Capture new state
+      const newState = await gameInteractor.captureCurrentState(page);
+      screenshots.push(newState.screenshot.path);
+
+      // Check if state actually changed (detect stuck loops)
+      stateCheckCount++;
+      const hasProgressed = await stateAnalyzer.hasStateProgressed(
+        currentState.screenshot.path,
+        newState.screenshot.path,
+      );
+
+      if (!hasProgressed && actionHistory.length > 0) {
+        logger.warn('State has not progressed, may be stuck', {
+          lastAction: actionHistory[actionHistory.length - 1].action,
+        });
+      }
+
+      currentState = newState;
+    }
+
+    logger.info('Adaptive loop completed', {
+      actionsPerformed: actionHistory.length,
+      screenshotsCaptured: screenshots.length,
+    });
+
+    // Retrieve console errors
+    let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
+    if (errorMonitor) {
+      try {
+        consoleErrors = await errorMonitor.getErrors(page);
+        logger.info('Console errors retrieved', { errorCount: consoleErrors.length });
+      } catch (error) {
+        logger.warn('Failed to retrieve console errors', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Final vision analysis
+    let playabilityScore = 50;
+    let visionIssues: Issue[] = [];
+    let visionAnalysisTokens: number | undefined;
+
+    if (visionAnalyzer && screenshots.length > 0) {
+      try {
+        logger.info('Starting final vision analysis', {
+          screenshotCount: screenshots.length,
+        });
+
+        // Convert screenshot paths to Screenshot objects for vision analyzer
+        const screenshotObjects = screenshots.map((path, index): Screenshot => ({
+          id: `screenshot-${index}`,
+          path,
+          timestamp: Date.now(),
+          stage: (index === 0 ? 'initial_load' : index === screenshots.length - 1 ? 'final_state' : 'after_interaction') as 'initial_load' | 'after_interaction' | 'final_state',
+        }));
+
+        const visionResult = await visionAnalyzer.analyzeScreenshots(
+          screenshotObjects,
+          metadata
+        );
+
+        playabilityScore = visionResult.playability_score;
+        visionIssues = visionResult.issues;
+        visionAnalysisTokens = visionResult.metadata?.visionAnalysisTokens;
+
+        logger.info('Final vision analysis completed', {
+          playabilityScore,
+          issueCount: visionIssues.length,
+          tokens: visionAnalysisTokens,
+        });
+      } catch (error) {
+        logger.warn('Final vision analysis failed - using default score', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Calculate final cost estimate
+    const finalCost = calculateEstimatedCost(
+      actionHistory.length,
+      screenshots.length,
+      stateCheckCount
+    );
+
+    // Determine pass/fail status
+    const status: 'pass' | 'fail' = playabilityScore >= 50 ? 'pass' : 'fail';
+
+    // Calculate test duration
+    const duration = Date.now() - startTime;
+
+    // Create result
+    const result: GameTestResult = {
+      status,
+      playability_score: playabilityScore,
+      issues: visionIssues,
+      screenshots,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration,
+        gameType,
+        consoleErrors,
+        actionHistory,
+        adaptiveConfig,
+        estimatedCost: finalCost,
+        ...(visionAnalysisTokens !== undefined && { visionAnalysisTokens }),
+      },
+    };
+
+    logger.info('Adaptive QA test completed successfully', {
+      status: result.status,
+      playabilityScore: result.playability_score,
+      actionsPerformed: actionHistory.length,
+      screenshotsCaptured: screenshots.length,
+      estimatedCost: finalCost,
+    });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Adaptive QA test failed', {
+      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
+
+    const errorIssue: Issue = {
+      severity: 'critical',
+      description: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    };
+
+    let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
+    if (errorMonitor) {
+      try {
+        const page = browserManager?.getPage();
+        if (page) {
+          consoleErrors = await errorMonitor.getErrors(page);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    const errorResult: GameTestResult = {
+      status: 'error',
+      playability_score: 0,
+      issues: [errorIssue],
+      screenshots: [],
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration,
+        gameType: GameType.UNKNOWN,
+        consoleErrors,
+      },
+    };
+
+    return errorResult;
+
+  } finally {
+    // Stop error monitoring
+    if (errorMonitor && browserManager) {
+      try {
+        const page = browserManager.getPage();
+        if (page) {
+          await errorMonitor.stopMonitoring(page);
+        }
+      } catch (error) {
+        logger.warn('Failed to stop error monitoring', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Cleanup files if enabled
+    const flags = getFeatureFlags();
+    if (flags.enableScreenshotCleanup) {
+      try {
+        await fileManager.cleanup(flags.enableScreenshotCleanup);
+      } catch (cleanupError) {
+        logger.warn('Error during file cleanup', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
+
+    // Always cleanup browser
+    if (browserManager) {
+      try {
+        await browserManager.cleanup();
+      } catch (cleanupError) {
+        logger.warn('Error during browser cleanup', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
+  }
+}
+
+/**
  * Result interface for loading metadata from file.
  */
 export interface LoadMetadataResult {
@@ -662,8 +1119,18 @@ if (import.meta.main) {
     };
   }
 
-  // Run QA test
-  runQA(gameUrl, request)
+  // Check feature flag for adaptive mode
+  const flags = getFeatureFlags();
+  const useAdaptiveMode = flags.enableAdaptiveQA;
+
+  if (useAdaptiveMode) {
+    console.log('🚀 Running in Adaptive QA mode (iterative action loop)');
+  }
+
+  // Run QA test (adaptive or standard based on feature flag)
+  const qaFunction = useAdaptiveMode ? runAdaptiveQA : runQA;
+  
+  qaFunction(gameUrl, request)
     .then((result) => {
       // Print result as formatted JSON
       console.log('\n📊 QA Test Result:');

@@ -17,3 +17,6 @@ export { withTimeout, TimeoutError, TIMEOUTS } from './timeout';
 // Export file manager
 export { FileManager } from './file-manager';
 
+// Export adaptive QA helpers
+export * from './adaptive-qa';
+
