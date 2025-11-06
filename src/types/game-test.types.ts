@@ -245,13 +245,14 @@ export interface InputAxis {
  * - New format: `InputAction[]` or `InputAxis[]` (structured with key bindings)
  */
 export interface InputSchema {
-  /** Type of input schema: 'javascript' for executable JS snippets, 'semantic' for descriptions */
-  type: 'javascript' | 'semantic';
-  
-  /** 
+  /** Type of input schema: 'javascript' for executable JS snippets, 'semantic' for descriptions, 'mouse-only' for clicker games */
+  type: 'javascript' | 'semantic' | 'mouse-only';
+
+  /**
    * Content of the input schema.
    * - For 'javascript': Executable JavaScript snippet that defines input handling
    * - For 'semantic': Human-readable description of game controls
+   * - For 'mouse-only': Description of mouse interaction patterns
    */
   content: string;
   

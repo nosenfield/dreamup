@@ -755,6 +755,15 @@ export class GameInteractor {
       return this.simulateKeyboardInput(page, actualDuration);
     }
 
+    // Check if game is mouse-only (clicker/idle games)
+    const inputType = metadata.inputSchema?.type;
+    if (inputType === 'mouse-only') {
+      this.logger.info('Detected mouse-only game - using click simulation', {
+        clickStrategy: metadata.testingStrategy?.clickStrategy,
+      });
+      return this.simulateMouseClicks(page, metadata, actualDuration);
+    }
+
     // Parse metadata to extract actions and axes
     const parsed = this.inputSchemaParser.parse(metadata);
     const allKeys = this.inputSchemaParser.inferKeybindings(parsed.actions, parsed.axes);
@@ -906,6 +915,137 @@ export class GameInteractor {
 
     this.logger.debug('Metadata-driven keyboard simulation loop completed', {
       keysPressed: keyIndex,
+      duration: Date.now() - startTime,
+    });
+  }
+
+  /**
+   * Simulate mouse clicks for clicker/idle games.
+   *
+   * Uses metadata to determine click positions, frequency, and strategy.
+   * Supports random grid-based clicking for games with brick/tile grids.
+   *
+   * @param page - Stagehand Page object
+   * @param metadata - GameMetadata with testingStrategy and gridBounds
+   * @param duration - Duration in milliseconds
+   */
+  async simulateMouseClicks(
+    page: AnyPage,
+    metadata: GameMetadata,
+    duration: number
+  ): Promise<void> {
+    const pageAny = page as any;
+    const strategy = metadata.testingStrategy;
+    const clicksPerSecond = strategy?.clicksPerSecond ?? 2;
+    const gridBounds = strategy?.gridBounds;
+
+    this.logger.info('Starting mouse click simulation', {
+      duration,
+      clicksPerSecond,
+      clickStrategy: strategy?.clickStrategy,
+      hasGridBounds: !!gridBounds,
+    });
+
+    // Get viewport size for calculating click positions
+    const viewport = await pageAny.viewportSize();
+    if (!viewport) {
+      throw new Error('Failed to get viewport size');
+    }
+
+    // Calculate grid bounds from metadata or use defaults
+    const bounds = gridBounds ? {
+      x: viewport.width * gridBounds.xStart,
+      y: viewport.height * gridBounds.yStart,
+      width: viewport.width * gridBounds.width,
+      height: viewport.height * gridBounds.height,
+    } : {
+      // Default: center 60% x 80% of screen
+      x: viewport.width * 0.2,
+      y: viewport.height * 0.1,
+      width: viewport.width * 0.6,
+      height: viewport.height * 0.8,
+    };
+
+    this.logger.debug('Calculated click bounds', {
+      viewport: { width: viewport.width, height: viewport.height },
+      bounds,
+    });
+
+    const startTime = Date.now();
+    const delayBetweenClicks = 1000 / clicksPerSecond;
+    let clickCount = 0;
+
+    try {
+      await withTimeout(
+        this._performMouseClickSimulation(pageAny, bounds, duration, delayBetweenClicks),
+        this.interactionTimeout,
+        `Mouse click simulation timed out after ${this.interactionTimeout}ms`
+      );
+
+      this.logger.info('Mouse click simulation completed', {
+        duration: Date.now() - startTime,
+        clicksPerformed: Math.floor(duration / delayBetweenClicks),
+      });
+    } catch (error) {
+      this.logger.error('Mouse click simulation failed', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Internal method to perform mouse click simulation loop.
+   *
+   * @param page - Stagehand Page object (AnyPage type)
+   * @param bounds - Click area bounds { x, y, width, height }
+   * @param duration - Duration in milliseconds
+   * @param delayBetweenClicks - Delay between clicks in milliseconds
+   */
+  private async _performMouseClickSimulation(
+    page: any,
+    bounds: { x: number; y: number; width: number; height: number },
+    duration: number,
+    delayBetweenClicks: number
+  ): Promise<void> {
+    const startTime = Date.now();
+    let clickCount = 0;
+
+    while (Date.now() - startTime < duration) {
+      // Generate random position within bounds
+      const x = Math.floor(bounds.x + Math.random() * bounds.width);
+      const y = Math.floor(bounds.y + Math.random() * bounds.height);
+
+      try {
+        await this.clickAtCoordinates(page, x, y);
+        clickCount++;
+
+        this.logger.debug('Click performed', {
+          clickNumber: clickCount,
+          position: { x, y },
+        });
+      } catch (error) {
+        this.logger.warn('Click failed, continuing simulation', {
+          position: { x, y },
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with next click rather than failing entire simulation
+      }
+
+      // Wait before next click
+      const remainingTime = duration - (Date.now() - startTime);
+      if (remainingTime <= 0) {
+        break;
+      }
+
+      // Use smaller delay if we're near the end
+      const delay = Math.min(delayBetweenClicks, remainingTime);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    this.logger.debug('Mouse click simulation loop completed', {
+      clicksPerformed: clickCount,
       duration: Date.now() - startTime,
     });
   }

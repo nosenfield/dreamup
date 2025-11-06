@@ -222,7 +222,7 @@ export class VisionAnalyzer {
       // NOTE: AI SDK requires root schema to be an object, not an array
       // So we wrap the array in an object with an 'elements' property
       const result = await generateObject({
-        model: this.openai('gpt-4-turbo'),
+        model: this.openai('gpt-4o'),
         messages: [{ role: 'user' as const, content }],
         schema: z.object({
           elements: z.array(clickableElementSchema),
