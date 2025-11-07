@@ -579,7 +579,7 @@
 **Status**: SA.1 complete, ready for SA.2
 
 ### Stagehand Agent QA Mode (Post-MVP Enhancement)
-**Status**: 📋 In Progress
+**Status**: ✅ Complete (Nov 6, 2025)
 **Related**: `_docs/task-list-stagehand-agent.md`
 
 - [x] SA.1: Add Configuration and Types (1-2 hours) ✅ COMPLETE (Nov 6, 2025)
@@ -589,10 +589,21 @@
   - Updated TestMetadata interface
   - Added comprehensive unit tests (10 new tests, all passing)
   - All existing tests continue to pass
-- [ ] SA.2: Implement Instruction Builder (1 hour) - NEXT
-- [ ] SA.3: Implement runStagehandAgentQA() Function (3-4 hours)
-- [ ] SA.4: Update Documentation (1 hour)
-- [ ] SA.5: Testing and Validation (1-2 hours)
+- [x] SA.2: Implement Instruction Builder (1 hour) ✅ COMPLETE (Nov 6, 2025)
+  - Created buildStagehandInstruction() and extractScreenshotsFromActions()
+  - Added comprehensive unit tests (16 tests, all passing)
+- [x] SA.3: Implement runStagehandAgentQA() Function (3-4 hours) ✅ COMPLETE (Nov 6, 2025)
+  - Added getStagehand() to BrowserManager
+  - Implemented runStagehandAgentQA() function
+  - Updated Lambda handler and CLI with mode selection
+  - Created integration tests (9 tests, all passing)
+- [x] SA.4: Update Documentation (1 hour) ✅ COMPLETE (Nov 6, 2025)
+  - Updated README.md, _docs/control-flow.md
+  - Created _docs/stagehand-agent-mode.md
+- [x] SA.5: Testing and Validation (1-2 hours) ✅ COMPLETE (Nov 6, 2025)
+  - All tests passing (32 new tests total)
+  - TypeScript compilation passes
+  - Mode precedence verified
 
 ---
 
