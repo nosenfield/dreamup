@@ -23,6 +23,7 @@ export * from './adaptive-qa';
 // Export Stagehand Agent helpers
 export {
   buildStagehandInstruction,
+  buildStagehandSystemPrompt,
   extractScreenshotsFromActions,
 } from './stagehand-agent';
 

@@ -10,6 +10,61 @@
 import type { GameMetadata } from '../types/game-test.types.js';
 
 /**
+ * Builds system prompt for Stagehand agent from game metadata
+ *
+ * Generates a context-aware system prompt that adapts to the game type:
+ * - Canvas-based games: Emphasizes coordinate-based clicking and visual analysis
+ * - DOM-based games: Emphasizes element selection and interaction
+ * - Generic fallback: Standard QA testing prompt
+ *
+ * @param metadata - Optional game metadata for context
+ * @returns System prompt string for agent constructor
+ *
+ * @example
+ * // Canvas-based game
+ * const prompt = buildStagehandSystemPrompt(canvasMetadata);
+ * // "You are a QA tester for browser games. This is a canvas-based game where
+ * //  all content is rendered on HTML5 canvas. Use coordinate-based clicking
+ * //  on the canvas element, not DOM selectors..."
+ *
+ * @see https://docs.stagehand.dev/v3/basics/agent (agent system prompt format)
+ */
+export function buildStagehandSystemPrompt(metadata?: GameMetadata): string {
+  const basePrompt = 'You are a QA tester for browser games. Your goal is to test all functionality, try different controls, look for bugs, and explore the game thoroughly. Report any errors or unusual behavior you encounter.';
+
+  if (!metadata) {
+    return basePrompt;
+  }
+
+  // Check if this is a canvas-based game
+  const isCanvasBased = metadata.specialInstructions?.canvasBased === true ||
+    metadata.specialInstructions?.clickTargets?.some(t => t.type === 'canvas-coordinates' || t.target === 'canvas') ||
+    metadata.inputSchema?.actions?.some(a => 
+      typeof a === 'object' && (a.target === 'canvas-coordinates' || a.target === 'canvas-ui-area')
+    );
+
+  if (isCanvasBased) {
+    return `${basePrompt}
+
+IMPORTANT: This is a canvas-based game where all content (game elements, UI, buttons) is rendered on an HTML5 canvas element, NOT as DOM elements. 
+
+Key guidelines for canvas-based games:
+- Use coordinate-based clicking on the canvas element, not CSS selectors
+- Find the canvas element first, then click on coordinates within it
+- Visual feedback is critical - observe the canvas for changes after each action
+- Cannot use DOM element selectors (querySelector, getElementById) for game elements
+- All interactions must be coordinate-based within the canvas bounds
+- Use screenshot analysis to verify game state changes (currency, score, animations)
+- Click on coordinates where game elements are visually rendered, not where DOM elements might be`;
+  }
+
+  // DOM-based game (default)
+  return `${basePrompt}
+
+This game uses DOM elements for interaction. Use standard element selection methods (CSS selectors, text matching) to find and interact with game elements.`;
+}
+
+/**
  * Builds natural language instruction for Stagehand agent from game metadata
  *
  * Generates detailed QA testing instructions including:
