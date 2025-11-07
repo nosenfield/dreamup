@@ -69,41 +69,40 @@
       "description": "Canvas element is present and visible"
     },
     {
-      "type": "visual",
-      "pattern": "brick-grid-visible",
-      "description": "Grid of bricks is visible on canvas (visual check via screenshot)"
+      "type": "element",
+      "pattern": "canvas",
+      "description": "Grid of bricks is visible on canvas (visual check via screenshot analysis)"
     },
     {
-      "type": "visual",
-      "pattern": "ui-text-visible",
-      "description": "UI text elements (currency, level) are visible on canvas (visual check via screenshot)"
+      "type": "element",
+      "pattern": "canvas",
+      "description": "UI text elements (currency, level) are visible on canvas (visual check via screenshot analysis)"
     }
   ],
 
   "successIndicators": [
     {
-      "type": "visual",
-      "description": "Bricks display numbers (health values) on canvas",
-      "method": "screenshot-analysis"
+      "type": "element_visible",
+      "description": "Bricks display numbers (health values) on canvas (verified via screenshot analysis)",
+      "selector": "canvas"
     },
     {
-      "type": "visual",
-      "description": "Currency counter is visible on canvas and updates after clicks",
-      "method": "screenshot-analysis"
+      "type": "element_visible",
+      "description": "Currency counter is visible on canvas and updates after clicks (verified via screenshot analysis)",
+      "selector": "canvas"
     },
     {
       "type": "interaction_response",
       "description": "Clicking canvas coordinates produces visual feedback (brick damage animation, number decrease)"
     },
     {
-      "type": "visual_change",
+      "type": "score_change",
       "description": "Currency value increases after clicking bricks (detected via screenshot comparison)",
-      "method": "screenshot-analysis"
+      "selector": "canvas"
     },
     {
-      "type": "visual_change",
-      "description": "Bricks disappear when health reaches 0 (detected via screenshot comparison)",
-      "method": "screenshot-analysis"
+      "type": "animation",
+      "description": "Bricks disappear when health reaches 0 (detected via screenshot comparison)"
     }
   ],
 

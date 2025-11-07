@@ -19,7 +19,7 @@ import { TIMEOUTS, THRESHOLDS, STAGEHAND_AGENT_DEFAULTS } from './config/constan
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
 import { calculateEstimatedCost, mergeAdaptiveConfig } from './utils/adaptive-qa';
-import { buildStagehandInstruction, extractScreenshotsFromActions } from './utils/stagehand-agent';
+import { buildStagehandInstruction, buildStagehandSystemPrompt, extractScreenshotsFromActions } from './utils/stagehand-agent';
 import { withTimeout } from './utils/timeout';
 import { OpenRouterProvider } from './services/openrouter-provider';
 import { AISdkClient } from '@browserbasehq/stagehand';
@@ -1027,13 +1027,16 @@ export async function runStagehandAgentQA(
       );
     }
 
+    // 8.5. Build system prompt from metadata (canvas-aware)
+    const systemPrompt = buildStagehandSystemPrompt(metadata);
+
     // Create agent with CUA model name for validation
     // NOTE: When using AISdkClient, the actual model comes from llmClient,
     // but we need to pass model name for CUA validation
     const agent = stagehandInstance.agent({
       cua: true,  // Enable Computer Use Agent mode
       model: agentModel,  // Pass model name for CUA validation (actual model comes from llmClient)
-      systemPrompt: STAGEHAND_AGENT_DEFAULTS.SYSTEM_PROMPT,
+      systemPrompt,  // Use metadata-aware system prompt
     });
 
     logger.info('Stagehand agent created', {

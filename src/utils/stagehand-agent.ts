@@ -2,7 +2,7 @@
  * Stagehand Agent utility functions.
  *
  * Provides helper functions for working with Stagehand's autonomous agent,
- * including instruction building and screenshot extraction.
+ * including instruction building, system prompt building, and screenshot extraction.
  *
  * @module utils.stagehand-agent
  */
