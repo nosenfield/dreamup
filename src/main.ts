@@ -1159,7 +1159,10 @@ export async function runStagehandAgentQA(
       const mapped: any = {
         type: action.type || action.action || 'unknown',
         reasoning: action.reasoning || '',
-        completed: action.completed !== undefined ? action.completed : (action.taskCompleted || false),
+        // Only set completed if taskCompleted is explicitly provided by Stagehand
+        // taskCompleted indicates if the overall task was completed after this action
+        // If not provided, we don't set it (undefined) rather than defaulting to false
+        completed: action.completed !== undefined ? action.completed : (action.taskCompleted !== undefined ? action.taskCompleted : undefined),
         url: action.url || action.pageUrl || gameUrl,
         timestamp: action.timestamp || action.timeMs ? new Date(action.timeMs || Date.now()).toISOString() : new Date().toISOString(),
       };

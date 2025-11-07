@@ -168,8 +168,8 @@ export interface StagehandAgentAction {
   /** Agent's reasoning for taking this action */
   reasoning: string;
 
-  /** Whether agent considered task completed after this action */
-  completed: boolean;
+  /** Whether agent considered task completed after this action (only set if taskCompleted was provided by Stagehand) */
+  completed?: boolean;
 
   /** URL of page when action was taken */
   url: string;
