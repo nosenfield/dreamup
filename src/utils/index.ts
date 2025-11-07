@@ -20,3 +20,9 @@ export { FileManager } from './file-manager';
 // Export adaptive QA helpers
 export * from './adaptive-qa';
 
+// Export Stagehand Agent helpers
+export {
+  buildStagehandInstruction,
+  extractScreenshotsFromActions,
+} from './stagehand-agent';
+
