@@ -7,6 +7,42 @@
 
 ---
 
+## ⚠️ Important Changes from Review
+
+**Before starting implementation, note these critical modifications:**
+
+1. **Stagehand API Limitation** (Task OR.3):
+   - Stagehand does NOT support passing OpenRouter models directly to `agent()`
+   - Must use `AISdkClient` during Stagehand initialization, not per-agent configuration
+   - Model is configured at Stagehand level, not per-agent
+
+2. **BrowserManager Integration** (Task OR.2.5 - NEW):
+   - Added new prerequisite task: Update BrowserManager for LLM client support
+   - BrowserManager must accept optional `llmClient?: AISdkClient` parameter
+   - Stagehand initialized with `llmClient` when provided
+   - This is a required prerequisite before implementing Task OR.3
+
+3. **OpenRouterProvider Enhancement** (Task OR.2):
+   - Added `getAISdkModel()` method to return AI SDK model instance
+   - Added `getApiKey()` method for API key access
+   - Required for creating `AISdkClient` with OpenRouter model
+
+4. **Agent Configuration** (Task OR.3):
+   - Agent created WITHOUT `model` parameter when using `AISdkClient`
+   - Model comes from Stagehand's `llmClient` (configured at initialization)
+   - Execution model limitation: Stagehand doesn't support separate `executionModel` with `AISdkClient`
+
+5. **Timeline Update**:
+   - Original: 2-3 hours
+   - Updated: 3-4 hours (added BrowserManager modification time)
+
+6. **Architecture Correction**:
+   - Original plan assumed: `agent({ model: 'openrouter/model' })` ❌
+   - Correct approach: `new Stagehand({ llmClient: new AISdkClient({ model }) })` ✅
+   - Then: `agent({ cua: true, systemPrompt: '...' })` (no model parameter)
+
+---
+
 ## Overview
 
 This task list implements OpenRouter integration for the Stagehand Agent QA mode, enabling model flexibility and experimentation across multiple LLM providers (OpenAI, Anthropic, Google, etc.) through a single API.
@@ -32,6 +68,7 @@ This task list implements OpenRouter integration for the Stagehand Agent QA mode
 - **Migration**: OpenRouter required when `ENABLE_STAGEHAND_AGENT=true`
 - **Configuration**: Model selection via environment variables with sensible defaults
 - **Fallback**: If OpenRouter fails, log error and throw (no silent fallback to OpenAI)
+- **Architecture**: Uses `AISdkClient` during Stagehand initialization (not per-agent configuration)
 
 ### Model Configuration Strategy
 ```
