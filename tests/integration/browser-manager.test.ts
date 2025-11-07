@@ -21,6 +21,7 @@ const mockPage = {
 
 const mockStagehand = {
   init: mock(() => Promise.resolve()),
+  close: mock(() => Promise.resolve()),
   context: {
     pages: mock(() => [mockPage]),
     activePage: mock(() => mockPage),
@@ -56,6 +57,7 @@ describe('BrowserManager', () => {
     
     // Reset mocks
     mockStagehand.init.mockClear();
+    mockStagehand.close.mockClear();
     mockPage.goto.mockClear();
     mockPage.close.mockClear();
     stagehandConstructorArgs = [];
@@ -163,6 +165,7 @@ describe('BrowserManager', () => {
       await browserManager.cleanup();
 
       expect(mockPage.close).toHaveBeenCalledTimes(1);
+      expect(mockStagehand.close).toHaveBeenCalledTimes(1);
     });
 
     it('should handle cleanup errors gracefully', async () => {

@@ -304,9 +304,15 @@ export class BrowserManager {
     this.logger.info('Cleaning up browser session', {});
 
     try {
-      // Close the page
+      // Close the page first
       if (this.page) {
         await this.page.close();
+      }
+
+      // Close Stagehand instance (closes browser for LOCAL, disconnects for BROWSERBASE)
+      // This is especially important for LOCAL environment to close Chrome browser instance
+      if (this.stagehand) {
+        await this.stagehand.close();
       }
 
       // Reset state
