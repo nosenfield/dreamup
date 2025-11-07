@@ -1144,13 +1144,60 @@ export async function runStagehandAgentQA(
     const totalOutputTokens = (agentResult.usage?.output_tokens || 0) + (visionResult.usage?.completionTokens || 0);
 
     // Convert agent actions to our StagehandAgentAction format
-    const actions = (agentResult.actions || []).map((action: any) => ({
-      type: action.type || 'unknown',
-      reasoning: action.reasoning || '',
-      completed: action.completed !== undefined ? action.completed : (action.taskCompleted || false),
-      url: action.url || action.pageUrl || gameUrl,
-      timestamp: action.timestamp || new Date().toISOString(),
-    }));
+    // Log raw action structure for debugging (first click action)
+    const firstClickAction = agentResult.actions?.find((a: any) => a.type === 'click' || a.action === 'click');
+    if (firstClickAction) {
+      logger.debug('Raw click action structure', {
+        sessionId,
+        rawAction: JSON.stringify(firstClickAction, null, 2),
+        actionKeys: Object.keys(firstClickAction),
+      });
+    }
+
+    const actions = (agentResult.actions || []).map((action: any) => {
+      // Extract all available fields from Stagehand's action
+      const mapped: any = {
+        type: action.type || action.action || 'unknown',
+        reasoning: action.reasoning || '',
+        completed: action.completed !== undefined ? action.completed : (action.taskCompleted || false),
+        url: action.url || action.pageUrl || gameUrl,
+        timestamp: action.timestamp || action.timeMs ? new Date(action.timeMs || Date.now()).toISOString() : new Date().toISOString(),
+      };
+
+      // Capture click coordinates if available (check multiple possible field names)
+      if (mapped.type === 'click') {
+        if (action.coordinates) {
+          mapped.coordinates = action.coordinates;
+        } else if (action.x !== undefined && action.y !== undefined) {
+          mapped.coordinates = { x: action.x, y: action.y };
+        } else if (action.target && typeof action.target === 'object' && 'x' in action.target && 'y' in action.target) {
+          mapped.coordinates = { x: action.target.x, y: action.target.y };
+        } else if (action.position) {
+          mapped.coordinates = action.position;
+        }
+      }
+
+      // Capture any other execution details
+      if (action.element) mapped.element = action.element;
+      if (action.selector) mapped.selector = action.selector;
+      if (action.text) mapped.text = action.text;
+      if (action.key) mapped.key = action.key;
+      if (action.value) mapped.value = action.value;
+      if (action.pageText) mapped.pageText = action.pageText;
+      if (action.instruction) mapped.instruction = action.instruction;
+
+      // Preserve any other fields we might not know about
+      const knownFields = ['type', 'action', 'reasoning', 'completed', 'taskCompleted', 'url', 'pageUrl', 'timestamp', 'timeMs', 'coordinates', 'x', 'y', 'target', 'position', 'element', 'selector', 'text', 'key', 'value', 'pageText', 'instruction'];
+      const unknownFields = Object.keys(action).filter(k => !knownFields.includes(k));
+      if (unknownFields.length > 0) {
+        mapped._raw = {};
+        unknownFields.forEach(field => {
+          mapped._raw[field] = action[field];
+        });
+      }
+
+      return mapped;
+    });
 
     const result: GameTestResult = {
       status,
