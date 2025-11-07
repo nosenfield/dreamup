@@ -8,6 +8,38 @@
 
 ---
 
+## ⚠️ Important Changes from Review
+
+**Before starting implementation, note these critical modifications:**
+
+1. **BrowserManager Integration** (Task SA.3, Step 3.0):
+   - Must add `getStagehand()` method to `BrowserManager` class
+   - Access Stagehand instance via `browserManager.getStagehand()`, NOT via page object
+   - This is a required prerequisite before implementing `runStagehandAgentQA()`
+
+2. **Agent Configuration** (Task SA.3, Step 3.1):
+   - Verify exact `agent()` API format - model may be string OR AgentModelConfig
+   - API key handling may be via env var OR clientOptions - verify in Stagehand docs
+   - Current code shows string format with comment for alternative
+
+3. **Error Handling** (Task SA.3):
+   - Must ensure `browserManager` cleanup happens in catch block
+   - Declare `browserManager` variable outside try block for cleanup access
+
+4. **Lambda Handler** (Task SA.3, Step 3.2):
+   - Must update Lambda `handler()` function to support Stagehand Agent mode
+   - Follows same precedence: Stagehand > Adaptive > Standard
+
+5. **Type Reuse** (Task SA.1):
+   - Check if Stagehand exports `AgentAction` type before defining custom `StagehandAgentAction`
+   - May be able to import and reuse existing type
+
+6. **Cost Tracking** (Task SA.3):
+   - Aggregate agent usage tokens + vision analysis tokens
+   - Include totals in result metadata
+
+---
+
 ## Background & Context
 
 ### What is Stagehand Agent?
@@ -144,12 +176,19 @@ export function getFeatureFlags(): FeatureFlags {
 
 Add new interfaces for Stagehand agent metadata:
 
+**Note**: Check if Stagehand exports `AgentAction` type that we can reuse. If it matches our needs, import and use it instead of defining a custom type.
+
 ```typescript
+// First, check if we can import from Stagehand:
+// import type { AgentAction } from '@browserbasehq/stagehand';
+// If AgentAction from Stagehand matches, use it directly
+
 /**
  * Action taken by Stagehand agent during autonomous execution
  * Returned in AgentResult.actions array
  *
  * @see https://docs.stagehand.dev/v3/references/agent
+ * @see node_modules/@browserbasehq/stagehand/dist/index.d.ts (check for AgentAction export)
  */
 export interface StagehandAgentAction {
   /** Type of action performed (e.g., 'click', 'type', 'navigate') */
@@ -372,6 +411,12 @@ test('enableStagehandAgent reads from environment', () => {
 - `src/types/index.ts`
 - `tests/unit/feature-flags.test.ts`
 
+**Pre-Implementation Verification**:
+Before starting implementation, verify:
+1. Check if `AgentAction` type exists in Stagehand exports: `grep -r "AgentAction" node_modules/@browserbasehq/stagehand/dist/index.d.ts`
+2. Verify agent API format: Check `agent()` method signature and `AgentConfig` type
+3. Verify API key handling: Check if it's via env var or needs to be passed in config
+
 **Tests to Run**:
 ```bash
 bun test tests/unit/stagehand-agent-types.test.ts
@@ -478,15 +523,18 @@ export function buildStagehandInstruction(metadata?: GameMetadata): string {
  * Stagehand documentation, actions likely do NOT include screenshots,
  * but this function provides forward compatibility if API changes.
  *
+ * NOTE: Current Stagehand API (v3) does NOT include screenshots in actions.
+ * This function provides forward compatibility if future versions add this.
+ * For now, always returns empty array - screenshots must be captured manually.
+ *
  * @param actions - Array of agent actions from AgentResult
  * @returns Array of screenshot file paths (likely empty with current API)
  *
  * @see https://docs.stagehand.dev/v3/references/agent (AgentAction structure)
  */
 export function extractScreenshotsFromActions(actions: any[]): string[] {
-  // TODO: Check if actions have screenshot field
   // Current API returns: { type, reasoning, completed, url, timestamp }
-  // No screenshot field documented
+  // No screenshot field documented - this is forward compatibility only
 
   const screenshots: string[] = [];
 
@@ -722,6 +770,12 @@ describe('extractScreenshotsFromActions', () => {
 **Files to Modify**:
 - `src/utils/index.ts`
 
+**Edge Cases to Test**:
+- Empty arrays for actions/axes in metadata
+- Very long instruction strings (should log warning if > 500 chars)
+- Special characters in control names
+- Missing testingStrategy.goals (should use defaults)
+
 **Tests to Run**:
 ```bash
 bun test tests/unit/stagehand-agent.test.ts
@@ -743,10 +797,30 @@ bunx tsc --noEmit
 - [ ] Returns GameTestResult with agent action history
 - [ ] Respects MAX_TEST_DURATION timeout
 - [ ] Handles errors gracefully (returns error result, no fallback)
-- [ ] Cleans up browser session in finally block
+- [ ] Cleans up browser session even on errors
 - [ ] Integration tests pass
 
 #### Implementation Steps
+
+**3.0: Add getStagehand() method to BrowserManager**
+
+Add a getter method to expose the Stagehand instance:
+
+**Update `src/core/browser-manager.ts`**:
+
+```typescript
+/**
+ * Get the Stagehand instance.
+ * 
+ * Returns the Stagehand instance if browser is initialized,
+ * or null if not initialized. Used for accessing agent API.
+ * 
+ * @returns Stagehand instance or null
+ */
+getStagehand(): Stagehand | null {
+  return this.stagehand;
+}
+```
 
 **3.1: Update `src/main.ts` - Add runStagehandAgentQA() function**
 
@@ -787,6 +861,7 @@ export async function runStagehandAgentQA(
   const sessionId = nanoid();
   const startTime = Date.now();
   const logger = new Logger();
+  let browserManager: BrowserManager | null = null;
 
   logger.info('Starting Stagehand Agent QA', {
     sessionId,
@@ -802,9 +877,10 @@ export async function runStagehandAgentQA(
 
     // 2. Initialize browser
     const fileManager = new FileManager({ logger, sessionId });
-    const browserManager = new BrowserManager({
+    browserManager = new BrowserManager({
+      apiKey: process.env.BROWSERBASE_API_KEY!,
+      projectId: process.env.BROWSERBASE_PROJECT_ID!,
       logger,
-      config: config || {}
     });
 
     const page = await withTimeout(
@@ -850,21 +926,29 @@ export async function runStagehandAgentQA(
     logger.info('Error monitoring started', { sessionId });
 
     // 7. Create Stagehand agent
-    // Access stagehand instance from page (Stagehand v3 API)
-    // Page is created by stagehand.context.pages()[0], so we can access stagehand via page
-    const stagehandInstance = (page as any).context?._stagehand || (page as any)._stagehand;
+    // Access Stagehand instance from BrowserManager (not from page)
+    const stagehandInstance = browserManager.getStagehand();
 
     if (!stagehandInstance) {
-      throw new Error('Unable to access Stagehand instance from page. Ensure BrowserManager is using Stagehand v3.');
+      throw new Error(
+        'Stagehand instance not available. ' +
+        'Ensure BrowserManager.initialize() was called successfully. ' +
+        'This may indicate a Browserbase connection issue.'
+      );
     }
 
+    // Create agent with CUA mode enabled
+    // Note: API key is handled via OPENAI_API_KEY environment variable
+    // Verify exact model config format in Stagehand docs - may be string or AgentModelConfig
     const agent = stagehandInstance.agent({
       cua: true,  // Enable Computer Use Agent mode
-      model: {
-        modelName: STAGEHAND_AGENT_DEFAULTS.MODEL,
-        apiKey: process.env.OPENAI_API_KEY,
-      },
+      model: STAGEHAND_AGENT_DEFAULTS.MODEL,  // String format (verify in Stagehand docs)
       systemPrompt: STAGEHAND_AGENT_DEFAULTS.SYSTEM_PROMPT,
+      // If AgentModelConfig format needed, use:
+      // model: {
+      //   modelName: STAGEHAND_AGENT_DEFAULTS.MODEL,
+      //   apiKey: process.env.OPENAI_API_KEY,  // Only if supported
+      // },
     });
 
     logger.info('Stagehand agent created', {
@@ -961,6 +1045,10 @@ export async function runStagehandAgentQA(
       : 'fail';
 
     // 15. Build result with agent metadata
+    // Aggregate costs: agent usage + vision analysis tokens
+    const totalInputTokens = (agentResult.usage?.input_tokens || 0) + (visionResult.usage?.promptTokens || 0);
+    const totalOutputTokens = (agentResult.usage?.output_tokens || 0) + (visionResult.usage?.completionTokens || 0);
+
     const result: GameTestResult = {
       status,
       playability_score: visionResult.playability_score,
@@ -980,12 +1068,17 @@ export async function runStagehandAgentQA(
           actionCount: agentResult.actions?.length || 0,
           actions: agentResult.actions || [],
           message: agentResult.message,
-          usage: agentResult.usage,
+          usage: {
+            ...agentResult.usage,
+            // Add aggregated totals if needed
+            totalInputTokens,
+            totalOutputTokens,
+          },
         },
       },
     };
 
-    // 16. Cleanup
+    // 16. Cleanup (always runs, even on errors)
     await browserManager.cleanup();
 
     logger.info('Stagehand Agent QA completed', {
@@ -1002,6 +1095,18 @@ export async function runStagehandAgentQA(
       sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
+
+    // Ensure cleanup happens even on error
+    try {
+      if (browserManager) {
+        await browserManager.cleanup();
+      }
+    } catch (cleanupError) {
+      logger.warn('Error during cleanup after failure', {
+        sessionId,
+        cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
+    }
 
     // Return error result (no fallback to other modes)
     return {
@@ -1026,7 +1131,45 @@ export async function runStagehandAgentQA(
 }
 ```
 
-**3.2: Update CLI entry point with mode precedence**
+**3.2: Update Lambda handler to support Stagehand Agent mode**
+
+Update the `handler()` function in `src/main.ts` to check for Stagehand Agent flag.
+
+**Find the section where `runQA()` is called** (around line 1042) and replace with mode selection:
+
+```typescript
+// Prepare request object (handle both metadata and inputSchema)
+const request: Partial<GameTestRequest> = {
+  config: event.config,
+};
+
+// Prioritize metadata over inputSchema (backwards compatibility)
+let metadata: GameMetadata | undefined;
+if (event.metadata) {
+  request.metadata = event.metadata;
+  metadata = event.metadata;
+} else if (event.inputSchema) {
+  // Backwards compatibility: convert inputSchema to metadata
+  request.inputSchema = event.inputSchema;
+  // Note: metadata will be undefined, runQA will handle conversion internally
+}
+
+// Select QA mode based on feature flags (PRECEDENCE: Stagehand > Adaptive > Standard)
+const flags = getFeatureFlags();
+let result: GameTestResult;
+
+if (flags.enableStagehandAgent) {
+  result = await runStagehandAgentQA(event.gameUrl, metadata);
+} else if (flags.enableAdaptiveQA) {
+  result = await runAdaptiveQA(event.gameUrl, metadata);
+} else {
+  result = await runQA(event.gameUrl, request);
+}
+```
+
+**Note**: The Lambda handler already handles metadata/inputSchema conversion. We extract `metadata` separately for the new functions that accept it directly, while `runQA()` still uses the `request` object format.
+
+**3.3: Update CLI entry point with mode precedence**
 
 Update the CLI entry point in `src/main.ts` to respect Stagehand Agent > Adaptive > Standard precedence:
 
@@ -1075,7 +1218,7 @@ if (import.meta.main) {
 }
 ```
 
-**3.3: Create integration tests**
+**3.4: Create integration tests**
 
 Create `tests/integration/stagehand-agent.test.ts`:
 
@@ -1221,18 +1364,33 @@ describe('CLI Mode Selection', () => {
 ```
 
 **Files to Modify**:
-- `src/main.ts` (add `runStagehandAgentQA()`, update CLI entry point)
+- `src/core/browser-manager.ts` (add `getStagehand()` method)
+- `src/main.ts` (add `runStagehandAgentQA()`, update CLI entry point, update Lambda handler)
 
 **Files to Create**:
 - `tests/integration/stagehand-agent.test.ts`
 
 **Tests to Run**:
 ```bash
+# Test BrowserManager getStagehand() method
+bun test tests/unit/browser-manager.test.ts
+
+# Integration tests
 bun test tests/integration/stagehand-agent.test.ts
+
+# Type checking
 bunx tsc --noEmit
 ```
 
 **Note**: Full integration tests require extensive mocking of Stagehand agent API. Initial tests focus on function signatures and basic validation. Real E2E tests should be done manually with actual games.
+
+**Verification Checklist**:
+- [ ] `getStagehand()` returns Stagehand instance after initialization
+- [ ] `getStagehand()` returns null before initialization
+- [ ] Agent configuration uses correct API format (verify with Stagehand docs)
+- [ ] API key is accessible (via env var or clientOptions - verify which)
+- [ ] Error handling includes cleanup in catch block
+- [ ] Cost tracking aggregates agent + vision tokens
 
 ---
 
