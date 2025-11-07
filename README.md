@@ -287,6 +287,114 @@ Feature flags control optional behavior:
 | `ENABLE_PROGRESS_UPDATES` | `false` | Enable real-time progress updates (future feature) |
 | `ENABLE_ERROR_RECOVERY` | `false` | Enable error recovery with retries (future feature) |
 | `ENABLE_SCREENSHOT_CLEANUP` | `false` | Enable automatic screenshot cleanup after test |
+| `ENABLE_STAGEHAND_AGENT` | `false` | Enable Stagehand Agent QA mode (autonomous, takes precedence over Adaptive QA) |
+| `ENABLE_ADAPTIVE_QA` | `false` | Enable Adaptive QA mode (iterative action loop) |
+
+### QA Modes
+
+DreamUp supports three QA testing modes with different capabilities:
+
+#### Standard QA Mode (Default)
+
+Single interaction cycle with fixed inputs. Best for quick validation of simple games.
+
+**Characteristics:**
+- Single interaction cycle
+- Fixed input sequence
+- Duration: 2-4 minutes
+- Cost: $0.02-0.05 (vision API only)
+- Use when: Quick validation, simple games
+
+#### Adaptive QA Mode
+
+Iterative action loop with state analysis at each step. Best for complex games requiring multi-step navigation.
+
+**Enable:**
+```bash
+ENABLE_ADAPTIVE_QA=true
+```
+
+**Characteristics:**
+- Manual loop management
+- State analysis each step (HTML + screenshot)
+- Action decisions via StateAnalyzer + GPT-4V
+- Duration: 2-4 minutes
+- Cost: $0.10-0.50 (multiple vision calls)
+- Use when: Complex games, custom loop logic
+
+**See `_docs/control-flow.md` for detailed flow.**
+
+#### Stagehand Agent QA Mode (Autonomous)
+
+**Fully autonomous mode using Stagehand's agent with OpenAI computer-use-preview model.**
+
+The agent handles the observe-act loop internally without manual state management. Simply provide a high-level instruction and the agent explores the game autonomously.
+
+**Enable:**
+```bash
+ENABLE_STAGEHAND_AGENT=true
+```
+
+**Requirements:**
+- `OPENAI_API_KEY` environment variable
+- OpenAI computer-use-preview model access
+
+**How it works:**
+1. Agent receives metadata-driven instruction (e.g., "Test this arcade game. Expected controls: Pause, Movement. Play for 2 minutes.")
+2. Agent autonomously navigates game using computer vision
+3. Agent takes up to 25 actions (configurable in constants)
+4. Final screenshot captured for playability analysis
+5. Result includes agent action history and reasoning
+
+**Configuration:**
+- Max steps: 25 (hardcoded in `STAGEHAND_AGENT_DEFAULTS.MAX_STEPS`)
+- Timeout: 4 minutes (uses `MAX_TEST_DURATION`)
+- Model: `openai/computer-use-preview`
+
+**Cost**: TBD (depends on action count and token usage)
+
+**Use when:**
+- You want fully autonomous testing without manual loop management
+- Game requires complex multi-step interactions
+- You have OpenAI API access with computer-use-preview
+
+**Example:**
+```bash
+ENABLE_STAGEHAND_AGENT=true bun run src/main.ts https://example.com/game --metadata ./game/metadata.json
+```
+
+**Result includes:**
+```json
+{
+  "metadata": {
+    "stagehandAgent": {
+      "success": true,
+      "completed": true,
+      "actionCount": 12,
+      "actions": [
+        {
+          "type": "click",
+          "reasoning": "Clicking start button to begin game",
+          "completed": false,
+          "url": "https://example.com/game",
+          "timestamp": "2025-01-01T00:00:00Z"
+        }
+      ],
+      "message": "Successfully tested game functionality",
+      "usage": {
+        "input_tokens": 5000,
+        "output_tokens": 1500,
+        "inference_time_ms": 8000
+      }
+    }
+  }
+}
+```
+
+**Mode Precedence:**
+1. Stagehand Agent (if `ENABLE_STAGEHAND_AGENT=true`)
+2. Adaptive QA (if `ENABLE_ADAPTIVE_QA=true`)
+3. Standard QA (default)
 
 ### Timeouts
 
