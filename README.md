@@ -465,6 +465,12 @@ OpenRouter provides transparent per-token pricing. Monitor usage at: https://ope
 - **Solution**: Use OpenAI models instead (e.g., `openai/computer-use-preview`)
 - Check Google Cloud Console for API access requirements
 
+**Error: "To use the computer use agent, please provide a CUA model"**
+- The model specified in `STAGEHAND_AGENT_MODEL` is not a supported CUA model
+- **Solution**: Use a CUA model (e.g., `openai/computer-use-preview`)
+- Check your `.env` file - ensure `STAGEHAND_AGENT_MODEL` is set to a CUA model
+- Command-line `STAGEHAND_AGENT_MODEL` overrides `.env` file value
+
 ### Timeouts
 
 Default timeout values (all in milliseconds):
