@@ -1027,8 +1027,16 @@ export async function runStagehandAgentQA(
       );
     }
 
-    // 8.5. Build system prompt from metadata (canvas-aware)
+    // 8.5. Build minimal system prompt (role definition only)
     const systemPrompt = buildStagehandSystemPrompt(metadata);
+
+    logger.info('Building Stagehand agent system prompt', {
+      sessionId,
+      systemPromptLength: systemPrompt.length,
+      systemPromptPreview: systemPrompt.substring(0, 150) + '...',
+      hasMetadata: !!metadata,
+      when: 'BEFORE agent creation',
+    });
 
     // Create agent with CUA model name for validation
     // NOTE: When using AISdkClient, the actual model comes from llmClient,
@@ -1036,28 +1044,61 @@ export async function runStagehandAgentQA(
     const agent = stagehandInstance.agent({
       cua: true,  // Enable Computer Use Agent mode
       model: agentModel,  // Pass model name for CUA validation (actual model comes from llmClient)
-      systemPrompt,  // Use metadata-aware system prompt
+      systemPrompt,  // Minimal role definition only
     });
 
     logger.info('Stagehand agent created', {
       sessionId,
       agentModel,  // Log which model is being used
+      systemPromptLength: systemPrompt.length,
       note: 'Model configured via AISdkClient at Stagehand initialization',
+      when: 'AFTER agent creation',
     });
 
-    // 9. Build instruction from metadata
+    // 9. Build comprehensive instruction from metadata (ALL game-specific context)
     const instruction = buildStagehandInstruction(metadata);
 
-    logger.info('Agent instruction built', {
+    logger.info('Building Stagehand agent instruction', {
       sessionId,
-      instruction: instruction.substring(0, 100) + '...',  // Log first 100 chars
+      instructionLength: instruction.length,
+      instructionPreview: instruction.substring(0, 200) + '...',
       hasMetadata: !!metadata,
+      when: 'BEFORE agent execution',
+    });
+
+    // Log full instruction for debugging (truncated if too long)
+    logger.debug('Full agent instruction', {
+      sessionId,
+      instruction: instruction.length > 5000 
+        ? instruction.substring(0, 5000) + `\n... (truncated, total length: ${instruction.length} characters)`
+        : instruction,
+      instructionLength: instruction.length,
+      when: 'BEFORE agent execution',
     });
 
     // 10. Execute agent with timeout
+    logger.info('Passing instruction to agent.execute()', {
+      sessionId,
+      instructionLength: instruction.length,
+      maxSteps: STAGEHAND_AGENT_DEFAULTS.MAX_STEPS,
+      highlightCursor: STAGEHAND_AGENT_DEFAULTS.HIGHLIGHT_CURSOR,
+      when: 'BEFORE agent.execute() call',
+    });
+
+    // Log the actual instruction being passed (truncated if too long)
+    logger.debug('Instruction being passed to agent.execute()', {
+      sessionId,
+      instruction: instruction.length > 5000 
+        ? instruction.substring(0, 5000) + `\n... (truncated, total length: ${instruction.length} characters)`
+        : instruction,
+      instructionLength: instruction.length,
+      when: 'BEFORE agent.execute() call',
+    });
+
     logger.info('Starting agent execution', {
       sessionId,
       maxSteps: STAGEHAND_AGENT_DEFAULTS.MAX_STEPS,
+      when: 'CALLING agent.execute()',
     });
 
     const agentResult = await withTimeout(

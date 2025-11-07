@@ -17,18 +17,25 @@
         "description": "Click on coordinates within the canvas where bricks are rendered (center grid area, approximately 20-80% width, 15-90% height of viewport)"
       },
       {
+        "name": "BuyBall",
+        "keys": [],
+        "mouseAction": "click",
+        "target": "canvas-coordinates",
+        "description": "Click on the Buy Ball button area within the canvas (typically top-left area)"
+      },
+      {
         "name": "OpenUpgrades",
         "keys": [],
         "mouseAction": "click",
         "target": "canvas-ui-area",
-        "description": "Click on the upgrades/shop button area within the canvas (typically top-center-right area)"
+        "description": "Click on the Upgrades/Shop button area within the canvas (typically top-center-right area)"
       },
       {
         "name": "OpenSettings",
         "keys": [],
         "mouseAction": "click",
         "target": "canvas-ui-area",
-        "description": "Click on the settings icon area within the canvas (typically top-right corner)"
+        "description": "Click on the Settings icon area within the canvas (typically top-right corner)"
       }
     ],
     "axes": []

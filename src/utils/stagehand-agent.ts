@@ -10,83 +10,61 @@
 import type { GameMetadata } from '../types/game-test.types.js';
 
 /**
- * Builds system prompt for Stagehand agent from game metadata
+ * Builds minimal system prompt for Stagehand agent
  *
- * Generates a context-aware system prompt that adapts to the game type:
- * - Canvas-based games: Emphasizes coordinate-based clicking and visual analysis
- * - DOM-based games: Emphasizes element selection and interaction
- * - Generic fallback: Standard QA testing prompt
+ * The system prompt provides only the core role definition. All game-specific
+ * context (game goal, starting goal, controls, interaction method, etc.) is
+ * included in the instruction (buildStagehandInstruction) to avoid duplication
+ * and ensure all context is available in one place.
  *
- * @param metadata - Optional game metadata for context
- * @returns System prompt string for agent constructor
+ * @param metadata - Optional game metadata (currently unused, kept for API consistency)
+ * @returns Minimal system prompt string with role definition only
  *
  * @example
- * // Canvas-based game
- * const prompt = buildStagehandSystemPrompt(canvasMetadata);
- * // "You are a QA tester for browser games. This is a canvas-based game where
- * //  all content is rendered on HTML5 canvas. Use coordinate-based clicking
- * //  on the canvas element, not DOM selectors..."
+ * const prompt = buildStagehandSystemPrompt();
+ * // "You are a QA tester for browser games. Your goal is to test all functionality,
+ * //  try different controls, look for bugs, and explore the game thoroughly.
+ * //  Report any errors or unusual behavior you encounter."
  *
  * @see https://docs.stagehand.dev/v3/basics/agent (agent system prompt format)
  */
-export function buildStagehandSystemPrompt(metadata?: GameMetadata): string {
-  const basePrompt = 'You are a QA tester for browser games. Your goal is to test all functionality, try different controls, look for bugs, and explore the game thoroughly. Report any errors or unusual behavior you encounter.';
-
-  if (!metadata) {
-    return basePrompt;
-  }
-
-  // Check if this is a canvas-based game
-  // Check multiple indicators to be robust
-  const hasCanvasBasedFlag = metadata.specialInstructions?.canvasBased === true;
-  const hasCanvasClickTargets = metadata.specialInstructions?.clickTargets?.some(t => 
-    t.type === 'canvas-coordinates' || t.target === 'canvas'
-  ) ?? false;
-  const hasCanvasActions = metadata.inputSchema?.actions?.some(a => 
-    typeof a === 'object' && (a.target === 'canvas-coordinates' || a.target === 'canvas-ui-area')
-  ) ?? false;
-  
-  const isCanvasBased = hasCanvasBasedFlag || hasCanvasClickTargets || hasCanvasActions;
-
-  if (isCanvasBased) {
-    return `${basePrompt}
-
-IMPORTANT: This is a canvas-based game where all content (game elements, UI, buttons) is rendered on an HTML5 canvas element, NOT as DOM elements. 
-
-Key guidelines for canvas-based games:
-- Use coordinate-based clicking on the canvas element, not CSS selectors
-- Find the canvas element first, then click on coordinates within it
-- Visual feedback is critical - observe the canvas for changes after each action
-- Cannot use DOM element selectors (querySelector, getElementById) for game elements
-- All interactions must be coordinate-based within the canvas bounds
-- Use screenshot analysis to verify game state changes (currency, score, animations)
-- Click on coordinates where game elements are visually rendered, not where DOM elements might be`;
-  }
-
-  // DOM-based game (default)
-  return `${basePrompt}
-
-This game uses DOM elements for interaction. Use standard element selection methods (CSS selectors, text matching) to find and interact with game elements.`;
+export function buildStagehandSystemPrompt(_metadata?: GameMetadata): string {
+  // Minimal role definition only - all game-specific context goes in instruction
+  // Metadata parameter is kept for API consistency but not used
+  return 'You are a QA tester for browser games. Your goal is to test all functionality, try different controls, look for bugs, and explore the game thoroughly. Report any errors or unusual behavior you encounter.';
 }
 
 /**
- * Builds natural language instruction for Stagehand agent from game metadata
+ * Builds comprehensive instruction for Stagehand agent from game metadata
  *
- * Generates detailed QA testing instructions including:
- * - Game genre and type
- * - Expected controls (from InputSchema)
- * - Testing objectives (from testingStrategy.instructions or defaults)
- * - Time-based completion criteria
+ * This instruction contains ALL game-specific context needed for testing:
+ * - Game goal (description)
+ * - Starting goal (testing strategy instructions)
+ * - Available controls (input schema)
+ * - Interaction method (canvas vs DOM)
+ * - Special instructions (click targets, bounds, frequency, expected behavior)
+ * - Success indicators (what to look for)
+ * - Validation checks (what to verify)
+ * - Important notes (critical context)
+ * - Areas to avoid clicking
+ *
+ * All context is in one place (the instruction) to avoid duplication with
+ * the system prompt, which only contains the minimal role definition.
  *
  * @param metadata - Optional game metadata for context
- * @returns Natural language instruction string for agent.execute()
+ * @returns Comprehensive instruction string for agent.execute()
  *
  * @example
- * // With metadata
- * const instruction = buildStagehandInstruction(pongMetadata);
- * // "Test this arcade game. Expected controls: Pause, RightPaddleVertical.
- * //  Your objectives: Start the game; Test paddle controls; Score at least one point.
- * //  Play for about 2 minutes or until you reach a clear completion point."
+ * // With full metadata
+ * const instruction = buildStagehandInstruction(canvasMetadata);
+ * // "Test this idle-clicker game. Game goal: Click-based idle game where you...
+ * //  Starting goal: Start the game; Test brick clicking; Verify currency increases.
+ * //  Available controls: ClickBrick, OpenUpgrades, OpenSettings.
+ * //  IMPORTANT: This is a canvas-based game...
+ * //  Click targets: Find canvas element, click within bounds (20-80% width, 15-90% height)...
+ * //  Expected behavior: When clicking, you should see brick damage animation...
+ * //  Success indicators: Currency increases, bricks disappear when health reaches 0...
+ * //  Validation checks: Verify currency increases, verify brick health decreases..."
  *
  * // Without metadata (fallback)
  * const instruction = buildStagehandInstruction();
@@ -101,136 +79,190 @@ export function buildStagehandInstruction(metadata?: GameMetadata): string {
     return 'Play this browser game and test basic functionality. Try different controls and interactions. Look for any errors or unusual behavior. Play for about 2 minutes or until you reach a clear stopping point.';
   }
 
-  // Extract genre
+  const sections: string[] = [];
+
+  // 1. Game Goal (description)
   const genre = metadata.genre || 'browser game';
+  if (metadata.description) {
+    sections.push(`Game Goal: Test this ${genre} game. ${metadata.description}`);
+  } else {
+    sections.push(`Game Goal: Test this ${genre} game.`);
+  }
 
-  // Extract controls from InputSchema
+  // 2. Starting Goal (testing strategy instructions)
+  if (metadata.testingStrategy?.instructions) {
+    const goals = metadata.testingStrategy.instructions
+      .split(';')
+      .map(g => g.trim())
+      .filter(g => g.length > 0);
+    sections.push(`Starting Goal: ${goals.join('; ')}.`);
+  } else {
+    const defaultGoals = [
+      'Start the game',
+      'Test basic controls',
+      'Try to progress through gameplay',
+    ];
+    sections.push(`Starting Goal: ${defaultGoals.join('; ')}.`);
+  }
+
+  // 3. Available Controls (input schema)
   const controls: string[] = [];
-
   if (metadata.inputSchema?.actions) {
     const actionNames = metadata.inputSchema.actions.map(action =>
       typeof action === 'string' ? action : action.name
     );
     controls.push(...actionNames);
   }
-
   if (metadata.inputSchema?.axes) {
     const axisNames = metadata.inputSchema.axes.map(axis =>
       typeof axis === 'string' ? axis : axis.name
     );
     controls.push(...axisNames);
   }
-
-  const controlsText = controls.length > 0
-    ? `Expected controls: ${controls.join(', ')}. `
-    : '';
-
-  // Extract testing objectives from testingStrategy
-  // Note: TestingStrategy has `instructions` (string), not `goals` (string[])
-  // If instructions exist, split by semicolon; otherwise use defaults
-  let objectivesText: string;
-  if (metadata.testingStrategy?.instructions) {
-    // Split instructions by semicolon and clean up whitespace
-    const goals = metadata.testingStrategy.instructions
-      .split(';')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-    objectivesText = `Your objectives: ${goals.join('; ')}.`;
-  } else {
-    // Default objectives
-    const defaultGoals = [
-      'Start the game',
-      'Test basic controls',
-      'Try to progress through gameplay',
-    ];
-    objectivesText = `Your objectives: ${defaultGoals.join('; ')}.`;
+  if (controls.length > 0) {
+    sections.push(`Available Controls: ${controls.join(', ')}.`);
+  } else if (metadata.expectedControls) {
+    sections.push(`Available Controls: ${metadata.expectedControls}.`);
   }
 
-  // Add special instructions if available (more detailed guidance)
-  let specialInstructionsText = '';
+  // 4. Interaction Method (canvas vs DOM)
+  const hasCanvasBasedFlag = metadata.specialInstructions?.canvasBased === true;
+  const hasCanvasClickTargets = metadata.specialInstructions?.clickTargets?.some(t => 
+    t.type === 'canvas-coordinates' || t.target === 'canvas'
+  ) ?? false;
+  // Check if actions have 'target' property (extended property not in InputAction interface)
+  const hasCanvasActions = metadata.inputSchema?.actions?.some(a => {
+    if (typeof a === 'object' && a !== null && 'target' in a) {
+      const target = (a as { target?: string }).target;
+      return target === 'canvas-coordinates' || target === 'canvas-ui-area';
+    }
+    return false;
+  }) ?? false;
+  const isCanvasBased = hasCanvasBasedFlag || hasCanvasClickTargets || hasCanvasActions;
+
+  if (isCanvasBased) {
+    sections.push('\nIMPORTANT: This is a canvas-based game where all content (game elements, UI, buttons) is rendered on an HTML5 canvas element, NOT as DOM elements.');
+    sections.push('Key guidelines for canvas-based games:');
+    sections.push('- Use coordinate-based clicking on the canvas element, not CSS selectors');
+    sections.push('- Find the canvas element first, then click on coordinates within it');
+    sections.push('- Visual feedback is critical - observe the canvas for changes after each action');
+    sections.push('- Cannot use DOM element selectors (querySelector, getElementById) for game elements');
+    sections.push('- All interactions must be coordinate-based within the canvas bounds');
+    sections.push('- Use screenshot analysis to verify game state changes (currency, score, animations)');
+    sections.push('- Click on coordinates where game elements are visually rendered, not where DOM elements might be');
+  } else {
+    sections.push('\nThis game uses DOM elements for interaction. Use standard element selection methods (CSS selectors, text matching) to find and interact with game elements.');
+  }
+
+  // 5. Special Instructions - Click Targets and Interaction Details
   if (metadata.specialInstructions) {
     const si = metadata.specialInstructions;
-    const parts: string[] = [];
-
-    // Add click targets/strategy
+    
     if (si.clickTargets && Array.isArray(si.clickTargets) && si.clickTargets.length > 0) {
       const target = si.clickTargets[0];
+      sections.push('\nClick Targets and Strategy:');
       
-      // Handle canvas-based games differently
-      if (si.canvasBased || target.type === 'canvas-coordinates' || target.target === 'canvas') {
-        parts.push(`This is a canvas-based game - all content is rendered on an HTML5 canvas element, not as DOM elements`);
-        parts.push(`Find the canvas element, then click on coordinates within the canvas where game elements are rendered`);
-        if (target.bounds) {
-          parts.push(`Click within canvas bounds: ${target.bounds.description || 'center grid area'}`);
-          if (target.bounds.xPercent) {
-            parts.push(`X coordinates: ${target.bounds.xPercent}`);
-          }
-          if (target.bounds.yPercent) {
-            parts.push(`Y coordinates: ${target.bounds.yPercent}`);
-          }
+      if (target.instructions) {
+        sections.push(`- ${target.instructions}`);
+      }
+      
+      if (target.bounds) {
+        const boundsDesc = target.bounds.description || 'center grid area';
+        sections.push(`- Click within bounds: ${boundsDesc}`);
+        if (target.bounds.xPercent) {
+          sections.push(`  X coordinates: ${target.bounds.xPercent}`);
         }
-        if (target.instructions) {
-          parts.push(target.instructions);
+        if (target.bounds.yPercent) {
+          sections.push(`  Y coordinates: ${target.bounds.yPercent}`);
         }
-      } else {
-        // DOM-based game
-        if (target.selector) {
-          parts.push(`Focus on clicking in the area defined by: ${target.selector}`);
-        }
-        if (target.bounds) {
-          parts.push(`Click within bounds: ${target.bounds.description || 'center grid area'}`);
+        if (target.bounds.note) {
+          sections.push(`  Note: ${target.bounds.note}`);
         }
       }
       
       if (target.frequency) {
-        parts.push(`Click frequency: ${target.frequency}`);
+        sections.push(`- Click frequency: ${target.frequency}`);
+      }
+      
+      if (target.strategy) {
+        sections.push(`- Clicking strategy: ${target.strategy}`);
       }
     }
 
-    // Add expected behavior
-    if (si.expectedBehavior) {
-      const eb = si.expectedBehavior;
-      if (eb.immediateResponse) {
-        parts.push(`You should see: ${eb.immediateResponse}`);
-      }
-      if (eb.afterMultipleClicks) {
-        parts.push(`After multiple clicks: ${eb.afterMultipleClicks}`);
-      }
-      if (eb.progressionIndicator) {
-        parts.push(`Progression indicator: ${eb.progressionIndicator}`);
-      }
-    }
-    
-    // Add canvas interaction details if available
+    // Canvas Interaction Details
     if (si.canvasInteraction) {
       const ci = si.canvasInteraction;
-      parts.push(`Canvas interaction method: ${ci.method || 'coordinate-based-clicking'}`);
+      sections.push('\nCanvas Interaction Details:');
+      if (ci.method) {
+        sections.push(`- Method: ${ci.method}`);
+      }
+      if (ci.targetElement) {
+        sections.push(`- Target element: ${ci.targetElement}`);
+      }
+      if (ci.coordinateStrategy) {
+        sections.push(`- Coordinate strategy: ${ci.coordinateStrategy}`);
+      }
       if (ci.note) {
-        parts.push(`Note: ${ci.note}`);
+        sections.push(`- ${ci.note}`);
       }
     }
 
-    // Add avoid clicking areas
+    // Expected Behavior
+    if (si.expectedBehavior) {
+      const eb = si.expectedBehavior;
+      sections.push('\nExpected Behavior:');
+      if (eb.immediateResponse) {
+        sections.push(`- Immediate response: ${eb.immediateResponse}`);
+      }
+      if (eb.afterMultipleClicks) {
+        sections.push(`- After multiple clicks: ${eb.afterMultipleClicks}`);
+      }
+      if (eb.progressionIndicator) {
+        sections.push(`- Progression indicator: ${eb.progressionIndicator}`);
+      }
+    }
+
+    // Areas to Avoid
     if (si.avoidClicking && Array.isArray(si.avoidClicking) && si.avoidClicking.length > 0) {
-      parts.push(`Avoid clicking: ${si.avoidClicking.join(', ')}`);
-    }
-
-    if (parts.length > 0) {
-      specialInstructionsText = ` ${parts.join('. ')}.`;
-    }
-  }
-
-  // Add validation checks from testingStrategy if available
-  let validationText = '';
-  if (metadata.testingStrategy?.validationChecks && Array.isArray(metadata.testingStrategy.validationChecks)) {
-    const checks = metadata.testingStrategy.validationChecks;
-    if (checks.length > 0) {
-      validationText = ` Verify: ${checks.join('; ')}.`;
+      sections.push('\nAreas to Avoid Clicking:');
+      si.avoidClicking.forEach(area => {
+        sections.push(`- ${area}`);
+      });
     }
   }
 
-  // Build complete instruction
-  return `Test this ${genre} game. ${controlsText}${objectivesText}${specialInstructionsText}${validationText} Play for about 2 minutes or until you reach a clear completion point (like game over, level complete, or winning the game).`;
+  // 6. Success Indicators (what to look for to verify the game is working)
+  if (metadata.successIndicators && Array.isArray(metadata.successIndicators) && metadata.successIndicators.length > 0) {
+    sections.push('\nSuccess Indicators (verify these to confirm the game is working):');
+    metadata.successIndicators.forEach(indicator => {
+      sections.push(`- ${indicator.description}`);
+    });
+  }
+
+  // 7. Validation Checks (what to verify during testing)
+  // Note: validationChecks is an extended property not in TestingStrategy interface
+  const testingStrategy = metadata.testingStrategy as { validationChecks?: string[] } | undefined;
+  if (testingStrategy?.validationChecks && Array.isArray(testingStrategy.validationChecks) && testingStrategy.validationChecks.length > 0) {
+    sections.push('\nValidation Checks (verify these during testing):');
+    testingStrategy.validationChecks.forEach((check: string) => {
+      sections.push(`- ${check}`);
+    });
+  }
+
+  // 8. Important Notes (critical context)
+  // Note: notes is an extended property not in GameMetadata interface
+  const metadataWithNotes = metadata as { notes?: string[] };
+  if (metadataWithNotes.notes && Array.isArray(metadataWithNotes.notes) && metadataWithNotes.notes.length > 0) {
+    sections.push('\nImportant Notes:');
+    metadataWithNotes.notes.forEach((note: string) => {
+      sections.push(`- ${note}`);
+    });
+  }
+
+  // 9. Time-based completion criteria
+  sections.push('\nPlay for about 2 minutes or until you reach a clear completion point (like game over, level complete, or winning the game).');
+
+  return sections.join('\n');
 }
 
 /**
@@ -263,7 +295,7 @@ export function extractScreenshotsFromActions(actions: any[]): string[] {
 
     // Check for screenshots array field
     if (Array.isArray(action.screenshots)) {
-      screenshots.push(...action.screenshots.filter(s => typeof s === 'string'));
+      screenshots.push(...action.screenshots.filter((s: unknown) => typeof s === 'string'));
     }
   }
 
