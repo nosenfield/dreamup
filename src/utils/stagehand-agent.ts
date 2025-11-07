@@ -37,11 +37,16 @@ export function buildStagehandSystemPrompt(metadata?: GameMetadata): string {
   }
 
   // Check if this is a canvas-based game
-  const isCanvasBased = metadata.specialInstructions?.canvasBased === true ||
-    metadata.specialInstructions?.clickTargets?.some(t => t.type === 'canvas-coordinates' || t.target === 'canvas') ||
-    metadata.inputSchema?.actions?.some(a => 
-      typeof a === 'object' && (a.target === 'canvas-coordinates' || a.target === 'canvas-ui-area')
-    );
+  // Check multiple indicators to be robust
+  const hasCanvasBasedFlag = metadata.specialInstructions?.canvasBased === true;
+  const hasCanvasClickTargets = metadata.specialInstructions?.clickTargets?.some(t => 
+    t.type === 'canvas-coordinates' || t.target === 'canvas'
+  ) ?? false;
+  const hasCanvasActions = metadata.inputSchema?.actions?.some(a => 
+    typeof a === 'object' && (a.target === 'canvas-coordinates' || a.target === 'canvas-ui-area')
+  ) ?? false;
+  
+  const isCanvasBased = hasCanvasBasedFlag || hasCanvasClickTargets || hasCanvasActions;
 
   if (isCanvasBased) {
     return `${basePrompt}

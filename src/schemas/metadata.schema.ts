@@ -163,6 +163,38 @@ export const gameMetadataSchema = z.object({
   
   /** Optional testing strategy */
   testingStrategy: testingStrategySchema.optional(),
+  
+  /** Optional special instructions for canvas-based games or specific interaction patterns */
+  specialInstructions: z.object({
+    gameType: z.string().optional(),
+    inputMethod: z.string().optional(),
+    canvasBased: z.boolean().optional(),
+    clickTargets: z.array(z.object({
+      type: z.string().optional(),
+      target: z.string().optional(),
+      strategy: z.string().optional(),
+      frequency: z.string().optional(),
+      bounds: z.object({
+        description: z.string().optional(),
+        xPercent: z.string().optional(),
+        yPercent: z.string().optional(),
+        note: z.string().optional(),
+      }).optional(),
+      instructions: z.string().optional(),
+    })).optional(),
+    avoidClicking: z.array(z.string()).optional(),
+    expectedBehavior: z.object({
+      immediateResponse: z.string().optional(),
+      afterMultipleClicks: z.string().optional(),
+      progressionIndicator: z.string().optional(),
+    }).optional(),
+    canvasInteraction: z.object({
+      method: z.string().optional(),
+      note: z.string().optional(),
+      targetElement: z.string().optional(),
+      coordinateStrategy: z.string().optional(),
+    }).optional(),
+  }).optional(),
 });
 
 /**

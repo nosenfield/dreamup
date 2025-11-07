@@ -481,6 +481,51 @@ export interface GameMetadata {
   
   /** Optional testing strategy with timing and priority hints */
   testingStrategy?: TestingStrategy;
+
+  /** Optional special instructions for canvas-based games or specific interaction patterns */
+  specialInstructions?: {
+    /** Game type identifier (e.g., "canvas-mouse-clicker") */
+    gameType?: string;
+    /** Input method description (e.g., "mouse-clicks-only") */
+    inputMethod?: string;
+    /** Flag indicating this is a canvas-based game */
+    canvasBased?: boolean;
+    /** Array of click target specifications for coordinate-based clicking */
+    clickTargets?: Array<{
+      /** Type of click target (e.g., "canvas-coordinates") */
+      type?: string;
+      /** Target element (e.g., "canvas") */
+      target?: string;
+      /** Clicking strategy (e.g., "random-positions-in-bounds") */
+      strategy?: string;
+      /** Click frequency (e.g., "2-per-second") */
+      frequency?: string;
+      /** Bounds for clicking area */
+      bounds?: {
+        description?: string;
+        xPercent?: string;
+        yPercent?: string;
+        note?: string;
+      };
+      /** Specific instructions for this click target */
+      instructions?: string;
+    }>;
+    /** Areas to avoid clicking */
+    avoidClicking?: string[];
+    /** Expected behavior descriptions */
+    expectedBehavior?: {
+      immediateResponse?: string;
+      afterMultipleClicks?: string;
+      progressionIndicator?: string;
+    };
+    /** Canvas interaction details */
+    canvasInteraction?: {
+      method?: string;
+      note?: string;
+      targetElement?: string;
+      coordinateStrategy?: string;
+    };
+  };
 }
 
 /**
