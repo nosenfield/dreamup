@@ -272,5 +272,17 @@ export class BrowserManager {
   isBrowserInitialized(): boolean {
     return this.isInitialized;
   }
+
+  /**
+   * Get the Stagehand instance.
+   * 
+   * Returns the Stagehand instance if browser is initialized,
+   * or null if not initialized. Used for accessing agent API.
+   * 
+   * @returns Stagehand instance or null
+   */
+  getStagehand(): Stagehand | null {
+    return this.stagehand;
+  }
 }
 

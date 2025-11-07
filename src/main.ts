@@ -15,10 +15,12 @@ import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, Error
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
-import { TIMEOUTS } from './config/constants';
+import { TIMEOUTS, THRESHOLDS, STAGEHAND_AGENT_DEFAULTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
 import { calculateEstimatedCost, mergeAdaptiveConfig } from './utils/adaptive-qa';
+import { buildStagehandInstruction, extractScreenshotsFromActions } from './utils/stagehand-agent';
+import { withTimeout } from './utils/timeout';
 import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig, Action, Screenshot } from './types/game-test.types';
 
 /**
@@ -851,6 +853,350 @@ export async function runAdaptiveQA(
 }
 
 /**
+ * Run QA test using Stagehand's autonomous agent
+ *
+ * Uses Stagehand agent with OpenAI computer-use-preview model for fully autonomous
+ * browser testing. Agent handles observe-act loop internally without manual state
+ * management. Returns result with agent action history and final vision analysis.
+ *
+ * Mode Comparison:
+ * - Standard QA: Single interaction cycle, fixed inputs, 2-4 min, $0.02-0.05
+ * - Adaptive QA: Manual loop, state analysis each step, 2-4 min, $0.10-0.50
+ * - Stagehand Agent: Autonomous loop, internal reasoning, 2-4 min, cost TBD
+ *
+ * @param gameUrl - URL of the game to test
+ * @param metadata - Optional game metadata for instruction building
+ * @param config - Optional configuration overrides
+ * @returns Promise resolving to GameTestResult with agent action history
+ *
+ * @example
+ * const result = await runStagehandAgentQA('https://example.com/game', metadata);
+ * console.log(result.metadata.stagehandAgent.actionCount); // 12
+ * console.log(result.metadata.stagehandAgent.success); // true
+ *
+ * @see https://docs.stagehand.dev/v3/basics/agent
+ * @see https://platform.openai.com/docs/models/computer-use-preview
+ * @see _docs/control-flow.md (comparison of QA modes)
+ */
+export async function runStagehandAgentQA(
+  gameUrl: string,
+  metadata?: GameMetadata,
+  config?: Partial<TestConfig>
+): Promise<GameTestResult> {
+  const sessionId = nanoid();
+  const startTime = Date.now();
+  const logger = new Logger({
+    module: 'qa-agent',
+    op: 'runStagehandAgentQA',
+    correlationId: sessionId,
+  });
+  let browserManager: BrowserManager | null = null;
+
+  logger.info('Starting Stagehand Agent QA', {
+    sessionId,
+    gameUrl,
+    hasMetadata: !!metadata,
+  });
+
+  try {
+    // 1. Validate OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is required for Stagehand Agent mode');
+    }
+
+    // 2. Validate Browserbase credentials
+    const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
+    const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
+
+    if (!browserbaseApiKey || !browserbaseProjectId) {
+      throw new Error('Missing required environment variables: BROWSERBASE_API_KEY and/or BROWSERBASE_PROJECT_ID');
+    }
+
+    // 3. Initialize browser
+    const fileManager = new FileManager(sessionId);
+    browserManager = new BrowserManager({
+      apiKey: browserbaseApiKey,
+      projectId: browserbaseProjectId,
+      logger,
+    });
+
+    const page = await withTimeout(
+      browserManager.initialize(),
+      TIMEOUTS.PAGE_NAVIGATION_TIMEOUT,
+      'Browser initialization timeout'
+    );
+
+    logger.info('Browser initialized', { sessionId });
+
+    // 4. Navigate to game
+    await withTimeout(
+      browserManager.navigate(gameUrl),
+      TIMEOUTS.PAGE_NAVIGATION_TIMEOUT,
+      'Page navigation timeout'
+    );
+
+    logger.info('Navigated to game URL', { sessionId, gameUrl });
+
+    // 5. Detect game type
+    const gameDetector = new GameDetector({ logger });
+    let gameType: GameType = GameType.UNKNOWN;
+    try {
+      gameType = await gameDetector.detectType(page);
+      logger.info('Game type detected', { sessionId, gameType });
+    } catch (error) {
+      logger.warn('Failed to detect game type', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // 6. Wait for game ready
+    try {
+      const isReady = await gameDetector.waitForGameReady(page, TIMEOUTS.GAME_LOAD_TIMEOUT);
+      if (!isReady) {
+        logger.warn('Game ready detection timed out, continuing anyway', { sessionId });
+      } else {
+        logger.info('Game ready', { sessionId });
+      }
+    } catch (error) {
+      logger.warn('Failed to confirm game ready state', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // 7. Start error monitoring
+    const errorMonitor = new ErrorMonitor({ logger });
+    try {
+      await errorMonitor.startMonitoring(page);
+      logger.info('Error monitoring started', { sessionId });
+    } catch (error) {
+      logger.warn('Failed to start error monitoring', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // 8. Create Stagehand agent
+    // Access Stagehand instance from BrowserManager (not from page)
+    const stagehandInstance = browserManager.getStagehand();
+
+    if (!stagehandInstance) {
+      throw new Error(
+        'Stagehand instance not available. ' +
+        'Ensure BrowserManager.initialize() was called successfully. ' +
+        'This may indicate a Browserbase connection issue.'
+      );
+    }
+
+    // Create agent with CUA mode enabled
+    // Note: API key is handled via OPENAI_API_KEY environment variable
+    // Verify exact model config format in Stagehand docs - may be string or AgentModelConfig
+    const agent = stagehandInstance.agent({
+      cua: true,  // Enable Computer Use Agent mode
+      model: STAGEHAND_AGENT_DEFAULTS.MODEL,  // String format (verify in Stagehand docs)
+      systemPrompt: STAGEHAND_AGENT_DEFAULTS.SYSTEM_PROMPT,
+      // If AgentModelConfig format needed, use:
+      // model: {
+      //   modelName: STAGEHAND_AGENT_DEFAULTS.MODEL,
+      //   apiKey: process.env.OPENAI_API_KEY,  // Only if supported
+      // },
+    });
+
+    logger.info('Stagehand agent created', {
+      sessionId,
+      model: STAGEHAND_AGENT_DEFAULTS.MODEL,
+    });
+
+    // 9. Build instruction from metadata
+    const instruction = buildStagehandInstruction(metadata);
+
+    logger.info('Agent instruction built', {
+      sessionId,
+      instruction: instruction.substring(0, 100) + '...',  // Log first 100 chars
+      hasMetadata: !!metadata,
+    });
+
+    // 10. Execute agent with timeout
+    logger.info('Starting agent execution', {
+      sessionId,
+      maxSteps: STAGEHAND_AGENT_DEFAULTS.MAX_STEPS,
+    });
+
+    const agentResult = await withTimeout(
+      agent.execute({
+        instruction,
+        maxSteps: STAGEHAND_AGENT_DEFAULTS.MAX_STEPS,
+        highlightCursor: STAGEHAND_AGENT_DEFAULTS.HIGHLIGHT_CURSOR,
+      }),
+      TIMEOUTS.MAX_TEST_DURATION,
+      'Agent execution timeout'
+    );
+
+    logger.info('Agent execution completed', {
+      sessionId,
+      success: agentResult.success,
+      completed: agentResult.completed,
+      actionCount: agentResult.actions?.length || 0,
+      message: agentResult.message,
+      usage: agentResult.usage,
+    });
+
+    // 11. Try to extract screenshots from agent actions
+    const agentScreenshots = extractScreenshotsFromActions(agentResult.actions || []);
+
+    if (agentScreenshots.length > 0) {
+      logger.info('Extracted screenshots from agent actions', {
+        sessionId,
+        count: agentScreenshots.length,
+      });
+    } else {
+      logger.info('No screenshots in agent actions, will capture manually', { sessionId });
+    }
+
+    // 12. Capture final screenshot
+    const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager, sessionId });
+    const finalScreenshot = await screenshotCapturer.capture(page, 'final_state');
+
+    logger.info('Final screenshot captured', {
+      sessionId,
+      path: finalScreenshot.path,
+    });
+
+    // 13. Vision analysis on final screenshot
+    const visionAnalyzer = new VisionAnalyzer({
+      logger,
+      apiKey: process.env.OPENAI_API_KEY!
+    });
+
+    const visionResult = await visionAnalyzer.analyzeScreenshots(
+      [finalScreenshot],
+      metadata
+    );
+
+    logger.info('Vision analysis completed', {
+      sessionId,
+      playabilityScore: visionResult.playability_score,
+      issueCount: visionResult.issues.length,
+    });
+
+    // 14. Get console errors
+    let consoleErrors: any[] = [];
+    try {
+      consoleErrors = errorMonitor.getErrors();
+      await errorMonitor.stopMonitoring(page);
+      logger.info('Error monitoring stopped', {
+        sessionId,
+        errorCount: consoleErrors.length,
+      });
+    } catch (error) {
+      logger.warn('Failed to stop error monitoring', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // 15. Determine pass/fail status
+    const status = visionResult.playability_score >= THRESHOLDS.PLAYABILITY_PASS_SCORE
+      ? 'pass'
+      : 'fail';
+
+    // 16. Build result with agent metadata
+    // Aggregate costs: agent usage + vision analysis tokens
+    const totalInputTokens = (agentResult.usage?.input_tokens || 0) + (visionResult.usage?.promptTokens || 0);
+    const totalOutputTokens = (agentResult.usage?.output_tokens || 0) + (visionResult.usage?.completionTokens || 0);
+
+    // Convert agent actions to our StagehandAgentAction format
+    const actions = (agentResult.actions || []).map((action: any) => ({
+      type: action.type || 'unknown',
+      reasoning: action.reasoning || '',
+      completed: action.completed !== undefined ? action.completed : (action.taskCompleted || false),
+      url: action.url || action.pageUrl || gameUrl,
+      timestamp: action.timestamp || new Date().toISOString(),
+    }));
+
+    const result: GameTestResult = {
+      status,
+      playability_score: visionResult.playability_score,
+      issues: visionResult.issues,
+      screenshots: [finalScreenshot.path],
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration: Date.now() - startTime,
+        gameType,
+        consoleErrors,
+        visionAnalysisTokens: visionResult.usage?.promptTokens,
+        stagehandAgent: {
+          success: agentResult.success,
+          completed: agentResult.completed,
+          actionCount: actions.length,
+          actions,
+          message: agentResult.message,
+          usage: {
+            ...agentResult.usage,
+            // Add aggregated totals if needed
+            totalInputTokens,
+            totalOutputTokens,
+          },
+        },
+      },
+    };
+
+    // 17. Cleanup (always runs, even on errors)
+    await browserManager.cleanup();
+
+    logger.info('Stagehand Agent QA completed', {
+      sessionId,
+      status: result.status,
+      playabilityScore: result.playability_score,
+      duration: result.metadata.duration,
+    });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Stagehand Agent QA failed', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // Ensure cleanup happens even on error
+    try {
+      if (browserManager) {
+        await browserManager.cleanup();
+      }
+    } catch (cleanupError) {
+      logger.warn('Error during cleanup after failure', {
+        sessionId,
+        cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
+    }
+
+    // Return error result (no fallback to other modes)
+    return {
+      status: 'error',
+      playability_score: 0,
+      issues: [{
+        severity: 'critical',
+        description: `Stagehand Agent QA failed: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: new Date().toISOString(),
+      }],
+      screenshots: [],
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration: Date.now() - startTime,
+        gameType: GameType.UNKNOWN,
+        consoleErrors: [],
+      },
+    };
+  }
+}
+
+/**
  * Result interface for loading metadata from file.
  */
 export interface LoadMetadataResult {
@@ -1031,15 +1377,27 @@ export async function handler(event: LambdaEvent): Promise<LambdaResponse> {
     };
 
     // Prioritize metadata over inputSchema (backwards compatibility)
+    let metadata: GameMetadata | undefined;
     if (event.metadata) {
       request.metadata = event.metadata;
+      metadata = event.metadata;
     } else if (event.inputSchema) {
       // Backwards compatibility: convert inputSchema to metadata
       request.inputSchema = event.inputSchema;
+      // Note: metadata will be undefined, runQA will handle conversion internally
     }
 
-    // Run QA test
-    const result = await runQA(event.gameUrl, request);
+    // Select QA mode based on feature flags (PRECEDENCE: Stagehand > Adaptive > Standard)
+    const flags = getFeatureFlags();
+    let result: GameTestResult;
+
+    if (flags.enableStagehandAgent) {
+      result = await runStagehandAgentQA(event.gameUrl, metadata);
+    } else if (flags.enableAdaptiveQA) {
+      result = await runAdaptiveQA(event.gameUrl, request);
+    } else {
+      result = await runQA(event.gameUrl, request);
+    }
 
     // Determine status code based on result status
     let statusCode = 200;
@@ -1114,32 +1472,36 @@ if (import.meta.main) {
     };
   }
 
-  // Check feature flag for adaptive mode
+  // Select QA mode based on feature flags (PRECEDENCE: Stagehand > Adaptive > Standard)
   const flags = getFeatureFlags();
-  const useAdaptiveMode = flags.enableAdaptiveQA;
 
-  if (useAdaptiveMode) {
-    console.log('🚀 Running in Adaptive QA mode (iterative action loop)');
-  }
+  try {
+    let result: GameTestResult;
 
-  // Run QA test (adaptive or standard based on feature flag)
-  const qaFunction = useAdaptiveMode ? runAdaptiveQA : runQA;
-  
-  qaFunction(gameUrl, request)
-    .then((result) => {
-      // Print result as formatted JSON
-      console.log('\n📊 QA Test Result:');
-      console.log(JSON.stringify(result, null, 2));
+    if (flags.enableStagehandAgent) {
+      console.log('🤖 Running in Stagehand Agent mode (autonomous)...');
+      const metadata = request?.metadata;
+      result = await runStagehandAgentQA(gameUrl, metadata);
+    } else if (flags.enableAdaptiveQA) {
+      console.log('🚀 Running in Adaptive QA mode (iterative action loop)...');
+      result = await runAdaptiveQA(gameUrl, request);
+    } else {
+      console.log('📊 Running in Standard QA mode (single cycle)...');
+      result = await runQA(gameUrl, request);
+    }
 
-      // Exit with appropriate code
-      if (result.status === 'pass') {
-        process.exit(0);
-      } else {
-        process.exit(1);
-      }
-    })
-    .catch((error) => {
-      console.error('Fatal error:', error instanceof Error ? error.message : String(error));
+    // Print result as formatted JSON
+    console.log('\n📊 QA Test Result:');
+    console.log(JSON.stringify(result, null, 2));
+
+    // Exit with appropriate code
+    if (result.status === 'pass') {
+      process.exit(0);
+    } else {
       process.exit(1);
-    });
+    }
+  } catch (error) {
+    console.error('Fatal error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }
