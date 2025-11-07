@@ -132,3 +132,39 @@ export const ADAPTIVE_COSTS = {
   RESERVED_FOR_FINAL_ANALYSIS: 0.10,
 } as const;
 
+/**
+ * Stagehand Agent QA Mode Configuration
+ *
+ * Uses Stagehand's autonomous agent with OpenAI computer-use-preview model.
+ * Agent handles observe-act loop internally without manual state management.
+ *
+ * @see https://docs.stagehand.dev/v3/basics/agent
+ * @see https://platform.openai.com/docs/models/computer-use-preview
+ */
+export const STAGEHAND_AGENT_DEFAULTS = {
+  /**
+   * Maximum number of autonomous actions agent can take
+   * Higher = more exploration, higher cost
+   * Lower = faster execution, may not complete complex tasks
+   */
+  MAX_STEPS: 25,
+
+  /**
+   * OpenAI model for computer use with vision capabilities
+   * Supports autonomous screen control via Computer Use Agent (CUA) mode
+   */
+  MODEL: 'openai/computer-use-preview',
+
+  /**
+   * Whether to show visual cursor highlights during execution
+   * Useful for debugging but may interfere with game UI
+   */
+  HIGHLIGHT_CURSOR: false,
+
+  /**
+   * System prompt for agent behavior
+   * Instructs agent to act as QA tester
+   */
+  SYSTEM_PROMPT: 'You are a QA tester for browser games. Your goal is to test all functionality, try different controls, look for bugs, and explore the game thoroughly. Report any errors or unusual behavior you encounter.',
+} as const;
+

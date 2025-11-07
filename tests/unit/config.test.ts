@@ -48,6 +48,8 @@ describe('Feature Flags', () => {
       expect(DEFAULT_FLAGS.enableErrorRecovery).toBe(false);
       expect(DEFAULT_FLAGS.enableScreenshotCleanup).toBe(false);
       expect(DEFAULT_FLAGS.enableDetailedLogging).toBe(false);
+      expect(DEFAULT_FLAGS.enableAdaptiveQA).toBe(false);
+      expect(DEFAULT_FLAGS.enableStagehandAgent).toBe(false);
     });
   });
 
@@ -124,17 +126,57 @@ describe('Feature Flags', () => {
       expect(flags.enableScreenshotCleanup).toBe(true);
     });
 
+    it('should enable adaptive QA when ENABLE_ADAPTIVE_QA=true', () => {
+      process.env.ENABLE_ADAPTIVE_QA = 'true';
+      const flags = getFeatureFlags();
+      expect(flags.enableAdaptiveQA).toBe(true);
+    });
+
+    it('enableStagehandAgent defaults to false', () => {
+      delete process.env.ENABLE_STAGEHAND_AGENT;
+      const flags = getFeatureFlags();
+      expect(flags.enableStagehandAgent).toBe(false);
+    });
+
+    it('enableStagehandAgent reads from environment', () => {
+      process.env.ENABLE_STAGEHAND_AGENT = 'true';
+      const flags = getFeatureFlags();
+      expect(flags.enableStagehandAgent).toBe(true);
+      delete process.env.ENABLE_STAGEHAND_AGENT;
+    });
+
+    it('enableStagehandAgent respects case-insensitive parsing', () => {
+      process.env.ENABLE_STAGEHAND_AGENT = 'True';
+      const flags = getFeatureFlags();
+      expect(flags.enableStagehandAgent).toBe(true);
+      
+      process.env.ENABLE_STAGEHAND_AGENT = 'TRUE';
+      const flags2 = getFeatureFlags();
+      expect(flags2.enableStagehandAgent).toBe(true);
+      
+      process.env.ENABLE_STAGEHAND_AGENT = 'false';
+      const flags3 = getFeatureFlags();
+      expect(flags3.enableStagehandAgent).toBe(false);
+      
+      delete process.env.ENABLE_STAGEHAND_AGENT;
+    });
+
     it('should handle multiple flags at once', () => {
       process.env.DEBUG = 'true';
       process.env.ENABLE_CACHING = 'true';
       process.env.ENABLE_PROGRESS_UPDATES = 'true';
+      process.env.ENABLE_STAGEHAND_AGENT = 'true';
       
       const flags = getFeatureFlags();
       expect(flags.enableDetailedLogging).toBe(true);
       expect(flags.enableCaching).toBe(true);
       expect(flags.enableProgressUpdates).toBe(true);
+      expect(flags.enableStagehandAgent).toBe(true);
       expect(flags.enableErrorRecovery).toBe(false); // Not set, remains false
       expect(flags.enableScreenshotCleanup).toBe(false); // Not set, remains false
+      
+      // Cleanup
+      delete process.env.ENABLE_STAGEHAND_AGENT;
     });
   });
 });

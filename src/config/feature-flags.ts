@@ -46,6 +46,9 @@ export const DEFAULT_FLAGS: FeatureFlags = {
 
   /** Enable LLM state analysis strategy for start button detection */
   enableStateAnalysisStrategy: false,
+
+  /** Enable Stagehand Agent QA mode (autonomous agent, takes precedence over Adaptive QA) */
+  enableStagehandAgent: false,
 };
 
 /**
@@ -73,6 +76,7 @@ function parseBoolean(value: string | undefined): boolean {
  * - ENABLE_NATURAL_LANGUAGE_STRATEGY: Enable natural language strategy (default: true)
  * - ENABLE_VISION_STRATEGY: Enable vision-based strategy (default: true)
  * - ENABLE_STATE_ANALYSIS_STRATEGY: Enable LLM state analysis strategy (default: false)
+ * - ENABLE_STAGEHAND_AGENT: Enable Stagehand Agent QA mode (default: false, takes precedence over Adaptive QA)
  *
  * @returns FeatureFlags object with environment variable overrides applied
  */
@@ -85,6 +89,7 @@ export function getFeatureFlags(): FeatureFlags {
     enableErrorRecovery: parseBoolean(process.env.ENABLE_ERROR_RECOVERY),
     enableScreenshotCleanup: parseBoolean(process.env.ENABLE_SCREENSHOT_CLEANUP),
     enableAdaptiveQA: parseBoolean(process.env.ENABLE_ADAPTIVE_QA),
+    enableStagehandAgent: parseBoolean(process.env.ENABLE_STAGEHAND_AGENT),
     enableDOMStrategy: process.env.ENABLE_DOM_STRATEGY !== undefined
       ? parseBoolean(process.env.ENABLE_DOM_STRATEGY)
       : DEFAULT_FLAGS.enableDOMStrategy,

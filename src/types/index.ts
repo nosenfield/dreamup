@@ -30,6 +30,9 @@ export type {
   AlternativeAction,
   ActionRecommendation,
   CapturedState,
+  StagehandAgentAction,
+  StagehandAgentResult,
+  StagehandAgentMetadata,
 } from './game-test.types';
 
 // Export all configuration types

@@ -43,6 +43,9 @@ export interface FeatureFlags {
 
   /** Enable LLM state analysis strategy for start button detection (default: false, Phase 2 feature) */
   enableStateAnalysisStrategy: boolean;
+
+  /** Enable Stagehand Agent QA mode (autonomous agent, takes precedence over Adaptive QA) */
+  enableStagehandAgent: boolean;
 }
 
 /**

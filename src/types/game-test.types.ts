@@ -142,6 +142,96 @@ export interface TestMetadata {
   
   /** Optional estimated cost in USD for this test */
   estimatedCost?: number;
+
+  /** Optional Stagehand agent metadata for Stagehand Agent QA mode */
+  stagehandAgent?: StagehandAgentMetadata;
+}
+
+/**
+ * Action taken by Stagehand agent during autonomous execution
+ * Returned in AgentResult.actions array
+ *
+ * Note: Stagehand exports AgentAction type, but it has different fields
+ * (taskCompleted? vs completed, pageUrl? vs url, etc.), so we define
+ * our own type aligned with our needs.
+ *
+ * @see https://docs.stagehand.dev/v3/references/agent
+ * @see node_modules/@browserbasehq/stagehand/dist/index.d.ts (AgentAction interface)
+ */
+export interface StagehandAgentAction {
+  /** Type of action performed (e.g., 'click', 'type', 'navigate') */
+  type: string;
+
+  /** Agent's reasoning for taking this action */
+  reasoning: string;
+
+  /** Whether agent considered task completed after this action */
+  completed: boolean;
+
+  /** URL of page when action was taken */
+  url: string;
+
+  /** Timestamp when action was executed */
+  timestamp: string;
+}
+
+/**
+ * Result from Stagehand agent.execute() call
+ * Contains execution summary and detailed action history
+ *
+ * Note: This matches Stagehand's AgentResult structure, but we define
+ * our own type for consistency and to use our StagehandAgentAction type.
+ *
+ * @see https://docs.stagehand.dev/v3/references/agent
+ * @see node_modules/@browserbasehq/stagehand/dist/index.d.ts (AgentResult interface)
+ */
+export interface StagehandAgentResult {
+  /** Whether agent successfully completed the task */
+  success: boolean;
+
+  /** Agent's summary message about task execution */
+  message: string;
+
+  /** Array of all actions taken during execution */
+  actions: StagehandAgentAction[];
+
+  /** Agent's assessment of whether task was fully completed */
+  completed: boolean;
+
+  /** Token usage and inference time metrics */
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    inference_time_ms: number;
+  };
+}
+
+/**
+ * Metadata specific to Stagehand agent QA execution
+ * Included in GameTestResult.metadata.stagehandAgent
+ */
+export interface StagehandAgentMetadata {
+  /** Whether agent reported successful task completion */
+  success: boolean;
+
+  /** Whether agent considered task fully completed */
+  completed: boolean;
+
+  /** Number of actions taken during execution */
+  actionCount: number;
+
+  /** Detailed action history from agent execution */
+  actions: StagehandAgentAction[];
+
+  /** Agent's summary message */
+  message: string;
+
+  /** Token usage if available */
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    inference_time_ms: number;
+  };
 }
 
 /**
