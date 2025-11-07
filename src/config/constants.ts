@@ -147,7 +147,7 @@ export const STAGEHAND_AGENT_DEFAULTS = {
    * Higher = more exploration, higher cost
    * Lower = faster execution, may not complete complex tasks
    */
-  MAX_STEPS: 25,
+  MAX_STEPS: 10,
 
   /**
    * OpenAI model for computer use with vision capabilities

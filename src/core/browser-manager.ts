@@ -146,26 +146,17 @@ export class BrowserManager {
       if (this.llmClient) {
         stagehandConfig.llmClient = this.llmClient;
         
-        // Stagehand requires modelApiKey when using llmClient with BROWSERBASE env
-        // LOCAL env doesn't call apiClient.init(), so modelApiKey may not be required
+        // When using llmClient, the model is configured in the AISdkClient itself
+        // We should NOT pass a model config to Stagehand, as it will try to validate
+        // the provider and reject "openrouter" as invalid
+        // The modelApiKey is embedded in the AISdkClient's model configuration
         if (this.env === 'BROWSERBASE') {
-          if (!this.modelApiKey) {
-            throw new Error(
-              'modelApiKey is required when using llmClient with BROWSERBASE environment. ' +
-              'Provide the OpenRouter API key via BrowserManagerConfig.modelApiKey'
-            );
-          }
-          // Set modelApiKey in model config so Stagehand can extract it via resolveModelConfiguration
-          // When using llmClient, Stagehand uses baseClientOptions from resolveModelConfiguration
-          // resolveModelConfiguration extracts everything except modelName as clientOptions
-          // So we pass apiKey directly in the model object, not nested in clientOptions
-          stagehandConfig.model = {
-            modelName: 'openrouter/dummy', // Dummy model name (not used when llmClient is provided)
-            apiKey: this.modelApiKey, // Pass apiKey directly (will be extracted as clientOptions.apiKey)
-          };
+          // For BROWSERBASE, Stagehand may need modelApiKey for its internal API client
+          // However, when using llmClient, the model configuration comes from the client
+          // Try without modelApiKey first - if Stagehand requires it, we'll get a clear error
           this.logger.info('Using custom LLM client for Stagehand (BROWSERBASE)', {
-            hasModelApiKey: true,
-            modelApiKeyPrefix: this.modelApiKey.substring(0, 8) + '...',
+            hasModelApiKey: !!this.modelApiKey,
+            note: 'Model configured in AISdkClient, not via Stagehand model config',
           });
         } else {
           // LOCAL env: modelApiKey not required (no apiClient.init() call)

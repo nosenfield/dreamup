@@ -86,8 +86,58 @@ export function buildStagehandInstruction(metadata?: GameMetadata): string {
     objectivesText = `Your objectives: ${defaultGoals.join('; ')}.`;
   }
 
+  // Add special instructions if available (more detailed guidance)
+  let specialInstructionsText = '';
+  if (metadata.specialInstructions) {
+    const si = metadata.specialInstructions;
+    const parts: string[] = [];
+
+    // Add click targets/strategy
+    if (si.clickTargets && Array.isArray(si.clickTargets) && si.clickTargets.length > 0) {
+      const target = si.clickTargets[0];
+      if (target.selector) {
+        parts.push(`Focus on clicking in the area defined by: ${target.selector}`);
+      }
+      if (target.bounds) {
+        parts.push(`Click within bounds: ${target.bounds.description || 'center grid area'}`);
+      }
+      if (target.frequency) {
+        parts.push(`Click frequency: ${target.frequency}`);
+      }
+    }
+
+    // Add expected behavior
+    if (si.expectedBehavior) {
+      const eb = si.expectedBehavior;
+      if (eb.immediateResponse) {
+        parts.push(`You should see: ${eb.immediateResponse}`);
+      }
+      if (eb.afterMultipleClicks) {
+        parts.push(`After multiple clicks: ${eb.afterMultipleClicks}`);
+      }
+    }
+
+    // Add avoid clicking areas
+    if (si.avoidClicking && Array.isArray(si.avoidClicking) && si.avoidClicking.length > 0) {
+      parts.push(`Avoid clicking: ${si.avoidClicking.join(', ')}`);
+    }
+
+    if (parts.length > 0) {
+      specialInstructionsText = ` ${parts.join('. ')}.`;
+    }
+  }
+
+  // Add validation checks from testingStrategy if available
+  let validationText = '';
+  if (metadata.testingStrategy?.validationChecks && Array.isArray(metadata.testingStrategy.validationChecks)) {
+    const checks = metadata.testingStrategy.validationChecks;
+    if (checks.length > 0) {
+      validationText = ` Verify: ${checks.join('; ')}.`;
+    }
+  }
+
   // Build complete instruction
-  return `Test this ${genre} game. ${controlsText}${objectivesText} Play for about 2 minutes or until you reach a clear completion point (like game over, level complete, or winning the game).`;
+  return `Test this ${genre} game. ${controlsText}${objectivesText}${specialInstructionsText}${validationText} Play for about 2 minutes or until you reach a clear completion point (like game over, level complete, or winning the game).`;
 }
 
 /**
