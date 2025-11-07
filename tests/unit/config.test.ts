@@ -2,7 +2,7 @@
  * Unit tests for configuration constants and feature flags.
  */
 
-import { TIMEOUTS, THRESHOLDS, PATHS } from '../../src/config/constants';
+import { TIMEOUTS, THRESHOLDS, PATHS, OPENROUTER_DEFAULTS } from '../../src/config/constants';
 import { DEFAULT_FLAGS, getFeatureFlags } from '../../src/config/feature-flags';
 
 describe('Configuration Constants', () => {
@@ -36,6 +36,19 @@ describe('Configuration Constants', () => {
       expect(PATHS.OUTPUT_DIR).toBe('/tmp/game-qa-output');
       expect(PATHS.SCREENSHOTS_SUBDIR).toBe('screenshots');
       expect(PATHS.REPORTS_SUBDIR).toBe('reports');
+    });
+  });
+
+  describe('OPENROUTER_DEFAULTS', () => {
+    it('should have correct default values', () => {
+      expect(OPENROUTER_DEFAULTS.AGENT_MODEL).toBe('anthropic/claude-3.5-sonnet');
+      expect(OPENROUTER_DEFAULTS.EXECUTION_MODEL).toBeUndefined();
+      expect(OPENROUTER_DEFAULTS.BASE_URL).toBe('https://openrouter.ai/api/v1');
+    });
+
+    it('should have AGENT_MODEL in provider/model format', () => {
+      const model = OPENROUTER_DEFAULTS.AGENT_MODEL;
+      expect(model).toMatch(/^[a-z0-9-]+\/[a-z0-9.-]+$/i);
     });
   });
 });

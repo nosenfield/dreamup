@@ -8,7 +8,7 @@
  */
 
 // Export all constants
-export { TIMEOUTS, THRESHOLDS, PATHS, ADAPTIVE_DEFAULTS, ADAPTIVE_COSTS, STAGEHAND_AGENT_DEFAULTS } from './constants';
+export { TIMEOUTS, THRESHOLDS, PATHS, ADAPTIVE_DEFAULTS, ADAPTIVE_COSTS, STAGEHAND_AGENT_DEFAULTS, OPENROUTER_DEFAULTS } from './constants';
 
 // Export all feature flag functions and constants
 export { DEFAULT_FLAGS, getFeatureFlags } from './feature-flags';

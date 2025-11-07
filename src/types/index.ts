@@ -41,5 +41,6 @@ export type {
   Timeouts,
   Thresholds,
   AdaptiveTestConfig,
+  OpenRouterConfig,
 } from './config.types';
 

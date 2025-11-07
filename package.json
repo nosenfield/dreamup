@@ -15,6 +15,7 @@
     "@ai-sdk/openai": "^0.0.66",
     "@browserbasehq/sdk": "^1.0.0",
     "@browserbasehq/stagehand": "3.0.1",
+    "@openrouter/ai-sdk-provider": "^1.2.1",
     "ai": "^3.4.0",
     "nanoid": "^5.0.7",
     "p-timeout": "^6.1.2",

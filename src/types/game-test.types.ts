@@ -73,6 +73,9 @@ export interface TestConfig {
   
   /** Feature flags for enabling/disabling features */
   featureFlags: FeatureFlags;
+
+  /** OpenRouter configuration (required when enableStagehandAgent is true) */
+  openrouter?: import('./config.types').OpenRouterConfig;
 }
 
 /**

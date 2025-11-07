@@ -168,3 +168,22 @@ export const STAGEHAND_AGENT_DEFAULTS = {
   SYSTEM_PROMPT: 'You are a QA tester for browser games. Your goal is to test all functionality, try different controls, look for bugs, and explore the game thoroughly. Report any errors or unusual behavior you encounter.',
 } as const;
 
+/**
+ * Default OpenRouter configuration for Stagehand Agent.
+ * 
+ * Provides model selection defaults for OpenRouter integration.
+ * Models must be in provider/model format (e.g., "anthropic/claude-3.5-sonnet").
+ * 
+ * @see https://openrouter.ai/docs/models
+ */
+export const OPENROUTER_DEFAULTS = {
+  /** Default agent model for autonomous testing */
+  AGENT_MODEL: 'anthropic/claude-3.5-sonnet',
+
+  /** Default execution model for tool calls (if not specified, uses AGENT_MODEL) */
+  EXECUTION_MODEL: undefined as string | undefined,
+
+  /** OpenRouter API base URL */
+  BASE_URL: 'https://openrouter.ai/api/v1',
+} as const;
+

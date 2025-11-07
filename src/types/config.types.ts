@@ -108,3 +108,22 @@ export interface AdaptiveTestConfig {
   llmCallStrategy: 'eager' | 'lazy';
 }
 
+/**
+ * OpenRouter configuration for Stagehand Agent.
+ * 
+ * Provides model selection flexibility across multiple LLM providers
+ * (OpenAI, Anthropic, Google, etc.) for Stagehand Agent autonomous testing.
+ * 
+ * @see https://openrouter.ai/docs/models
+ */
+export interface OpenRouterConfig {
+  /** OpenRouter API key (required for Stagehand Agent) */
+  apiKey: string;
+
+  /** Main agent model in provider/model format (e.g., "anthropic/claude-3.5-sonnet") */
+  agentModel: string;
+
+  /** Optional execution model for tool calls (defaults to agentModel) */
+  executionModel?: string;
+}
+

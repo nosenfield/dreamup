@@ -26,6 +26,7 @@ import type {
   LoadingIndicator,
   SuccessIndicator,
   TestingStrategy,
+  OpenRouterConfig,
 } from '../../src/types';
 
 describe('Type Definitions', () => {
@@ -301,6 +302,87 @@ describe('Type Definitions', () => {
     expect(strategy.criticalActions).toEqual(['Pause']);
     expect(strategy.criticalAxes).toEqual(['MoveVertical']);
     expect(strategy.instructions).toBe('Test game');
+  });
+
+  it('should import OpenRouterConfig type correctly', () => {
+    // Verify that OpenRouterConfig type can be imported and used
+    const openRouterConfig: OpenRouterConfig = {
+      apiKey: 'or-test-key',
+      agentModel: 'anthropic/claude-3.5-sonnet',
+      executionModel: 'openai/gpt-4o-mini',
+    };
+
+    expect(openRouterConfig.apiKey).toBe('or-test-key');
+    expect(openRouterConfig.agentModel).toBe('anthropic/claude-3.5-sonnet');
+    expect(openRouterConfig.executionModel).toBe('openai/gpt-4o-mini');
+  });
+
+  it('should allow OpenRouterConfig without executionModel', () => {
+    // Verify that executionModel is optional
+    const openRouterConfig: OpenRouterConfig = {
+      apiKey: 'or-test-key',
+      agentModel: 'anthropic/claude-3.5-sonnet',
+    };
+
+    expect(openRouterConfig.apiKey).toBe('or-test-key');
+    expect(openRouterConfig.agentModel).toBe('anthropic/claude-3.5-sonnet');
+    expect(openRouterConfig.executionModel).toBeUndefined();
+  });
+
+  it('should allow TestConfig with openrouter field', () => {
+    // Verify that TestConfig accepts optional openrouter field
+    const testConfig: TestConfig = {
+      maxDuration: 240000,
+      loadTimeout: 60000,
+      screenshotCount: 3,
+      featureFlags: {
+        enableCaching: false,
+        enableProgressUpdates: false,
+        enableErrorRecovery: false,
+        enableScreenshotCleanup: false,
+        enableDetailedLogging: false,
+        enableAdaptiveQA: false,
+        enableDOMStrategy: true,
+        enableNaturalLanguageStrategy: true,
+        enableVisionStrategy: true,
+        enableStateAnalysisStrategy: false,
+        enableStagehandAgent: false,
+      },
+      openrouter: {
+        apiKey: 'or-test-key',
+        agentModel: 'anthropic/claude-3.5-sonnet',
+        executionModel: 'openai/gpt-4o-mini',
+      },
+    };
+
+    expect(testConfig.openrouter).toBeDefined();
+    expect(testConfig.openrouter?.apiKey).toBe('or-test-key');
+    expect(testConfig.openrouter?.agentModel).toBe('anthropic/claude-3.5-sonnet');
+    expect(testConfig.openrouter?.executionModel).toBe('openai/gpt-4o-mini');
+  });
+
+  it('should allow TestConfig without openrouter field', () => {
+    // Verify that openrouter is optional
+    const testConfig: TestConfig = {
+      maxDuration: 240000,
+      loadTimeout: 60000,
+      screenshotCount: 3,
+      featureFlags: {
+        enableCaching: false,
+        enableProgressUpdates: false,
+        enableErrorRecovery: false,
+        enableScreenshotCleanup: false,
+        enableDetailedLogging: false,
+        enableAdaptiveQA: false,
+        enableDOMStrategy: true,
+        enableNaturalLanguageStrategy: true,
+        enableVisionStrategy: true,
+        enableStateAnalysisStrategy: false,
+        enableStagehandAgent: false,
+      },
+    };
+
+    expect(testConfig.openrouter).toBeUndefined();
   });
 });
 
