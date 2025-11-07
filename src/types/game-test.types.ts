@@ -176,6 +176,24 @@ export interface StagehandAgentAction {
 
   /** Timestamp when action was executed */
   timestamp: string;
+
+  /** Click coordinates (if action type is 'click') */
+  coordinates?: { x: number; y: number };
+
+  /** Element selector (if action targeted a DOM element) */
+  selector?: string;
+
+  /** Element description (if available) */
+  element?: string;
+
+  /** Text typed (if action type is 'type') */
+  text?: string;
+
+  /** Key pressed (if action type is 'keypress') */
+  key?: string;
+
+  /** Raw action data from Stagehand (for debugging) */
+  _raw?: Record<string, unknown>;
 }
 
 /**
