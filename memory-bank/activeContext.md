@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
-**Last Updated**: November 5, 2025
-**Session**: Iteration 5 Preparation - GameMetadata Documentation (Complete)
+**Last Updated**: November 7, 2025
+**Session**: Adaptive Agent Enhancements - T1 Complete
 
 ---
 
@@ -102,20 +102,39 @@
   - ✅ Performance documentation included in README.md
 
 ### Next Immediate Tasks
-1. **Phase 2 Complete!** ✅ Ready for testing
-   - StateAnalyzer integrated as Strategy 3 fallback
-   - All unit tests passing
-   - Ready for real game testing with complex UIs
-2. **Future Enhancement**: Phase 3 - Iterative Action Loop (12-16 hours)
-   - Full adaptive gameplay with state progression awareness
-   - Navigate 2-3 screens/levels automatically
-   - See _docs/migration-plan-adaptive-agent.md for details
+1. **Adaptive Agent Enhancements** - IN PROGRESS
+   - ✅ **T1: Simplify Metadata Structure** - COMPLETE (Nov 7, 2025)
+     - Simplified `brick-breaker-idle/metadata.json` to metadata-2.json pattern
+     - Expanded `pong/metadata.json` with comprehensive instructions
+     - Expanded `snake/metadata.json` with comprehensive instructions
+     - All files validated (JSON syntax and schema)
+     - All instructions include all 8 key elements
+   - 📋 **T2: Enhance StateAnalyzer Prompts** - NEXT (2 hours)
+   - 📋 **T3: Add Canvas-Aware Clicking** - PENDING (1.5 hours)
+   - 📋 **T4: Create Prompt Preview Script** - PENDING (0.5 hours)
+   - 📋 **T5: Update Example Metadata Files** - PENDING (0.5 hours)
 
 ---
 
 ## Recent Changes
 
 ### Completed This Session (Latest)
+- ✅ **T1: Simplify Metadata Structure** (Nov 7, 2025)
+  - **Implementation**: Simplified metadata files to follow metadata-2.json pattern
+  - **Files Modified**:
+    - `_game-examples/brick-breaker-idle/metadata.json`: Removed `uiElements`, `specialInstructions`, `notes`, `gridBounds`, `clickStrategy`, `clicksPerSecond`, `validationChecks`. Consolidated all context into comprehensive `testingStrategy.instructions` narrative.
+    - `_game-examples/pong/metadata.json`: Expanded `testingStrategy.instructions` to include all 8 key elements (game type, interaction method, click targets, frequency, expected behavior, success indicators, areas to avoid, validation checks).
+    - `_game-examples/snake/metadata.json`: Expanded `testingStrategy.instructions` to include all 8 key elements.
+  - **Key Features**:
+    - All metadata files now follow simplified metadata-2.json pattern
+    - Comprehensive `instructions` field contains all game-specific context in narrative form
+    - No duplication between `instructions` and other fields
+    - All 8 key elements included in each `instructions` field
+    - Single source of truth for game-specific guidance
+  - **Validation**: All files pass JSON syntax validation and Zod schema validation
+  - **Impact**: Enables better LLM decision-making by providing comprehensive context in narrative form, following Stagehand Agent best practices
+  - **Foundation**: Ready for T2 (Enhance StateAnalyzer Prompts) which will use these instructions
+
 - ✅ **Phase 3: Iterative Action Loop** (Nov 5, 2025)
   - **Implementation**: Full adaptive QA mode with iterative action loop
   - **Files Created**:

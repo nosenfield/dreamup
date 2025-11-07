@@ -1,6 +1,6 @@
 # Progress Tracker: DreamUp
 
-**Last Updated**: November 5, 2025
+**Last Updated**: November 7, 2025
 **Development Approach**: Iterative (5 iterations)
 
 ---
@@ -285,6 +285,27 @@
     - `src/vision/index.ts` (export STATE_ANALYSIS_PROMPT)
     - `src/types/index.ts` (export new types)
   - **Pattern Documented**: See `_docs/migration-plan-adaptive-agent.md` Phase 2
+
+### Adaptive Agent Enhancements
+**Status**: 📋 In Progress (T1 Complete)
+**Related**: `_docs/adaptive-agent-enhancement-tasks.md`
+
+- [x] **T1: Simplify Metadata Structure** (1 hour) ✅ COMPLETE (Nov 7, 2025)
+  - Simplified `brick-breaker-idle/metadata.json` to metadata-2.json pattern
+    - Removed `uiElements`, `specialInstructions`, `notes`, `gridBounds`, `clickStrategy`, `clicksPerSecond`, `validationChecks`
+    - Consolidated all context into comprehensive `testingStrategy.instructions` narrative
+  - Expanded `pong/metadata.json` with comprehensive instructions
+    - Added all 8 key elements: game type, interaction method, click targets, frequency, expected behavior, success indicators, areas to avoid, validation checks
+  - Expanded `snake/metadata.json` with comprehensive instructions
+    - Added all 8 key elements in narrative form
+  - All files validated (JSON syntax and Zod schema validation)
+  - All instructions include all 8 key elements
+  - No duplication between `instructions` and other fields
+  - Foundation ready for T2 (Enhance StateAnalyzer Prompts)
+- [ ] **T2: Enhance StateAnalyzer Prompts** (2 hours) - NEXT
+- [ ] **T3: Add Canvas-Aware Clicking** (1.5 hours) - PENDING
+- [ ] **T4: Create Prompt Preview Script** (0.5 hours) - PENDING
+- [ ] **T5: Update Example Metadata Files** (0.5 hours) - PENDING
 
 ### Iterative Action Loop (Migration Plan Phase 3)
 **Status**: ✅ Complete (Nov 5, 2025)
