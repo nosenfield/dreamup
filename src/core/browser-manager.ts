@@ -8,7 +8,7 @@
  * @module core.browser-manager
  */
 
-import { Stagehand, type AnyPage } from '@browserbasehq/stagehand';
+import { Stagehand, type AnyPage, AISdkClient } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
@@ -25,6 +25,9 @@ export interface BrowserManagerConfig {
   
   /** Logger instance for structured logging */
   logger: Logger;
+  
+  /** Optional LLM client for Stagehand (e.g., AISdkClient with OpenRouter model) */
+  llmClient?: AISdkClient;
   
   /** Optional timeout for initialization (default: PAGE_NAVIGATION_TIMEOUT) */
   initTimeout?: number;
@@ -61,6 +64,7 @@ export class BrowserManager {
   private readonly logger: Logger;
   private readonly initTimeout: number;
   private readonly navigateTimeout: number;
+  private readonly llmClient?: AISdkClient;
   
   private stagehand: Stagehand | null = null;
   private page: AnyPage | null = null;
@@ -75,6 +79,7 @@ export class BrowserManager {
     this.apiKey = config.apiKey;
     this.projectId = config.projectId;
     this.logger = config.logger;
+    this.llmClient = config.llmClient;
     this.initTimeout = config.initTimeout ?? TIMEOUTS.PAGE_NAVIGATION_TIMEOUT;
     this.navigateTimeout = config.navigateTimeout ?? TIMEOUTS.PAGE_NAVIGATION_TIMEOUT;
   }
@@ -105,15 +110,25 @@ export class BrowserManager {
     this.logger.info('Initializing browser session', {
       apiKey: this.apiKey.substring(0, 8) + '...', // Log partial key for debugging
       projectId: this.projectId,
+      hasLlmClient: !!this.llmClient,
     });
 
     try {
-      // Create Stagehand instance with Browserbase configuration
-      this.stagehand = new Stagehand({
+      // Initialize Stagehand with optional LLM client
+      const stagehandConfig: any = {
         env: 'BROWSERBASE',
         apiKey: this.apiKey,
         projectId: this.projectId,
-      });
+      };
+
+      // Add LLM client if provided (for OpenRouter integration)
+      if (this.llmClient) {
+        stagehandConfig.llmClient = this.llmClient;
+        this.logger.info('Using custom LLM client for Stagehand', {});
+      }
+
+      // Create Stagehand instance with Browserbase configuration
+      this.stagehand = new Stagehand(stagehandConfig);
 
       // Initialize Stagehand with timeout
       await withTimeout(

@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { BrowserManager } from '../../src/core/browser-manager';
 import { Logger } from '../../src/utils/logger';
 import { TimeoutError } from '../../src/utils/timeout';
+import { AISdkClient } from '@browserbasehq/stagehand';
 
 // Mock Stagehand
 const mockPage = {
@@ -26,11 +27,19 @@ const mockStagehand = {
   },
 };
 
+// Mock AISdkClient
+const mockAISdkClient = {
+  // AISdkClient is a class, mock it as an object
+} as unknown as AISdkClient;
+
 // Mock Stagehand module
+let stagehandConstructorArgs: any[] = [];
 mock.module('@browserbasehq/stagehand', () => ({
-  Stagehand: mock(() => {
+  Stagehand: mock((config: any) => {
+    stagehandConstructorArgs.push(config);
     return mockStagehand;
   }),
+  AISdkClient: mock(() => mockAISdkClient),
 }));
 
 describe('BrowserManager', () => {
@@ -49,6 +58,7 @@ describe('BrowserManager', () => {
     mockStagehand.init.mockClear();
     mockPage.goto.mockClear();
     mockPage.close.mockClear();
+    stagehandConstructorArgs = [];
   });
 
   afterEach(async () => {
@@ -186,6 +196,108 @@ describe('BrowserManager', () => {
 
       // Logger should have been called (if error logging is implemented)
       // Note: Actual logging verification depends on Logger implementation
+    });
+  });
+
+  describe('llmClient support (OpenRouter integration)', () => {
+    it('should accept optional llmClient parameter', () => {
+      const browserWithLlmClient = new BrowserManager({
+        apiKey: 'test-api-key',
+        projectId: 'test-project-id',
+        logger,
+        llmClient: mockAISdkClient,
+      });
+
+      expect(browserWithLlmClient).toBeDefined();
+    });
+
+    it('should work without llmClient (backwards compatible)', () => {
+      const browserWithoutLlmClient = new BrowserManager({
+        apiKey: 'test-api-key',
+        projectId: 'test-project-id',
+        logger,
+      });
+
+      expect(browserWithoutLlmClient).toBeDefined();
+    });
+
+    it('should pass llmClient to Stagehand constructor when provided', async () => {
+      const browserWithLlmClient = new BrowserManager({
+        apiKey: 'test-api-key',
+        projectId: 'test-project-id',
+        logger,
+        llmClient: mockAISdkClient,
+      });
+
+      await browserWithLlmClient.initialize();
+
+      // Verify Stagehand was called with llmClient
+      expect(stagehandConstructorArgs.length).toBeGreaterThan(0);
+      const lastCall = stagehandConstructorArgs[stagehandConstructorArgs.length - 1];
+      expect(lastCall).toHaveProperty('llmClient');
+      expect(lastCall.llmClient).toBe(mockAISdkClient);
+      expect(lastCall.env).toBe('BROWSERBASE');
+      expect(lastCall.apiKey).toBe('test-api-key');
+      expect(lastCall.projectId).toBe('test-project-id');
+    });
+
+    it('should not pass llmClient to Stagehand when not provided', async () => {
+      const browserWithoutLlmClient = new BrowserManager({
+        apiKey: 'test-api-key',
+        projectId: 'test-project-id',
+        logger,
+      });
+
+      await browserWithoutLlmClient.initialize();
+
+      // Verify Stagehand was called without llmClient
+      expect(stagehandConstructorArgs.length).toBeGreaterThan(0);
+      const lastCall = stagehandConstructorArgs[stagehandConstructorArgs.length - 1];
+      expect(lastCall).not.toHaveProperty('llmClient');
+      expect(lastCall.env).toBe('BROWSERBASE');
+      expect(lastCall.apiKey).toBe('test-api-key');
+      expect(lastCall.projectId).toBe('test-project-id');
+    });
+
+    it('should log hasLlmClient when initializing with llmClient', async () => {
+      const logSpy = mock();
+      logger.info = logSpy;
+
+      const browserWithLlmClient = new BrowserManager({
+        apiKey: 'test-api-key',
+        projectId: 'test-project-id',
+        logger,
+        llmClient: mockAISdkClient,
+      });
+
+      await browserWithLlmClient.initialize();
+
+      // Verify log was called with hasLlmClient
+      const initLogCall = logSpy.mock.calls.find((call: any[]) => 
+        call[0] === 'Initializing browser session'
+      );
+      expect(initLogCall).toBeDefined();
+      expect(initLogCall[1]).toHaveProperty('hasLlmClient', true);
+    });
+
+    it('should log hasLlmClient false when initializing without llmClient', async () => {
+      const logSpy = mock();
+      logger.info = logSpy;
+
+      const browserWithoutLlmClient = new BrowserManager({
+        apiKey: 'test-api-key',
+        projectId: 'test-project-id',
+        logger,
+      });
+
+      await browserWithoutLlmClient.initialize();
+
+      // Verify log was called with hasLlmClient false
+      const initLogCall = logSpy.mock.calls.find((call: any[]) => 
+        call[0] === 'Initializing browser session'
+      );
+      expect(initLogCall).toBeDefined();
+      expect(initLogCall[1]).toHaveProperty('hasLlmClient', false);
     });
   });
 });
