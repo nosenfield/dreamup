@@ -17,19 +17,22 @@ import { TIMEOUTS } from '../config/constants';
  * Configuration for BrowserManager.
  */
 export interface BrowserManagerConfig {
-  /** Browserbase API key */
-  apiKey: string;
+  /** Browserbase API key (required for BROWSERBASE env, optional for LOCAL) */
+  apiKey?: string;
   
-  /** Browserbase project ID */
-  projectId: string;
+  /** Browserbase project ID (required for BROWSERBASE env, optional for LOCAL) */
+  projectId?: string;
   
   /** Logger instance for structured logging */
   logger: Logger;
   
+  /** Optional environment: 'BROWSERBASE' (default) or 'LOCAL' */
+  env?: 'BROWSERBASE' | 'LOCAL';
+  
   /** Optional LLM client for Stagehand (e.g., AISdkClient with OpenRouter model) */
   llmClient?: AISdkClient;
   
-  /** Optional model API key (required when using llmClient with OpenRouter) */
+  /** Optional model API key (required when using llmClient with BROWSERBASE env) */
   modelApiKey?: string;
   
   /** Optional timeout for initialization (default: PAGE_NAVIGATION_TIMEOUT) */
@@ -62,11 +65,12 @@ export interface BrowserManagerConfig {
  * ```
  */
 export class BrowserManager {
-  private readonly apiKey: string;
-  private readonly projectId: string;
+  private readonly apiKey?: string;
+  private readonly projectId?: string;
   private readonly logger: Logger;
   private readonly initTimeout: number;
   private readonly navigateTimeout: number;
+  private readonly env: 'BROWSERBASE' | 'LOCAL';
   private readonly llmClient?: AISdkClient;
   private readonly modelApiKey?: string;
   
@@ -83,6 +87,7 @@ export class BrowserManager {
     this.apiKey = config.apiKey;
     this.projectId = config.projectId;
     this.logger = config.logger;
+    this.env = config.env ?? 'BROWSERBASE';
     this.llmClient = config.llmClient;
     this.modelApiKey = config.modelApiKey;
     this.initTimeout = config.initTimeout ?? TIMEOUTS.PAGE_NAVIGATION_TIMEOUT;
@@ -113,7 +118,8 @@ export class BrowserManager {
     }
 
     this.logger.info('Initializing browser session', {
-      apiKey: this.apiKey.substring(0, 8) + '...', // Log partial key for debugging
+      env: this.env,
+      apiKey: this.apiKey ? this.apiKey.substring(0, 8) + '...' : undefined,
       projectId: this.projectId,
       hasLlmClient: !!this.llmClient,
     });
@@ -121,37 +127,52 @@ export class BrowserManager {
     try {
       // Initialize Stagehand with optional LLM client
       const stagehandConfig: any = {
-        env: 'BROWSERBASE',
-        apiKey: this.apiKey,
-        projectId: this.projectId,
+        env: this.env,
       };
+
+      // Add Browserbase credentials only for BROWSERBASE environment
+      if (this.env === 'BROWSERBASE') {
+        if (!this.apiKey || !this.projectId) {
+          throw new Error(
+            'BROWSERBASE environment requires apiKey and projectId. ' +
+            'Provide them via BrowserManagerConfig or set BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID environment variables.'
+          );
+        }
+        stagehandConfig.apiKey = this.apiKey;
+        stagehandConfig.projectId = this.projectId;
+      }
 
       // Add LLM client if provided (for OpenRouter integration)
       if (this.llmClient) {
         stagehandConfig.llmClient = this.llmClient;
-        // Stagehand requires modelApiKey when using llmClient (e.g., OpenRouter API key)
-        // Must be set unconditionally when llmClient is provided
-        // Stagehand passes this to apiClient.init() even when using AISdkClient
-        // We need to set it in modelClientOptions which comes from resolveModelConfiguration
-        // Since we're using llmClient, we need to pass modelClientOptions directly
-        if (!this.modelApiKey) {
-          throw new Error(
-            'modelApiKey is required when using llmClient. ' +
-            'Provide the OpenRouter API key via BrowserManagerConfig.modelApiKey'
-          );
+        
+        // Stagehand requires modelApiKey when using llmClient with BROWSERBASE env
+        // LOCAL env doesn't call apiClient.init(), so modelApiKey may not be required
+        if (this.env === 'BROWSERBASE') {
+          if (!this.modelApiKey) {
+            throw new Error(
+              'modelApiKey is required when using llmClient with BROWSERBASE environment. ' +
+              'Provide the OpenRouter API key via BrowserManagerConfig.modelApiKey'
+            );
+          }
+          // Set modelApiKey in model config so Stagehand can extract it via resolveModelConfiguration
+          // When using llmClient, Stagehand uses baseClientOptions from resolveModelConfiguration
+          // resolveModelConfiguration extracts everything except modelName as clientOptions
+          // So we pass apiKey directly in the model object, not nested in clientOptions
+          stagehandConfig.model = {
+            modelName: 'openrouter/dummy', // Dummy model name (not used when llmClient is provided)
+            apiKey: this.modelApiKey, // Pass apiKey directly (will be extracted as clientOptions.apiKey)
+          };
+          this.logger.info('Using custom LLM client for Stagehand (BROWSERBASE)', {
+            hasModelApiKey: true,
+            modelApiKeyPrefix: this.modelApiKey.substring(0, 8) + '...',
+          });
+        } else {
+          // LOCAL env: modelApiKey not required (no apiClient.init() call)
+          this.logger.info('Using custom LLM client for Stagehand (LOCAL)', {
+            hasModelApiKey: !!this.modelApiKey,
+          });
         }
-        // Set modelApiKey in model config so Stagehand can extract it via resolveModelConfiguration
-        // When using llmClient, Stagehand uses baseClientOptions from resolveModelConfiguration
-        // resolveModelConfiguration extracts everything except modelName as clientOptions
-        // So we pass apiKey directly in the model object, not nested in clientOptions
-        stagehandConfig.model = {
-          modelName: 'openrouter/dummy', // Dummy model name (not used when llmClient is provided)
-          apiKey: this.modelApiKey, // Pass apiKey directly (will be extracted as clientOptions.apiKey)
-        };
-        this.logger.info('Using custom LLM client for Stagehand', {
-          hasModelApiKey: true,
-          modelApiKeyPrefix: this.modelApiKey.substring(0, 8) + '...',
-        });
       }
 
       // Log final config for debugging (without sensitive data)

@@ -933,21 +933,29 @@ export async function runStagehandAgentQA(
       agentModel,
     });
 
-    // 5. Validate Browserbase credentials
+    // 5. Determine environment (LOCAL or BROWSERBASE)
+    // LOCAL env bypasses Browserbase API client, which may avoid modelApiKey requirement
+    const useLocalEnv = process.env.STAGEHAND_ENV === 'LOCAL' || config?.env === 'LOCAL';
+    const env: 'BROWSERBASE' | 'LOCAL' = useLocalEnv ? 'LOCAL' : 'BROWSERBASE';
+
+    // 6. Validate Browserbase credentials (only required for BROWSERBASE)
     const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
     const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
 
-    if (!browserbaseApiKey || !browserbaseProjectId) {
+    if (env === 'BROWSERBASE' && (!browserbaseApiKey || !browserbaseProjectId)) {
       throw new Error('Missing required environment variables: BROWSERBASE_API_KEY and/or BROWSERBASE_PROJECT_ID');
     }
 
-    // 6. Initialize browser with LLM client
+    // 7. Initialize browser with LLM client
     const fileManager = new FileManager(sessionId);
     browserManager = new BrowserManager({
       apiKey: browserbaseApiKey,
       projectId: browserbaseProjectId,
+      env,  // Use LOCAL or BROWSERBASE
       logger,
       llmClient,  // Pass OpenRouter LLM client
+      // modelApiKey only required for BROWSERBASE env (LOCAL doesn't call apiClient.init())
+      modelApiKey: env === 'BROWSERBASE' ? openRouterProvider.getApiKey() : undefined,
     });
 
     const page = await withTimeout(
@@ -1019,13 +1027,13 @@ export async function runStagehandAgentQA(
       );
     }
 
-    // Create agent (no model needed - uses Stagehand's llmClient)
-    // NOTE: Stagehand agent() does NOT accept model parameter when using AISdkClient
-    // The model is configured at Stagehand initialization via llmClient
+    // Create agent with CUA model name for validation
+    // NOTE: When using AISdkClient, the actual model comes from llmClient,
+    // but we need to pass model name for CUA validation
     const agent = stagehandInstance.agent({
       cua: true,  // Enable Computer Use Agent mode
+      model: agentModel,  // Pass model name for CUA validation (actual model comes from llmClient)
       systemPrompt: STAGEHAND_AGENT_DEFAULTS.SYSTEM_PROMPT,
-      // NO model parameter - uses llmClient from Stagehand initialization
     });
 
     logger.info('Stagehand agent created', {

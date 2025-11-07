@@ -9,6 +9,7 @@
  */
 
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createOpenAI } from '@ai-sdk/openai';
 import { Logger } from '../utils/logger';
 import { OPENROUTER_DEFAULTS } from '../config/constants';
 import type { OpenRouterConfig } from '../types/config.types';
@@ -145,6 +146,9 @@ export class OpenRouterProvider {
    * Creates and returns an AI SDK model instance from OpenRouter provider
    * that can be used with Stagehand's AISdkClient.
    *
+   * Uses OpenAI SDK with OpenRouter baseURL as a more reliable alternative
+   * to @openrouter/ai-sdk-provider, which may have authentication issues.
+   *
    * @returns AI SDK model instance (from @ai-sdk/core)
    *
    * @example
@@ -156,9 +160,37 @@ export class OpenRouterProvider {
    */
   getAISdkModel(): ReturnType<ReturnType<typeof createOpenRouter>> {
     const { agentModel } = this.getModelConfig();
-    // Type assertion needed due to OpenRouter package type definitions
-    // Runtime behavior is correct (verified by tests)
-    return this.openrouter(agentModel) as ReturnType<ReturnType<typeof createOpenRouter>>;
+    
+    // Use OpenAI SDK approach with OpenRouter baseURL (recommended by OpenRouter quickstart)
+    // According to OpenRouter quickstart: https://openrouter.ai/docs/quickstart
+    // This approach uses OpenAI SDK compatibility with OpenRouter API
+    // OpenRouter accepts OpenAI-compatible requests for all models, regardless of provider
+    // The model name can be in "provider/model" format (e.g., "anthropic/claude-3-7-sonnet-latest")
+    const openai = createOpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: this.config.apiKey, // AI SDK will automatically set Authorization header
+      defaultHeaders: {
+        // Note: Don't set Authorization manually - createOpenAI handles it automatically
+        'HTTP-Referer': 'https://github.com/dreamup', // Optional: for OpenRouter rankings
+        'X-Title': 'DreamUp QA Agent', // Optional: for OpenRouter rankings
+      },
+    });
+    
+    // OpenRouter models are in format "provider/model" (e.g., "anthropic/claude-3-7-sonnet-latest")
+    // OpenAI SDK expects just the model name, but OpenRouter accepts the full format
+    // OpenRouter routes requests to the correct provider based on the model name
+    const model = openai(agentModel);
+    
+    this.logger.info('Using OpenAI SDK with OpenRouter baseURL', {
+      agentModel,
+      baseURL: 'https://openrouter.ai/api/v1',
+      hasApiKey: !!this.config.apiKey,
+      note: 'OpenRouter routes all models through OpenAI-compatible API',
+    });
+    
+    // Type assertion needed due to different provider types
+    // Both OpenAI SDK and OpenRouter provider return AI SDK model instances
+    return model as ReturnType<ReturnType<typeof createOpenRouter>>;
   }
 
   /**

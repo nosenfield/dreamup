@@ -177,8 +177,18 @@ export const STAGEHAND_AGENT_DEFAULTS = {
  * @see https://openrouter.ai/docs/models
  */
 export const OPENROUTER_DEFAULTS = {
-  /** Default agent model for autonomous testing */
-  AGENT_MODEL: 'anthropic/claude-3.5-sonnet',
+  /** Default agent model for autonomous testing
+   * Must be a supported CUA (Computer Use Agent) model:
+   * - openai/computer-use-preview (recommended - works with OpenRouter)
+   * - google/gemini-2.5-computer-use-preview-10-2025 (untested)
+   * - anthropic/claude-3-7-sonnet-latest (⚠️ authentication issues with OpenRouter)
+   * - anthropic/claude-sonnet-4-5-20250929 (⚠️ authentication issues with OpenRouter)
+   * 
+   * Note: Anthropic models currently fail with "Could not resolve authentication method"
+   * when using OpenAI SDK with OpenRouter baseURL. Use OpenAI or Google models instead.
+   * @see https://docs.stagehand.dev/v3/basics/agent
+   */
+  AGENT_MODEL: 'openai/computer-use-preview',
 
   /** Default execution model for tool calls (if not specified, uses AGENT_MODEL) */
   EXECUTION_MODEL: undefined as string | undefined,

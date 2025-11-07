@@ -406,19 +406,24 @@ The Stagehand Agent QA mode uses [OpenRouter](https://openrouter.ai) for flexibl
 2. Add to `.env`:
    ```bash
    OPENROUTER_API_KEY=or-xxxxx
-   STAGEHAND_AGENT_MODEL=anthropic/claude-3.5-sonnet
+   STAGEHAND_AGENT_MODEL=openai/computer-use-preview
    ```
 
 **Model Configuration:**
 
-**STAGEHAND_AGENT_MODEL** (default: `anthropic/claude-3.5-sonnet`)
+**STAGEHAND_AGENT_MODEL** (default: `openai/computer-use-preview`)
 - Main agent model for autonomous decision-making
+- **Must be a supported CUA (Computer Use Agent) model**
 - Format: `provider/model-name`
-- Examples:
-  - `anthropic/claude-3.5-sonnet` (recommended for complex reasoning)
-  - `openai/gpt-4o` (cost-effective, fast)
-  - `google/gemini-2.0-flash-exp` (experimental, low-cost)
-  - See full catalog: https://openrouter.ai/docs/models
+- **Working Models:**
+  - ✅ `openai/computer-use-preview` (recommended - tested and working)
+  - ✅ `openai/computer-use-preview-2025-03-11` (OpenAI CUA model)
+- **Known Issues:**
+  - ⚠️ `anthropic/claude-3-7-sonnet-latest` - Authentication error with OpenRouter
+  - ⚠️ `anthropic/claude-sonnet-4-5-20250929` - Authentication error with OpenRouter
+  - ⚠️ `google/gemini-2.5-computer-use-preview-10-2025` - Permission denied (403) from Google API
+- See full catalog: https://openrouter.ai/docs/models
+- See supported CUA models: https://docs.stagehand.dev/v3/basics/agent
 
 **STAGEHAND_EXECUTION_MODEL** (optional, defaults to STAGEHAND_AGENT_MODEL)
 - Separate model for tool execution (observe/act actions)
@@ -431,9 +436,9 @@ The Stagehand Agent QA mode uses [OpenRouter](https://openrouter.ai) for flexibl
 OpenRouter provides transparent per-token pricing. Monitor usage at: https://openrouter.ai/activity
 
 **Typical cost per test run:**
-- Anthropic Claude 3.5 Sonnet: ~$0.10-0.30
-- OpenAI GPT-4o: ~$0.05-0.15
-- Google Gemini 2.0 Flash: ~$0.01-0.05
+- OpenAI Computer Use Preview: ~$0.05-0.15 (recommended)
+- Anthropic Claude 3.7 Sonnet: ~$0.10-0.30 (⚠️ authentication issues)
+- Google Gemini 2.5 Computer Use: ~$0.01-0.05 (⚠️ permission issues)
 
 **Troubleshooting:**
 
@@ -449,6 +454,16 @@ OpenRouter provides transparent per-token pricing. Monitor usage at: https://ope
 - Model ID doesn't exist in OpenRouter catalog
 - Verify model ID at https://openrouter.ai/docs/models
 - Some models require explicit provider approval
+
+**Error: "Could not resolve authentication method" (Anthropic models)**
+- Anthropic models currently fail with authentication errors when using OpenRouter
+- **Solution**: Use OpenAI models instead (e.g., `openai/computer-use-preview`)
+- This is a known limitation with Anthropic models through OpenRouter
+
+**Error: "Method doesn't allow unregistered callers" (Google models)**
+- Google models may require additional API setup or approval
+- **Solution**: Use OpenAI models instead (e.g., `openai/computer-use-preview`)
+- Check Google Cloud Console for API access requirements
 
 ### Timeouts
 
