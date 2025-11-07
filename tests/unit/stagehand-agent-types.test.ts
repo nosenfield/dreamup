@@ -16,16 +16,28 @@ describe('Stagehand Agent Types', () => {
     const action: StagehandAgentAction = {
       type: 'click',
       reasoning: 'Clicking start button',
-      completed: false,
       url: 'https://example.com/game',
       timestamp: new Date().toISOString(),
     };
 
     expect(action.type).toBe('click');
     expect(action.reasoning).toBe('Clicking start button');
-    expect(action.completed).toBe(false);
+    // completed is optional - can be omitted or set explicitly
+    expect(action.completed).toBeUndefined();
     expect(action.url).toBe('https://example.com/game');
     expect(typeof action.timestamp).toBe('string');
+  });
+
+  test('StagehandAgentAction can have completed field when provided', () => {
+    const action: StagehandAgentAction = {
+      type: 'click',
+      reasoning: 'Task completed',
+      completed: true,
+      url: 'https://example.com/game',
+      timestamp: new Date().toISOString(),
+    };
+
+    expect(action.completed).toBe(true);
   });
 
   test('StagehandAgentResult type exists and has correct structure', () => {
