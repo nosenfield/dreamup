@@ -117,7 +117,7 @@ describe('Stagehand Agent Types', () => {
   });
 
   test('STAGEHAND_AGENT_DEFAULTS has correct structure', () => {
-    expect(STAGEHAND_AGENT_DEFAULTS.MAX_STEPS).toBe(25);
+    expect(STAGEHAND_AGENT_DEFAULTS.MAX_STEPS).toBe(10);
     expect(STAGEHAND_AGENT_DEFAULTS.MODEL).toBe('openai/computer-use-preview');
     expect(STAGEHAND_AGENT_DEFAULTS.HIGHLIGHT_CURSOR).toBe(false);
     expect(typeof STAGEHAND_AGENT_DEFAULTS.SYSTEM_PROMPT).toBe('string');
