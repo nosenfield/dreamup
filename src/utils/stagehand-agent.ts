@@ -95,12 +95,33 @@ export function buildStagehandInstruction(metadata?: GameMetadata): string {
     // Add click targets/strategy
     if (si.clickTargets && Array.isArray(si.clickTargets) && si.clickTargets.length > 0) {
       const target = si.clickTargets[0];
-      if (target.selector) {
-        parts.push(`Focus on clicking in the area defined by: ${target.selector}`);
+      
+      // Handle canvas-based games differently
+      if (si.canvasBased || target.type === 'canvas-coordinates' || target.target === 'canvas') {
+        parts.push(`This is a canvas-based game - all content is rendered on an HTML5 canvas element, not as DOM elements`);
+        parts.push(`Find the canvas element, then click on coordinates within the canvas where game elements are rendered`);
+        if (target.bounds) {
+          parts.push(`Click within canvas bounds: ${target.bounds.description || 'center grid area'}`);
+          if (target.bounds.xPercent) {
+            parts.push(`X coordinates: ${target.bounds.xPercent}`);
+          }
+          if (target.bounds.yPercent) {
+            parts.push(`Y coordinates: ${target.bounds.yPercent}`);
+          }
+        }
+        if (target.instructions) {
+          parts.push(target.instructions);
+        }
+      } else {
+        // DOM-based game
+        if (target.selector) {
+          parts.push(`Focus on clicking in the area defined by: ${target.selector}`);
+        }
+        if (target.bounds) {
+          parts.push(`Click within bounds: ${target.bounds.description || 'center grid area'}`);
+        }
       }
-      if (target.bounds) {
-        parts.push(`Click within bounds: ${target.bounds.description || 'center grid area'}`);
-      }
+      
       if (target.frequency) {
         parts.push(`Click frequency: ${target.frequency}`);
       }
@@ -114,6 +135,18 @@ export function buildStagehandInstruction(metadata?: GameMetadata): string {
       }
       if (eb.afterMultipleClicks) {
         parts.push(`After multiple clicks: ${eb.afterMultipleClicks}`);
+      }
+      if (eb.progressionIndicator) {
+        parts.push(`Progression indicator: ${eb.progressionIndicator}`);
+      }
+    }
+    
+    // Add canvas interaction details if available
+    if (si.canvasInteraction) {
+      const ci = si.canvasInteraction;
+      parts.push(`Canvas interaction method: ${ci.method || 'coordinate-based-clicking'}`);
+      if (ci.note) {
+        parts.push(`Note: ${ci.note}`);
       }
     }
 
