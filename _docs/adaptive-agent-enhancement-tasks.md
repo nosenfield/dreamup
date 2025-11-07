@@ -97,15 +97,14 @@ The Stagehand Agent instruction builder (`buildStagehandInstruction`) taught us 
 ## T2: Enhance StateAnalyzer Prompts with Metadata Context (2 hours)
 
 ### Goal
-Update `StateAnalyzer.analyzeAndRecommendAction()` to include metadata context (especially `testingStrategy.instructions`) in the STATE_ANALYSIS_PROMPT.
+Update `StateAnalyzer.buildStateAnalysisPrompt()` to prioritize `testingStrategy.instructions` from metadata context in the STATE_ANALYSIS_PROMPT.
 
 ### Why This Matters
-Currently, StateAnalyzer doesn't know:
+Currently, StateAnalyzer includes some metadata context (`expectedControls`, `genre`) but doesn't prioritize the comprehensive `testingStrategy.instructions` field. The instructions field contains game-specific guidance that significantly improves LLM decision-making:
 - What type of game it's testing (canvas vs DOM)
 - Where it should click (bounds, safe zones)
 - What success looks like (expected behavior)
-
-Adding metadata context helps the LLM make better decisions.
+- How to interact (click frequency, patterns)
 
 ### Key Learnings from Stagehand Work
 The `buildStagehandInstruction()` function showed that providing:
@@ -117,159 +116,92 @@ The `buildStagehandInstruction()` function showed that providing:
 
 ...significantly improves agent performance.
 
+### Current Implementation Status
+✅ **Good News**: `StateAnalyzer` already receives metadata via `GameState` (no constructor changes needed)
+✅ **Good News**: `buildStateAnalysisPrompt()` method already exists and includes metadata
+⚠️ **Needs Enhancement**: Currently uses `expectedControls` and `genre`, but should prioritize `testingStrategy.instructions`
+
 ### Implementation
 
-**Step 1: Update StateAnalyzer Constructor** (5 min)
+**Step 1: Enhance buildStateAnalysisPrompt()** (45 min)
 
-Accept optional metadata parameter:
-
-```typescript
-// src/core/state-analyzer.ts
-
-export interface StateAnalyzerConfig {
-  logger: Logger;
-  apiKey?: string;
-  metadata?: GameMetadata;  // NEW: Optional game metadata
-}
-```
-
-**Step 2: Create Contextual Prompt Builder** (30 min)
-
-Add a new private method to build context-aware prompts:
+Update the existing method to prioritize `testingStrategy.instructions`:
 
 ```typescript
-/**
- * Build contextual prompt incorporating metadata and game state.
- *
- * @param goal - High-level goal (e.g., "Find and click the start button")
- * @param previousActions - Array of previous action strings
- * @returns Contextualized prompt string
- */
-private buildContextualPrompt(goal: string, previousActions: string[]): string {
-  const sections: string[] = [];
+// src/core/state-analyzer.ts - update existing buildStateAnalysisPrompt() method
 
-  // 1. Add goal
-  sections.push(`Goal: ${goal}`);
+private buildStateAnalysisPrompt(state: GameState): string {
+  let prompt = STATE_ANALYSIS_PROMPT;
 
-  // 2. Add game-specific context from metadata
-  if (this.metadata?.testingStrategy?.instructions) {
-    sections.push('\nGame Context:');
-    sections.push(this.metadata.testingStrategy.instructions);
+  // Add goal context
+  prompt += `\n\n**Current Goal:** ${state.goal}`;
+
+  // PRIORITY 1: Add game-specific context from testingStrategy.instructions (MOST IMPORTANT)
+  if (state.metadata?.testingStrategy?.instructions) {
+    prompt += `\n\n**Game Context (IMPORTANT - Follow these instructions carefully):**\n${state.metadata.testingStrategy.instructions}`;
   }
 
-  // 3. Add previous actions if any
-  if (previousActions.length > 0) {
-    sections.push('\nPrevious actions taken:');
-    sections.push(previousActions.join('\n'));
+  // PRIORITY 2: Add supplementary metadata context (if instructions not available)
+  if (state.metadata) {
+    if (state.metadata.expectedControls && !state.metadata.testingStrategy?.instructions) {
+      prompt += `\n\n**Expected Controls:** ${state.metadata.expectedControls}`;
+    }
+    if (state.metadata.genre) {
+      prompt += `\n**Game Genre:** ${state.metadata.genre}`;
+    }
   }
 
-  return sections.join('\n');
-}
-```
-
-**Step 3: Update analyzeAndRecommendAction** (45 min)
-
-Integrate contextual prompt into state analysis:
-
-```typescript
-async analyzeAndRecommendAction(state: GameState): Promise<ActionRecommendation | null> {
-  const { html, screenshot, previousActions, goal } = state;
-
-  try {
-    // Build contextual prompt with metadata
-    const contextPrompt = this.buildContextualPrompt(goal, previousActions);
-
-    // Sanitize HTML
-    const sanitizedHtml = this.sanitizeHTML(html);
-
-    // Load screenshot as base64
-    const screenshotBuffer = await Bun.file(screenshot.path).arrayBuffer();
-    const screenshotBase64 = Buffer.from(screenshotBuffer).toString('base64');
-    const screenshotDataUri = `data:image/png;base64,${screenshotBase64}`;
-
-    // Build full prompt: Context + STATE_ANALYSIS_PROMPT + Current State
-    const fullPrompt = `
-${contextPrompt}
-
-${STATE_ANALYSIS_PROMPT}
-
-Current HTML structure:
-${sanitizedHtml}
-
-Based on the screenshot and HTML above, what should I do next to achieve the goal?
-`;
-
-    // Call GPT-4 Vision with structured output
-    const result = await generateObject({
-      model: this.openai('gpt-4-turbo'),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: fullPrompt },
-            { type: 'image', image: screenshotDataUri },
-          ],
-        },
-      ],
-      schema: actionRecommendationSchema,
-      temperature: 0.3,
+  // Add previous actions context if available
+  if (state.previousActions.length > 0) {
+    prompt += `\n\n**Previous Actions Taken:**`;
+    state.previousActions.slice(-5).forEach((action, index) => {
+      prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
     });
-
-    this.logger.info('State analysis complete', {
-      action: result.object.action,
-      confidence: result.object.confidence,
-    });
-
-    return result.object;
-  } catch (error) {
-    this.logger.error('State analysis failed', error);
-    return null;
+    prompt += `\n\n**Note:** Avoid repeating these exact actions if they didn't work.`;
   }
+
+  // Add HTML context if available (limited to first 2000 chars to avoid token limits)
+  if (state.html) {
+    const htmlPreview = state.html.substring(0, 2000);
+    prompt += `\n\n**HTML Structure (first 2000 chars):**\n${htmlPreview}`;
+    if (state.html.length > 2000) {
+      prompt += `\n[... HTML truncated, total length: ${state.html.length} chars]`;
+    }
+  }
+
+  return prompt;
 }
 ```
 
-**Step 4: Update main.ts Integration** (30 min)
-
-Pass metadata to StateAnalyzer when initializing in `runAdaptiveQA()`:
-
-```typescript
-// src/main.ts - in runAdaptiveQA() function
-
-// Initialize StateAnalyzer with metadata
-const stateAnalyzer = new StateAnalyzer({
-  logger,
-  metadata,  // Pass metadata here
-});
-```
-
-**Step 5: Update STATE_ANALYSIS_PROMPT** (15 min)
+**Step 2: Update STATE_ANALYSIS_PROMPT** (30 min)
 
 Enhance the base prompt to work with contextual information:
 
 ```typescript
 // src/vision/prompts.ts
 
-export const STATE_ANALYSIS_PROMPT = `
-You are analyzing a browser game to determine the next action.
+export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend the next action to achieve a specific goal.
 
-IMPORTANT - Use Game Context:
+**IMPORTANT - Use Game Context:**
 - If "Game Context" is provided above, follow those instructions carefully
-- For canvas-based games: Use coordinate-based clicking (percentages of canvas size)
+- For canvas-based games: Use coordinate-based clicking (percentages 0.0-1.0 of canvas size)
 - For DOM-based games: Use absolute pixel coordinates
 - Respect click bounds and avoid areas specified in context
 - Follow expected behavior patterns described in context
 
-IMPORTANT - Coordinate Accuracy:
+**IMPORTANT - Coordinate Accuracy:**
 For canvas games, coordinates should be percentages (0.0 to 1.0):
 - Example: Center of canvas = { x: 0.5, y: 0.5 }
 - Example: Top-left quadrant = { x: 0.25, y: 0.25 }
+- Example: Brick grid area (20-80% width, 15-90% height) = { x: 0.5, y: 0.5 }
 
 For DOM games, coordinates should be absolute pixels:
 - Measure carefully from the screenshot
 - Center coordinates on the target element
 - Consider element borders and padding
+- Example: Button at center of 640x480 image = { x: 320, y: 240 }
 
-Your task:
+**Your Task:**
 1. Analyze the current screenshot and HTML
 2. Consider the game context and previous actions
 3. Recommend the BEST next action to achieve the goal
@@ -280,25 +212,49 @@ Your task:
 `;
 ```
 
+**Step 3: Verify Metadata Flow** (15 min)
+
+Ensure metadata is passed correctly through the call chain:
+
+```typescript
+// In runAdaptiveQA() - metadata is already passed via GameState
+const recommendation = await stateAnalyzer.analyzeAndRecommendAction({
+  html: sanitizedHTML,
+  screenshot: screenshot.path,
+  previousActions: actionHistory,
+  metadata: metadata,  // ✅ Already passed here
+  goal: currentGoal,
+});
+```
+
 **Gotchas**:
-- ⚠️ Don't store metadata as instance variable if it changes per test - pass it in constructor
-- ⚠️ Make sure to check `if (this.metadata?.testingStrategy?.instructions)` before using
-- ⚠️ Keep STATE_ANALYSIS_PROMPT generic - specific context comes from metadata
-- ⚠️ For canvas games, LLM needs to understand coordinates are percentages (0.0-1.0), not pixels
-- ⚠️ Test with both canvas (Brick Breaker) and DOM (Pong) games to verify prompt works for both
+- ⚠️ **Metadata already in GameState**: No need to add to constructor - metadata is passed via `GameState` parameter
+- ⚠️ **Enhance existing method**: Don't create new `buildContextualPrompt()` - enhance existing `buildStateAnalysisPrompt()`
+- ⚠️ **Prioritize instructions**: Put `testingStrategy.instructions` FIRST in prompt (most important context)
+- ⚠️ **Backwards compatible**: Check if `instructions` exists before using (works with old metadata)
+- ⚠️ **Keep STATE_ANALYSIS_PROMPT generic**: Specific context comes from metadata, base prompt stays reusable
+- ⚠️ **For canvas games**: LLM needs to understand coordinates are percentages (0.0-1.0), not pixels
+- ⚠️ **Test with both**: Canvas (Brick Breaker) and DOM (Pong) games to verify prompt works for both
 
 **Files to Modify**:
-- `src/core/state-analyzer.ts` (4 changes: config, constructor, buildContextualPrompt, analyzeAndRecommendAction)
-- `src/vision/prompts.ts` (1 change: enhance STATE_ANALYSIS_PROMPT)
-- `src/main.ts` (1 change: pass metadata to StateAnalyzer)
+- `src/core/state-analyzer.ts` (1 change: enhance buildStateAnalysisPrompt method)
+- `src/vision/prompts.ts` (1 change: enhance STATE_ANALYSIS_PROMPT with canvas/DOM guidance)
+
+**Testing Considerations**:
+- [ ] Unit test: `buildStateAnalysisPrompt()` includes `instructions` when present
+- [ ] Unit test: `buildStateAnalysisPrompt()` falls back to `expectedControls` when `instructions` missing
+- [ ] Integration test: StateAnalyzer uses `instructions` in actual API call
+- [ ] E2E test: Test with Brick Breaker (canvas) - verify instructions are followed
+- [ ] E2E test: Test with Pong (DOM) - verify instructions are followed
 
 **Acceptance Criteria**:
-- [ ] StateAnalyzer accepts metadata in constructor
-- [ ] buildContextualPrompt() method created and working
-- [ ] analyzeAndRecommendAction() uses contextual prompt
-- [ ] STATE_ANALYSIS_PROMPT enhanced with canvas/DOM guidance
-- [ ] main.ts passes metadata to StateAnalyzer
-- [ ] Tested with Brick Breaker (canvas) and Pong (DOM) games
+- [ ] `buildStateAnalysisPrompt()` prioritizes `testingStrategy.instructions` when available
+- [ ] `buildStateAnalysisPrompt()` falls back gracefully when `instructions` missing
+- [ ] STATE_ANALYSIS_PROMPT enhanced with canvas/DOM coordinate guidance
+- [ ] Metadata context appears in actual LLM prompts (verify via logging)
+- [ ] Tested with Brick Breaker (canvas) - instructions followed correctly
+- [ ] Tested with Pong (DOM) - instructions followed correctly
+- [ ] Backwards compatible with metadata files without `instructions` field
 
 ---
 
@@ -384,24 +340,28 @@ private async clickCanvasCoordinates(
   metadata?: GameMetadata
 ): Promise<boolean> {
   try {
-    // Find canvas element
-    const canvasExists = await page.locator('canvas').count() > 0;
-    if (!canvasExists) {
+    // Find canvas element using Stagehand's evaluate method
+    // Note: Stagehand v3 may not have locator() - use evaluate() instead
+    const canvasInfo = await (page as any).evaluate(() => {
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      };
+    });
+
+    if (!canvasInfo) {
       this.logger.warn('Canvas element not found for canvas-based game', {
         op: 'clickCanvasCoordinates',
       });
       return false;
     }
 
-    // Get canvas bounding box
-    const canvas = page.locator('canvas').first();
-    const box = await canvas.boundingBox();
-    if (!box) {
-      this.logger.warn('Canvas bounding box not available', {
-        op: 'clickCanvasCoordinates',
-      });
-      return false;
-    }
+    const box = canvasInfo;
 
     // Convert percentage to absolute coordinates
     const absoluteX = box.x + (box.width * xPercent);
@@ -414,11 +374,11 @@ private async clickCanvasCoordinates(
       absolute: { x: absoluteX, y: absoluteY },
     });
 
-    // Click at absolute coordinates
-    await page.mouse.click(absoluteX, absoluteY);
+    // Click at absolute coordinates (Stagehand API: page.click() not page.mouse.click())
+    await page.click(absoluteX, absoluteY);
 
     // Wait for visual feedback (important for canvas games)
-    await page.waitForTimeout(500);
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     return true;
   } catch (error) {
@@ -477,7 +437,7 @@ async executeRecommendation(
     }
 
     if (action === 'wait' && typeof target === 'number') {
-      await page.waitForTimeout(target);
+      await new Promise(resolve => setTimeout(resolve, target));
       return true;
     }
 
@@ -511,7 +471,9 @@ const currentState = await gameInteractor.captureCurrentState(page, screenshotCa
 - ⚠️ **Canvas Not Ready**: Canvas element may exist but not be fully rendered - check `boundingBox()` returns valid dimensions
 - ⚠️ **Viewport vs Canvas Coordinates**: Canvas position changes if page scrolls - always get fresh `boundingBox()`
 - ⚠️ **Clamp Percentages**: LLM might return x=1.2 or y=-0.1 - clamp to [0,1] range
-- ⚠️ **Visual Feedback Delay**: Canvas games update visually, not in DOM - add `waitForTimeout(500)` after click
+- ⚠️ **Visual Feedback Delay**: Canvas games update visually, not in DOM - add delay after click
+- ⚠️ **Stagehand API**: Use `page.click(x, y)` not `page.mouse.click()` (Stagehand v3 API)
+- ⚠️ **Stagehand Locator**: Verify `page.locator()` works with Stagehand v3 - may need to use `page.evaluate()` to find canvas
 
 **Test Cases to Verify**:
 
@@ -576,19 +538,18 @@ When debugging why the agent makes bad decisions, you need to see:
  *   bun test-adaptive-prompt.mjs _game-examples/brick-breaker-idle/metadata.json
  */
 
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-
 // Get metadata file path from command line or use default
 const metadataPath = process.argv[2] || '_game-examples/brick-breaker-idle/metadata.json';
-const resolvedPath = resolve(process.cwd(), metadataPath);
 
-console.log(`📄 Reading metadata from: ${resolvedPath}\n`);
+console.log(`📄 Reading metadata from: ${metadataPath}\n`);
 
 try {
-  // Read and parse metadata
-  const metadataContent = readFileSync(resolvedPath, 'utf-8');
-  const metadata = JSON.parse(metadataContent);
+  // Read and parse metadata using Bun APIs
+  const file = Bun.file(metadataPath);
+  if (!(await file.exists())) {
+    throw new Error(`File not found: ${metadataPath}`);
+  }
+  const metadata = await file.json();
 
   // Build contextual prompt (mimics StateAnalyzer.buildContextualPrompt)
   const goal = "Find and click the start button";
@@ -685,12 +646,12 @@ Based on the screenshot and HTML above, what should I do next?
   console.log(`   along with the current screenshot and HTML structure.`);
 
 } catch (error) {
-  console.error('❌ Error:', error.message);
-  if (error.code === 'ENOENT') {
-    console.error(`\nFile not found: ${resolvedPath}`);
+  console.error('❌ Error:', error instanceof Error ? error.message : String(error));
+  if (error instanceof Error && error.message.includes('not found')) {
+    console.error(`\nFile not found: ${metadataPath}`);
     console.error('Usage: bun test-adaptive-prompt.mjs [path-to-metadata.json]');
   } else if (error instanceof SyntaxError) {
-    console.error(`\nInvalid JSON in file: ${resolvedPath}`);
+    console.error(`\nInvalid JSON in file: ${metadataPath}`);
   }
   process.exit(1);
 }
@@ -759,6 +720,7 @@ You are analyzing a browser game to determine the next action...
 - `test-adaptive-prompt.mjs` (new script)
 
 **Gotchas**:
+- ⚠️ **Use Bun APIs**: Use `Bun.file()` instead of Node.js `fs.readFileSync()` for better Bun compatibility
 - ⚠️ Keep script simple - don't import from `src/` to avoid build complications
 - ⚠️ Mimic the logic from StateAnalyzer but don't require actual implementation
 - ⚠️ Show abbreviated STATE_ANALYSIS_PROMPT for readability
