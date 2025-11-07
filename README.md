@@ -396,6 +396,60 @@ ENABLE_STAGEHAND_AGENT=true bun run src/main.ts https://example.com/game --metad
 2. Adaptive QA (if `ENABLE_ADAPTIVE_QA=true`)
 3. Standard QA (default)
 
+#### OpenRouter Integration (Stagehand Agent Mode)
+
+The Stagehand Agent QA mode uses [OpenRouter](https://openrouter.ai) for flexible model selection across multiple providers.
+
+**Setup:**
+
+1. Get your OpenRouter API key: https://openrouter.ai/keys
+2. Add to `.env`:
+   ```bash
+   OPENROUTER_API_KEY=or-xxxxx
+   STAGEHAND_AGENT_MODEL=anthropic/claude-3.5-sonnet
+   ```
+
+**Model Configuration:**
+
+**STAGEHAND_AGENT_MODEL** (default: `anthropic/claude-3.5-sonnet`)
+- Main agent model for autonomous decision-making
+- Format: `provider/model-name`
+- Examples:
+  - `anthropic/claude-3.5-sonnet` (recommended for complex reasoning)
+  - `openai/gpt-4o` (cost-effective, fast)
+  - `google/gemini-2.0-flash-exp` (experimental, low-cost)
+  - See full catalog: https://openrouter.ai/docs/models
+
+**STAGEHAND_EXECUTION_MODEL** (optional, defaults to STAGEHAND_AGENT_MODEL)
+- Separate model for tool execution (observe/act actions)
+- Use a faster/cheaper model for tool calls
+- Example: `openai/gpt-4o-mini`
+- **Note**: Currently, Stagehand does not support separate execution models when using `AISdkClient`. This field is reserved for future use.
+
+**Cost Management:**
+
+OpenRouter provides transparent per-token pricing. Monitor usage at: https://openrouter.ai/activity
+
+**Typical cost per test run:**
+- Anthropic Claude 3.5 Sonnet: ~$0.10-0.30
+- OpenAI GPT-4o: ~$0.05-0.15
+- Google Gemini 2.0 Flash: ~$0.01-0.05
+
+**Troubleshooting:**
+
+**Error: "OpenRouter API key is required"**
+- Ensure `OPENROUTER_API_KEY` is set in `.env`
+- Verify key is valid at https://openrouter.ai/keys
+
+**Error: Invalid model format**
+- Model must be in format: `provider/model-name`
+- Check available models: https://openrouter.ai/docs/models
+
+**Error: Agent fails with "model not found"**
+- Model ID doesn't exist in OpenRouter catalog
+- Verify model ID at https://openrouter.ai/docs/models
+- Some models require explicit provider approval
+
 ### Timeouts
 
 Default timeout values (all in milliseconds):

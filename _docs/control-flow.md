@@ -515,14 +515,24 @@ Adaptive QA mode replaces Phase 4 (single gameplay simulation) with an **iterati
 
 ## Stagehand Agent QA Mode: Detailed Flow
 
-Stagehand Agent mode uses Stagehand's autonomous agent with OpenAI computer-use-preview model for fully autonomous testing. The agent handles the observe-act loop internally.
+Stagehand Agent mode uses Stagehand's autonomous agent with OpenRouter models (via AISdkClient) for fully autonomous testing. The agent handles the observe-act loop internally.
 
-### Stagehand Agent Architecture
+### Stagehand Agent Architecture (with OpenRouter)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Phases 1-3: Same as Standard/Adaptive Mode                     │
-│  (Initialize → Navigate → Detect → Wait for Ready)              │
+│  Phase 1: Initialization                                         │
+│  • Load OpenRouter config from environment                       │
+│  • Validate OPENROUTER_API_KEY exists                           │
+│  • Initialize OpenRouterProvider with agent/execution models    │
+│  • Create AI SDK model instance from OpenRouter                 │
+│  • Create AISdkClient with OpenRouter model                     │
+│  • Initialize BrowserManager with llmClient                     │
+└─────────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Phases 2-3: Same as Standard/Adaptive Mode                     │
+│  (Navigate → Detect → Wait for Ready)                          │
 └─────────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -531,7 +541,8 @@ Stagehand Agent mode uses Stagehand's autonomous agent with OpenAI computer-use-
 │  Configuration:                                                 │
 │  • maxSteps: 25 (max autonomous actions)                        │
 │  • maxDuration: 240000ms (4 minutes)                            │
-│  • model: openai/computer-use-preview                           │
+│  • model: Configured via AISdkClient at Stagehand init         │
+│    (default: anthropic/claude-3.5-sonnet via OpenRouter)       │
 │  • cua: true (Computer Use Agent mode)                          │
 │                                                                  │
 │  Instruction (metadata-driven):                                │
@@ -556,13 +567,14 @@ Stagehand Agent mode uses Stagehand's autonomous agent with OpenAI computer-use-
 │  • Capture final screenshot                                     │
 │  • Vision analysis for playability score                        │
 │  • Include agent action history in result                       │
+│  • Include agentModel in metadata                               │
 └─────────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Phase 6: Cleanup & Report (same as other modes)                │
 │  • Add stagehandAgent metadata to result                        │
 │  • Track console errors                                         │
-│  • Return result with action history                            │
+│  • Return result with action history and model info             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -575,7 +587,7 @@ Stagehand Agent mode uses Stagehand's autonomous agent with OpenAI computer-use-
 | Action Decisions | None | StateAnalyzer + GPT-4V | **Internal LLM** |
 | Code Complexity | Simple | ~450 lines | **~150 lines** |
 | Duration | 2-4 min | 2-4 min | **2-4 min** |
-| Cost (typical) | $0.02-0.05 | $0.10-0.50 | **TBD** |
+| Cost (typical) | $0.02-0.05 | $0.10-0.50 | **$0.10-0.30** (Claude 3.5 Sonnet) |
 | Cost Control | None | Budget + duration | **maxSteps + duration** |
 | Transparency | Full | Full | **Limited (black box)** |
 | Use Case | Quick validation | Complex navigation | **Fully autonomous** |
@@ -590,7 +602,7 @@ Stagehand Agent mode uses Stagehand's autonomous agent with OpenAI computer-use-
 | Timeout | 4 minutes (MAX_TEST_DURATION) |
 | Final Analysis | 10-20s (vision analysis) |
 | Total Duration | 2-4 minutes (typical) |
-| Cost | TBD (depends on action count and tokens) |
+| Cost | $0.10-0.30 (Claude 3.5 Sonnet), $0.05-0.15 (GPT-4o), $0.01-0.05 (Gemini 2.0 Flash) |
 
 ### Agent Action Types
 
