@@ -15,6 +15,7 @@ import type { GameMetadata } from '../../src/types/index.js';
 process.env.BROWSERBASE_API_KEY = 'test-key';
 process.env.BROWSERBASE_PROJECT_ID = 'test-project';
 process.env.OPENAI_API_KEY = 'test-openai-key';
+process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
 
 describe('runStagehandAgentQA Integration Tests', () => {
   beforeEach(() => {
@@ -22,6 +23,7 @@ describe('runStagehandAgentQA Integration Tests', () => {
     process.env.BROWSERBASE_API_KEY = 'test-key';
     process.env.BROWSERBASE_PROJECT_ID = 'test-project';
     process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
   });
 
   test('throws error if OPENAI_API_KEY missing', async () => {

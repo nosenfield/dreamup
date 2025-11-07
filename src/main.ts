@@ -21,6 +21,8 @@ import { validateGameMetadata } from './schemas/metadata.schema';
 import { calculateEstimatedCost, mergeAdaptiveConfig } from './utils/adaptive-qa';
 import { buildStagehandInstruction, extractScreenshotsFromActions } from './utils/stagehand-agent';
 import { withTimeout } from './utils/timeout';
+import { OpenRouterProvider } from './services/openrouter-provider';
+import { AISdkClient } from '@browserbasehq/stagehand';
 import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig, Action, Screenshot } from './types/game-test.types';
 
 /**
@@ -899,12 +901,39 @@ export async function runStagehandAgentQA(
   });
 
   try {
-    // 1. Validate OpenAI API key
+    // 1. Validate OpenAI API key (still needed for vision analysis)
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is required for Stagehand Agent mode');
+      throw new Error('OPENAI_API_KEY environment variable is required for vision analysis');
     }
 
-    // 2. Validate Browserbase credentials
+    // 2. Initialize OpenRouter provider
+    const openRouterProvider = new OpenRouterProvider({
+      logger,
+      apiKey: config?.openrouter?.apiKey,
+      agentModel: config?.openrouter?.agentModel,
+      executionModel: config?.openrouter?.executionModel,
+    });
+
+    const { agentModel } = openRouterProvider.getModelConfig();
+
+    logger.info('OpenRouter provider initialized', {
+      sessionId,
+      agentModel,
+      hasExecutionModel: !!openRouterProvider.getExecutionModel(),
+    });
+
+    // 3. Create AI SDK model instance from OpenRouter
+    const model = openRouterProvider.getAISdkModel();
+
+    // 4. Create AISdkClient with OpenRouter model
+    const llmClient = new AISdkClient({ model });
+
+    logger.info('AISdkClient created with OpenRouter model', {
+      sessionId,
+      agentModel,
+    });
+
+    // 5. Validate Browserbase credentials
     const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
     const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
 
@@ -912,12 +941,13 @@ export async function runStagehandAgentQA(
       throw new Error('Missing required environment variables: BROWSERBASE_API_KEY and/or BROWSERBASE_PROJECT_ID');
     }
 
-    // 3. Initialize browser
+    // 6. Initialize browser with LLM client
     const fileManager = new FileManager(sessionId);
     browserManager = new BrowserManager({
       apiKey: browserbaseApiKey,
       projectId: browserbaseProjectId,
       logger,
+      llmClient,  // Pass OpenRouter LLM client
     });
 
     const page = await withTimeout(
@@ -926,7 +956,7 @@ export async function runStagehandAgentQA(
       'Browser initialization timeout'
     );
 
-    logger.info('Browser initialized', { sessionId });
+    logger.info('Browser initialized with OpenRouter LLM client', { sessionId });
 
     // 4. Navigate to game
     await withTimeout(
@@ -989,23 +1019,19 @@ export async function runStagehandAgentQA(
       );
     }
 
-    // Create agent with CUA mode enabled
-    // Note: API key is handled via OPENAI_API_KEY environment variable
-    // Verify exact model config format in Stagehand docs - may be string or AgentModelConfig
+    // Create agent (no model needed - uses Stagehand's llmClient)
+    // NOTE: Stagehand agent() does NOT accept model parameter when using AISdkClient
+    // The model is configured at Stagehand initialization via llmClient
     const agent = stagehandInstance.agent({
       cua: true,  // Enable Computer Use Agent mode
-      model: STAGEHAND_AGENT_DEFAULTS.MODEL,  // String format (verify in Stagehand docs)
       systemPrompt: STAGEHAND_AGENT_DEFAULTS.SYSTEM_PROMPT,
-      // If AgentModelConfig format needed, use:
-      // model: {
-      //   modelName: STAGEHAND_AGENT_DEFAULTS.MODEL,
-      //   apiKey: process.env.OPENAI_API_KEY,  // Only if supported
-      // },
+      // NO model parameter - uses llmClient from Stagehand initialization
     });
 
     logger.info('Stagehand agent created', {
       sessionId,
-      model: STAGEHAND_AGENT_DEFAULTS.MODEL,
+      agentModel,  // Log which model is being used
+      note: 'Model configured via AISdkClient at Stagehand initialization',
     });
 
     // 9. Build instruction from metadata
@@ -1134,6 +1160,7 @@ export async function runStagehandAgentQA(
           actionCount: actions.length,
           actions,
           message: agentResult.message,
+          agentModel,  // Record which model was used
           usage: {
             ...agentResult.usage,
             // Add aggregated totals if needed
@@ -1392,7 +1419,21 @@ export async function handler(event: LambdaEvent): Promise<LambdaResponse> {
     let result: GameTestResult;
 
     if (flags.enableStagehandAgent) {
-      result = await runStagehandAgentQA(event.gameUrl, metadata);
+      // Load OpenRouter config from environment
+      const openRouterConfig = OpenRouterProvider.fromEnvironment();
+      if (!openRouterConfig) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({
+            error: 'OPENROUTER_API_KEY is required for Stagehand Agent mode',
+            message: 'Get your API key at: https://openrouter.ai/keys',
+          }),
+          headers,
+        };
+      }
+      result = await runStagehandAgentQA(event.gameUrl, metadata, {
+        openrouter: openRouterConfig,
+      });
     } else if (flags.enableAdaptiveQA) {
       result = await runAdaptiveQA(event.gameUrl, request);
     } else {
@@ -1480,8 +1521,19 @@ if (import.meta.main) {
 
     if (flags.enableStagehandAgent) {
       console.log('🤖 Running in Stagehand Agent mode (autonomous)...');
+      
+      // Load OpenRouter config from environment
+      const openRouterConfig = OpenRouterProvider.fromEnvironment();
+      if (!openRouterConfig) {
+        console.error('Error: OPENROUTER_API_KEY is required for Stagehand Agent mode');
+        console.error('Get your API key at: https://openrouter.ai/keys');
+        process.exit(1);
+      }
+      
       const metadata = request?.metadata;
-      result = await runStagehandAgentQA(gameUrl, metadata);
+      result = await runStagehandAgentQA(gameUrl, metadata, {
+        openrouter: openRouterConfig,
+      });
     } else if (flags.enableAdaptiveQA) {
       console.log('🚀 Running in Adaptive QA mode (iterative action loop)...');
       result = await runAdaptiveQA(gameUrl, request);

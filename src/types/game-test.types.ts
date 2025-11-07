@@ -229,11 +229,16 @@ export interface StagehandAgentMetadata {
   /** Agent's summary message */
   message: string;
 
+  /** Model used for agent execution (e.g., "anthropic/claude-3.5-sonnet") */
+  agentModel?: string;
+
   /** Token usage if available */
   usage?: {
     input_tokens: number;
     output_tokens: number;
     inference_time_ms: number;
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
   };
 }
 
