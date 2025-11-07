@@ -1,0 +1,8 @@
+Snake
+bun run src/main.ts https://isnoahalive.com/games/snake --metadata _game-examples/snake/metadata.json
+
+2048
+bun run src/main.ts https://funhtml5games.com/2048/index.html
+
+Idle Breaker
+bun run src/main.ts https://game303785.konggames.com/gamez/0030/3785/live/index.html --metadata _game-examples/brick-breaker-idle/metadata.json
