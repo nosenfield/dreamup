@@ -29,6 +29,9 @@ export interface BrowserManagerConfig {
   /** Optional LLM client for Stagehand (e.g., AISdkClient with OpenRouter model) */
   llmClient?: AISdkClient;
   
+  /** Optional model API key (required when using llmClient with OpenRouter) */
+  modelApiKey?: string;
+  
   /** Optional timeout for initialization (default: PAGE_NAVIGATION_TIMEOUT) */
   initTimeout?: number;
   
@@ -65,6 +68,7 @@ export class BrowserManager {
   private readonly initTimeout: number;
   private readonly navigateTimeout: number;
   private readonly llmClient?: AISdkClient;
+  private readonly modelApiKey?: string;
   
   private stagehand: Stagehand | null = null;
   private page: AnyPage | null = null;
@@ -80,6 +84,7 @@ export class BrowserManager {
     this.projectId = config.projectId;
     this.logger = config.logger;
     this.llmClient = config.llmClient;
+    this.modelApiKey = config.modelApiKey;
     this.initTimeout = config.initTimeout ?? TIMEOUTS.PAGE_NAVIGATION_TIMEOUT;
     this.navigateTimeout = config.navigateTimeout ?? TIMEOUTS.PAGE_NAVIGATION_TIMEOUT;
   }
@@ -124,13 +129,49 @@ export class BrowserManager {
       // Add LLM client if provided (for OpenRouter integration)
       if (this.llmClient) {
         stagehandConfig.llmClient = this.llmClient;
-        this.logger.info('Using custom LLM client for Stagehand', {});
+        // Stagehand requires modelApiKey when using llmClient (e.g., OpenRouter API key)
+        // Must be set unconditionally when llmClient is provided
+        // Stagehand passes this to apiClient.init() even when using AISdkClient
+        // We need to set it in modelClientOptions which comes from resolveModelConfiguration
+        // Since we're using llmClient, we need to pass modelClientOptions directly
+        if (!this.modelApiKey) {
+          throw new Error(
+            'modelApiKey is required when using llmClient. ' +
+            'Provide the OpenRouter API key via BrowserManagerConfig.modelApiKey'
+          );
+        }
+        // Set modelApiKey in model config so Stagehand can extract it via resolveModelConfiguration
+        // When using llmClient, Stagehand uses baseClientOptions from resolveModelConfiguration
+        // resolveModelConfiguration extracts everything except modelName as clientOptions
+        // So we pass apiKey directly in the model object, not nested in clientOptions
+        stagehandConfig.model = {
+          modelName: 'openrouter/dummy', // Dummy model name (not used when llmClient is provided)
+          apiKey: this.modelApiKey, // Pass apiKey directly (will be extracted as clientOptions.apiKey)
+        };
+        this.logger.info('Using custom LLM client for Stagehand', {
+          hasModelApiKey: true,
+          modelApiKeyPrefix: this.modelApiKey.substring(0, 8) + '...',
+        });
       }
+
+      // Log final config for debugging (without sensitive data)
+      this.logger.debug('Stagehand config', {
+        env: stagehandConfig.env,
+        hasApiKey: !!stagehandConfig.apiKey,
+        hasProjectId: !!stagehandConfig.projectId,
+        hasLlmClient: !!stagehandConfig.llmClient,
+        hasModel: !!stagehandConfig.model,
+        modelType: typeof stagehandConfig.model,
+        modelKeys: stagehandConfig.model && typeof stagehandConfig.model === 'object' ? Object.keys(stagehandConfig.model) : [],
+        hasModelClientOptions: stagehandConfig.model && typeof stagehandConfig.model === 'object' && 'clientOptions' in stagehandConfig.model,
+        hasModelClientOptionsApiKey: stagehandConfig.model && typeof stagehandConfig.model === 'object' && stagehandConfig.model.clientOptions && 'apiKey' in stagehandConfig.model.clientOptions,
+      });
 
       // Create Stagehand instance with Browserbase configuration
       this.stagehand = new Stagehand(stagehandConfig);
 
       // Initialize Stagehand with timeout
+      // Note: modelApiKey is set in stagehandConfig above, Stagehand validates it during init()
       await withTimeout(
         this.stagehand.init(),
         this.initTimeout,
