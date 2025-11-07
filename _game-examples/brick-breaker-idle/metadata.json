@@ -7,96 +7,103 @@
 
   "inputSchema": {
     "type": "semantic",
-    "content": "Click on bricks (blue grid elements) to destroy them. Click 'UPGRADES' button to access shop. No keyboard input required.",
+    "content": "This is a canvas-based game. All game content (bricks, UI) is rendered on an HTML5 canvas element. Click on coordinates within the canvas to interact with bricks. Click on UI button areas (if rendered outside canvas) to access menus. No keyboard input required.",
     "actions": [
       {
         "name": "ClickBrick",
         "keys": [],
         "mouseAction": "click",
-        "target": "brick-element",
-        "description": "Click on any brick in the grid to deal damage and destroy it"
+        "target": "canvas-coordinates",
+        "description": "Click on coordinates within the canvas where bricks are rendered (center grid area, approximately 20-80% width, 15-90% height of viewport)"
       },
       {
         "name": "OpenUpgrades",
         "keys": [],
         "mouseAction": "click",
-        "target": "upgrades-button",
-        "description": "Open the upgrades/shop menu to purchase improvements"
+        "target": "canvas-ui-area",
+        "description": "Click on the upgrades/shop button area within the canvas (typically top-center-right area)"
       },
       {
         "name": "OpenSettings",
         "keys": [],
         "mouseAction": "click",
-        "target": "settings-icon",
-        "description": "Open settings menu (gear icon in top-right)"
+        "target": "canvas-ui-area",
+        "description": "Click on the settings icon area within the canvas (typically top-right corner)"
       }
     ],
     "axes": []
   },
 
   "uiElements": {
+    "canvas": {
+      "selector": "canvas",
+      "description": "Main game canvas element - all game content is rendered here",
+      "location": "center of page"
+    },
     "currency": {
-      "selector": ".currency-display, [class*='money'], [class*='dollar']",
-      "expectedFormat": "$ {number}",
-      "location": "top-right"
+      "selector": "canvas",
+      "expectedFormat": "Rendered on canvas - visual text showing currency amount",
+      "location": "top-right area of canvas"
     },
     "level": {
-      "selector": ".level-display, [class*='level']",
-      "expectedFormat": "LEVEL {number}",
-      "location": "top-center"
+      "selector": "canvas",
+      "expectedFormat": "Rendered on canvas - visual text showing level number",
+      "location": "top-center area of canvas"
     },
     "ballCounter": {
-      "selector": ".ball-counter, [class*='balls']",
-      "expectedFormat": "{current}/{max} BALLS",
-      "location": "top-left"
+      "selector": "canvas",
+      "expectedFormat": "Rendered on canvas - visual text showing ball count",
+      "location": "top-left area of canvas"
     },
     "upgradesButton": {
-      "selector": "button:has-text('UPGRADES'), [class*='upgrade-btn']",
-      "location": "top-center-right"
+      "selector": "canvas",
+      "description": "Rendered on canvas - button area for upgrades menu",
+      "location": "top-center-right area of canvas"
     }
   },
 
   "loadingIndicators": [
     {
       "type": "element",
-      "pattern": ".brick, canvas, .game-container",
-      "description": "Grid of bricks is visible"
+      "pattern": "canvas",
+      "description": "Canvas element is present and visible"
     },
     {
-      "type": "element",
-      "pattern": ".currency-display, .level-display",
-      "description": "UI elements (currency, level) are rendered"
+      "type": "visual",
+      "pattern": "brick-grid-visible",
+      "description": "Grid of bricks is visible on canvas (visual check via screenshot)"
     },
     {
-      "type": "text",
-      "pattern": "LEVEL",
-      "description": "Level counter shows game has loaded"
+      "type": "visual",
+      "pattern": "ui-text-visible",
+      "description": "UI text elements (currency, level) are visible on canvas (visual check via screenshot)"
     }
   ],
 
   "successIndicators": [
     {
-      "type": "element_visible",
-      "description": "Bricks display numbers (health values)",
-      "selector": ".brick, canvas"
+      "type": "visual",
+      "description": "Bricks display numbers (health values) on canvas",
+      "method": "screenshot-analysis"
     },
     {
-      "type": "element_visible",
-      "description": "Currency counter is visible and updates",
-      "selector": ".currency-display, [class*='money']"
+      "type": "visual",
+      "description": "Currency counter is visible on canvas and updates after clicks",
+      "method": "screenshot-analysis"
     },
     {
       "type": "interaction_response",
-      "description": "Clicking bricks produces visual feedback"
+      "description": "Clicking canvas coordinates produces visual feedback (brick damage animation, number decrease)"
     },
     {
-      "type": "score_change",
-      "description": "Currency increases after clicking bricks",
-      "selector": ".currency-display"
+      "type": "visual_change",
+      "description": "Currency value increases after clicking bricks (detected via screenshot comparison)",
+      "method": "screenshot-analysis"
     },
     {
-      "type": "animation",
-      "description": "Bricks disappear when health reaches 0"
+      "type": "visual_change",
+      "description": "Bricks disappear when health reaches 0 (detected via screenshot comparison)",
+      "method": "screenshot-analysis"
     }
   ],
 
@@ -123,30 +130,39 @@
   },
 
   "specialInstructions": {
-    "gameType": "mouse-clicker",
+    "gameType": "canvas-mouse-clicker",
     "inputMethod": "mouse-clicks-only",
+    "canvasBased": true,
     "clickTargets": [
       {
-        "type": "grid-area",
-        "selector": "canvas, .game-container, [class*='brick']",
+        "type": "canvas-coordinates",
+        "target": "canvas",
         "strategy": "random-positions-in-bounds",
         "frequency": "2-per-second",
         "bounds": {
-          "description": "Calculate positions within brick grid area",
-          "xPercent": "20% to 80% of viewport width",
-          "yPercent": "15% to 90% of viewport height"
-        }
+          "description": "Click on canvas coordinates within brick grid area (center of canvas)",
+          "xPercent": "20% to 80% of canvas width",
+          "yPercent": "15% to 90% of canvas height",
+          "note": "Coordinates are relative to canvas element, not viewport"
+        },
+        "instructions": "Find the canvas element, then click on random coordinates within the center grid area where bricks are rendered"
       }
     ],
     "avoidClicking": [
-      "Settings icon (top-right corner)",
-      "Areas outside brick grid",
-      "Top UI bar with level/upgrades"
+      "Canvas coordinates outside the brick grid area (edges of canvas)",
+      "Top UI bar area of canvas (where level/currency text is displayed)",
+      "Settings icon area (top-right corner of canvas)"
     ],
     "expectedBehavior": {
-      "immediateResponse": "Brick shows damage animation or number decreases",
-      "afterMultipleClicks": "Currency increases, bricks disappear",
-      "progressionIndicator": "Level counter may increase after clearing enough bricks"
+      "immediateResponse": "When clicking canvas coordinates where bricks are rendered, you should see: brick shows damage animation or number decreases visually on canvas",
+      "afterMultipleClicks": "After multiple clicks on brick coordinates: currency number increases on canvas, bricks disappear when health reaches 0",
+      "progressionIndicator": "Level counter (rendered on canvas) may increase after clearing enough bricks"
+    },
+    "canvasInteraction": {
+      "method": "coordinate-based-clicking",
+      "note": "All game elements are rendered on canvas. Use coordinate-based clicking within canvas bounds, not DOM element selectors",
+      "targetElement": "canvas",
+      "coordinateStrategy": "random-positions-within-grid-bounds"
     }
   },
 
@@ -154,9 +170,12 @@
   "notes": [
     "Game is entirely mouse-driven - no keyboard controls needed",
     "Primary gameplay loop: click bricks → earn money → purchase balls",
-    "QA agent should focus on rapid clicking in the brick grid area (center of screen)",
-    "Success = seeing currency increase and bricks respond to clicks",
-    "Bricks may be rendered on HTML5 Canvas, not as DOM elements",
-    "Visual validation via screenshots recommended to verify brick destruction"
+    "IMPORTANT: This is a canvas-based game - all content is rendered on HTML5 canvas, NOT as DOM elements",
+    "QA agent must use coordinate-based clicking on canvas element, not CSS selectors",
+    "Target the canvas element, then click on coordinates within the brick grid area (center of canvas)",
+    "Brick grid area: approximately 20-80% width, 15-90% height of canvas element",
+    "Success = seeing currency increase and bricks respond to clicks (verified via screenshot analysis)",
+    "Visual validation via screenshots is REQUIRED - cannot use DOM selectors for game elements",
+    "All UI elements (currency, level, buttons) are also rendered on canvas, not separate DOM elements"
   ]
 }
