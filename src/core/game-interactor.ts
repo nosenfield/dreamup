@@ -18,12 +18,12 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
-import { getFeatureFlags } from '../config/feature-flags';
 import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
 import type { StateAnalyzer } from './state-analyzer';
 import type { GameMetadata, ActionRecommendation, CapturedState } from '../types';
+import { StartDetector } from './start-detection';
 
 /**
  * Configuration for GameInteractor.
@@ -270,18 +270,15 @@ export class GameInteractor {
   }
 
   /**
-   * Find and click the start button using DOM selector, natural language, or vision fallback.
+   * Find and click the start button using multiple strategies.
    *
-   * Uses a three-strategy approach:
-   * 1. First tries direct DOM selection (fastest, most reliable for HTML buttons)
-   *    - Looks for common start/play button selectors
-   *    - Works for HTML elements above or below canvas
-   * 2. Then tries Stagehand's natural language command (`page.act("click start button")`)
-   * 3. Finally falls back to vision-based detection if both fail
-   *    - Takes a screenshot
-   *    - Uses VisionAnalyzer to find clickable elements
-   *    - Filters for "start" or "play" buttons
-   *    - Clicks at the highest confidence element (>= 0.7)
+   * Delegates to StartDetector which coordinates multiple strategies:
+   * 1. DOM selector strategy (fastest, most reliable)
+   * 2. Natural language strategy (Stagehand page.act())
+   * 3. Vision strategy (GPT-4 Vision element detection)
+   * 4. State analysis strategy (LLM-powered state analysis)
+   *
+   * Strategies are tried in order until one succeeds.
    *
    * @param page - The Stagehand page object
    * @param timeout - Optional timeout for the operation (default: interactionTimeout)
@@ -296,271 +293,17 @@ export class GameInteractor {
    * ```
    */
   async findAndClickStart(page: AnyPage, timeout?: number): Promise<boolean> {
-    const operationTimeout = timeout ?? this.interactionTimeout;
-    const pageAny = page as any;
-    const featureFlags = getFeatureFlags();
-
-    this.logger.info('Finding and clicking start button', {
-      timeout: operationTimeout,
-      hasVisionFallback: !!(this.visionAnalyzer && this.screenshotCapturer),
-      enabledStrategies: {
-        dom: featureFlags.enableDOMStrategy,
-        naturalLanguage: featureFlags.enableNaturalLanguageStrategy,
-        vision: featureFlags.enableVisionStrategy,
-        stateAnalysis: featureFlags.enableStateAnalysisStrategy,
-      },
+    const detector = new StartDetector({
+      logger: this.logger,
+      timeout: timeout ?? this.interactionTimeout,
+      visionAnalyzer: this.visionAnalyzer,
+      screenshotCapturer: this.screenshotCapturer,
+      stateAnalyzer: this.stateAnalyzer,
+      metadata: this.metadata,
     });
 
-    // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
-    // Three-tier approach: exact IDs -> attribute wildcards -> text-based fallback
-    // Note: :has-text() is case-insensitive by default (matches "Start", "START", "start")
-    if (featureFlags.enableDOMStrategy) {
-      const domSelectors = [
-      // Tier 1: Exact IDs (fast path for our game engine standard)
-      '#start-btn',
-      '#play-btn',
-      '#begin-btn',
-
-      // Tier 2: Attribute wildcards (broad coverage, case-insensitive with 'i' flag)
-      '[id*="start" i]',
-      '[id*="play" i]',
-      '[id*="begin" i]',
-      '[class*="start" i]',
-      '[class*="play" i]',
-      '[class*="begin" i]',
-      '[name*="start" i]',
-      '[name*="play" i]',
-      '[name*="begin" i]',
-      '[onclick*="start" i]',
-      '[onclick*="play" i]',
-      '[onclick*="begin" i]',
-
-      // Tier 3: Text-based fallback (case-insensitive, partial match)
-      'button:has-text("start")',
-      'button:has-text("play")',
-      'button:has-text("begin")',
-      'a:has-text("start")',
-      'a:has-text("play")',
-      'div[role="button"]:has-text("start")',
-      'div[role="button"]:has-text("play")',
-    ];
-
-    for (const selector of domSelectors) {
-      try {
-        // Try to find and click the element using standard page.click(selector)
-        const element = await pageAny.locator(selector).first();
-        if (element && (await element.isVisible({ timeout: 1000 }).catch(() => false))) {
-          await withTimeout(
-            element.click(),
-            operationTimeout,
-            `DOM selector click "${selector}" timed out after ${operationTimeout}ms`
-          );
-
-          this.logger.info('Start button found using DOM selector', {
-            selector,
-          });
-
-          // Wait for game to initialize after clicking start
-          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-          this.logger.debug('Post-click delay completed (DOM selector)', {
-            delayMs: TIMEOUTS.POST_START_DELAY,
-          });
-
-          return true;
-        }
-      } catch (error) {
-        this.logger.debug('DOM selector failed', {
-          selector,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Continue to next selector
-      }
-    }
-    }
-
-    // Strategy 2: Try natural language commands
-    if (featureFlags.enableNaturalLanguageStrategy) {
-    const naturalLanguagePhrases = [
-      'click start button',
-      'click play button',
-      'press start',
-      'click begin game',
-    ];
-
-    for (const phrase of naturalLanguagePhrases) {
-      try {
-        if (typeof pageAny.act === 'function') {
-          await withTimeout(
-            pageAny.act(phrase),
-            operationTimeout,
-            `Natural language act "${phrase}" timed out after ${operationTimeout}ms`
-          );
-
-          this.logger.info('Start button found using natural language', {
-            phrase,
-          });
-
-          // Wait for game to initialize after clicking start
-          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-          this.logger.debug('Post-click delay completed (natural language)', {
-            delayMs: TIMEOUTS.POST_START_DELAY,
-          });
-
-          return true;
-        } else {
-          // page.act() doesn't exist, skip natural language
-          break;
-        }
-      } catch (error) {
-        this.logger.debug('Natural language command failed', {
-          phrase,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Continue to next phrase or fallback
-      }
-    }
-    }
-
-    // Strategy 3: Fallback to vision-based detection
-    if (featureFlags.enableVisionStrategy && this.visionAnalyzer && this.screenshotCapturer) {
-      this.logger.info('Falling back to vision-based start button detection', {});
-
-      try {
-        // Take screenshot for vision analysis
-        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
-        
-        // Find clickable elements using vision
-        const elements = await this.visionAnalyzer.findClickableElements(screenshot.path);
-
-        if (elements.length === 0) {
-          this.logger.warn('No clickable elements found in screenshot', {});
-          return false;
-        }
-
-        // Filter for start/play-related buttons
-        const startKeywords = ['start', 'play', 'begin', 'go'];
-        const startElements = elements.filter((element) => {
-          const labelLower = element.label.toLowerCase();
-          return (
-            startKeywords.some((keyword) => labelLower.includes(keyword)) &&
-            element.confidence >= 0.7
-          );
-        });
-
-        if (startElements.length === 0) {
-          this.logger.warn('No start/play buttons found in clickable elements', {
-            elementCount: elements.length,
-          });
-          return false;
-        }
-
-        // Select element with highest confidence
-        const bestElement = startElements.reduce((best, current) =>
-          current.confidence > best.confidence ? current : best
-        );
-
-        this.logger.info('Start button found using vision', {
-          label: bestElement.label,
-          coordinates: { x: bestElement.x, y: bestElement.y },
-          confidence: bestElement.confidence,
-        });
-
-        // Click at the coordinates
-        await this.clickAtCoordinates(page, bestElement.x, bestElement.y);
-
-        this.logger.info('Start button clicked successfully using vision', {
-          label: bestElement.label,
-        });
-
-        // Wait for game to initialize after clicking start
-        await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-        this.logger.debug('Post-click delay completed (vision)', {
-          delayMs: TIMEOUTS.POST_START_DELAY,
-        });
-
-        return true;
-      } catch (error) {
-        this.logger.warn('Vision-based start button detection failed', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return false;
-      }
-    }
-
-    // Strategy 4: LLM State Analysis (fallback when DOM and natural language fail)
-    if (featureFlags.enableStateAnalysisStrategy && this.stateAnalyzer && this.screenshotCapturer) {
-      try {
-        this.logger.info('DOM and natural language failed, using LLM state analysis');
-
-        // Capture HTML and screenshot for state analysis
-        // @ts-ignore - Code runs in browser context where document exists
-        const html = await (page as any).evaluate(() => document.documentElement.outerHTML);
-        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
-
-        // Get sanitized HTML
-        const sanitizedHTML = this.stateAnalyzer.sanitizeHTML(html);
-
-        // Analyze state and get recommendation
-        const recommendation = await this.stateAnalyzer.analyzeAndRecommendAction({
-          html: sanitizedHTML,
-          screenshot: screenshot.path,
-          previousActions: [],
-          metadata: this.metadata,
-          goal: 'Find and click the start/play button to begin the game',
-        });
-
-        // Execute recommendation
-        const success = await this.executeRecommendation(page, recommendation);
-        
-        if (success) {
-          // Wait for game to initialize after clicking start
-          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-          this.logger.debug('Post-click delay completed (state analysis)', {
-            delayMs: TIMEOUTS.POST_START_DELAY,
-          });
-          return true;
-        }
-
-        // Try alternatives if primary recommendation failed
-        if (recommendation.alternatives.length > 0) {
-          this.logger.info('Primary recommendation failed, trying alternatives', {
-            alternativeCount: recommendation.alternatives.length,
-          });
-
-          for (const alternative of recommendation.alternatives) {
-            const altSuccess = await this.executeRecommendation(page, {
-              action: alternative.action,
-              target: alternative.target,
-              reasoning: alternative.reasoning,
-              confidence: 0.5, // Lower confidence for alternatives
-              alternatives: [],
-            });
-
-            if (altSuccess) {
-              await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-              return true;
-            }
-          }
-        }
-
-        return false;
-      } catch (error) {
-        this.logger.warn('LLM state analysis failed', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return false;
-      }
-    }
-
-    // All strategies failed or fallback not available
-    this.logger.warn('Could not find start button', {
-      domSelectionFailed: true,
-      naturalLanguageFailed: true,
-      visionFallbackAvailable: !!(this.visionAnalyzer && this.screenshotCapturer),
-      stateAnalysisAvailable: !!(this.stateAnalyzer && this.screenshotCapturer),
-    });
-
-    return false;
+    const result = await detector.findAndClickStart(page);
+    return result.success;
   }
 
   /**
