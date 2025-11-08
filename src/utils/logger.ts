@@ -38,6 +38,42 @@ export enum LogLevel {
 }
 
 /**
+ * Test phases for phase-based logging.
+ * 
+ * Used to visually separate different phases of the test execution
+ * with clear banners in the logs.
+ */
+export enum TestPhase {
+  INITIALIZATION = 'initialization',
+  NAVIGATION = 'navigation',
+  GAME_DETECTION = 'game_detection',
+  START_BUTTON_DETECTION = 'start_button_detection',
+  GAMEPLAY_SIMULATION = 'gameplay_simulation',
+  ADAPTIVE_QA_LOOP = 'adaptive_qa_loop',
+  VISION_ANALYSIS = 'vision_analysis',
+  SCREENSHOT_CAPTURE = 'screenshot_capture',
+  CLEANUP = 'cleanup',
+}
+
+/**
+ * Action details for action logging.
+ */
+export interface ActionDetails {
+  x?: number;
+  y?: number;
+  target?: string;
+  strategy?: string;
+  key?: string;
+  duration?: number;
+  stage?: string;
+  path?: string;
+  timing?: string;
+  confidence?: number;
+  reasoning?: string;
+  [key: string]: unknown;
+}
+
+/**
  * Context object for logger instantiation.
  * 
  * Provides default context that will be included in all log entries
@@ -119,6 +155,38 @@ export interface LogEntry {
 export class Logger {
   private context: LoggerContext;
   private flags: FeatureFlags;
+  private logLevel: LogLevel;
+  private currentPhase?: TestPhase;
+
+  /**
+   * Parse log level from environment variable.
+   * 
+   * @param envValue - Value from LOG_LEVEL environment variable
+   * @param flags - Feature flags (for DEBUG backward compatibility)
+   * @returns Parsed log level, defaults to INFO
+   */
+  private static parseLogLevel(envValue: string | undefined, flags: FeatureFlags): LogLevel {
+    // Backward compatibility: DEBUG flag sets log level to DEBUG
+    if (flags.enableDetailedLogging && !envValue) {
+      return LogLevel.DEBUG;
+    }
+
+    if (!envValue) {
+      return LogLevel.INFO;
+    }
+
+    const levelMap: Record<string, LogLevel> = {
+      trace: LogLevel.TRACE,
+      debug: LogLevel.DEBUG,
+      info: LogLevel.INFO,
+      warn: LogLevel.WARN,
+      error: LogLevel.ERROR,
+      fatal: LogLevel.FATAL,
+    };
+
+    const normalized = envValue.toLowerCase();
+    return levelMap[normalized] || LogLevel.INFO;
+  }
 
   /**
    * Create a new Logger instance.
@@ -129,22 +197,32 @@ export class Logger {
   constructor(context?: LoggerContext, flags?: FeatureFlags) {
     this.context = context || {};
     this.flags = flags || getFeatureFlags();
+    this.logLevel = Logger.parseLogLevel(process.env.LOG_LEVEL, this.flags);
   }
 
   /**
    * Check if a log level should be output.
    * 
-   * Debug logs are only shown when enableDetailedLogging is true.
-   * All other levels are always shown.
+   * Respects LOG_LEVEL environment variable and DEBUG flag for backward compatibility.
    * 
    * @param level - Log level to check
    * @returns true if log should be output, false otherwise
    */
   private shouldLog(level: LogLevel): boolean {
-    if (level === LogLevel.DEBUG || level === LogLevel.TRACE) {
-      return this.flags.enableDetailedLogging === true;
-    }
-    return true;
+    const levelPriority: Record<LogLevel, number> = {
+      [LogLevel.TRACE]: 0,
+      [LogLevel.DEBUG]: 1,
+      [LogLevel.INFO]: 2,
+      [LogLevel.WARN]: 3,
+      [LogLevel.ERROR]: 4,
+      [LogLevel.FATAL]: 5,
+    };
+
+    const currentPriority = levelPriority[this.logLevel];
+    const messagePriority = levelPriority[level];
+
+    // Log if message priority >= current log level priority
+    return messagePriority >= currentPriority;
   }
 
   /**
@@ -212,6 +290,15 @@ export class Logger {
   }
 
   /**
+   * Output a plain string (for phase banners).
+   * 
+   * @param message - Plain string message to output
+   */
+  private outputPlain(message: string): void {
+    console.log(message);
+  }
+
+  /**
    * Log an info-level message.
    * 
    * Use for important business events (user login, order placed, job completed).
@@ -265,7 +352,7 @@ export class Logger {
    * Log a debug-level message.
    * 
    * Use for detailed diagnostic info (variable values, intermediate states).
-   * Only logs when enableDetailedLogging is true.
+   * Only logs when LOG_LEVEL allows it.
    * 
    * @param msg - Human-readable message
    * @param data - Optional additional context data
@@ -274,6 +361,108 @@ export class Logger {
     if (this.shouldLog(LogLevel.DEBUG)) {
       const entry = this.formatLog(LogLevel.DEBUG, msg, data);
       this.output(entry);
+    }
+  }
+
+  /**
+   * Log a trace-level message.
+   * 
+   * Use for very detailed, hot path debugging (function entry/exit, loop iterations).
+   * Only logs when LOG_LEVEL=trace.
+   * 
+   * @param msg - Human-readable message
+   * @param data - Optional additional context data
+   */
+  trace(msg: string, data?: Record<string, unknown>): void {
+    if (this.shouldLog(LogLevel.TRACE)) {
+      const entry = this.formatLog(LogLevel.TRACE, msg, data);
+      this.output(entry);
+    }
+  }
+
+  /**
+   * Begin a test phase with a visual banner.
+   * 
+   * Outputs a clear banner to separate test phases in logs.
+   * 
+   * @param phase - Test phase to begin
+   * @param details - Optional phase details to log
+   */
+  beginPhase(phase: TestPhase, details?: Record<string, unknown>): void {
+    this.currentPhase = phase;
+    const phaseName = phase.toUpperCase().replace(/_/g, ' ');
+    const banner = `\n${'='.repeat(60)}\n=== BEGIN ${phaseName} ===\n${'='.repeat(60)}`;
+    this.outputPlain(banner);
+    
+    if (details) {
+      this.info('Phase details', details);
+    }
+  }
+
+  /**
+   * End a test phase with a visual banner.
+   * 
+   * Outputs a clear banner to mark the end of a test phase.
+   * 
+   * @param phase - Test phase to end
+   * @param summary - Optional phase summary to log
+   */
+  endPhase(phase: TestPhase, summary?: Record<string, unknown>): void {
+    if (summary) {
+      this.info('Phase summary', summary);
+    }
+    
+    const phaseName = phase.toUpperCase().replace(/_/g, ' ');
+    const banner = `${'='.repeat(60)}\n=== END ${phaseName} ===\n${'='.repeat(60)}\n`;
+    this.outputPlain(banner);
+    this.currentPhase = undefined;
+  }
+
+  /**
+   * Log an action with formatted details.
+   * 
+   * Formats action details based on action type (click, keypress, screenshot).
+   * 
+   * @param actionType - Type of action (click, keypress, screenshot, etc.)
+   * @param details - Action details to format and log
+   */
+  action(actionType: string, details: ActionDetails): void {
+    const formatted = this.formatActionDetails(actionType, details);
+    this.info(`ACTION: ${actionType}`, formatted);
+  }
+
+  /**
+   * Format action details based on action type.
+   * 
+   * @param actionType - Type of action
+   * @param details - Raw action details
+   * @returns Formatted action details object
+   */
+  private formatActionDetails(actionType: string, details: ActionDetails): Record<string, unknown> {
+    switch (actionType) {
+      case 'click':
+        return {
+          coordinates: details.x !== undefined && details.y !== undefined
+            ? `(${details.x}, ${details.y})`
+            : undefined,
+          target: details.target,
+          strategy: details.strategy,
+          ...(details.confidence !== undefined && { confidence: details.confidence }),
+          ...(details.reasoning !== undefined && { reasoning: details.reasoning }),
+        };
+      case 'keypress':
+        return {
+          key: details.key,
+          duration: details.duration,
+        };
+      case 'screenshot':
+        return {
+          stage: details.stage,
+          path: details.path,
+          timing: details.timing,
+        };
+      default:
+        return details;
     }
   }
 }

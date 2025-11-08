@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { Logger, LogLevel } from '../../src/utils/logger';
+import { Logger, LogLevel, TestPhase } from '../../src/utils/logger';
 import { getFeatureFlags } from '../../src/config/feature-flags';
 
 describe('Logger', () => {
@@ -307,6 +307,305 @@ describe('Logger', () => {
       expect(String(LogLevel.WARN)).toBe('warn');
       expect(String(LogLevel.ERROR)).toBe('error');
       expect(String(LogLevel.FATAL)).toBe('fatal');
+    });
+  });
+
+  describe('TestPhase enum', () => {
+    it('should export TestPhase enum with all required phases', () => {
+      expect(TestPhase.INITIALIZATION).toBe('initialization');
+      expect(TestPhase.NAVIGATION).toBe('navigation');
+      expect(TestPhase.GAME_DETECTION).toBe('game_detection');
+      expect(TestPhase.START_BUTTON_DETECTION).toBe('start_button_detection');
+      expect(TestPhase.GAMEPLAY_SIMULATION).toBe('gameplay_simulation');
+      expect(TestPhase.ADAPTIVE_QA_LOOP).toBe('adaptive_qa_loop');
+      expect(TestPhase.VISION_ANALYSIS).toBe('vision_analysis');
+      expect(TestPhase.SCREENSHOT_CAPTURE).toBe('screenshot_capture');
+      expect(TestPhase.CLEANUP).toBe('cleanup');
+    });
+  });
+
+  describe('beginPhase() method', () => {
+    it('should output phase banner with correct format', () => {
+      const logger = new Logger();
+      logger.beginPhase(TestPhase.START_BUTTON_DETECTION);
+
+      expect(console.log).toHaveBeenCalled();
+      const calls = (console.log as ReturnType<typeof mock>).mock.calls;
+      
+      // Should have 3 calls: banner start, phase details (if any), banner end
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      
+      // First call should be the banner
+      const banner = calls[0][0];
+      expect(typeof banner).toBe('string');
+      expect(banner).toContain('BEGIN');
+      expect(banner).toContain('START BUTTON DETECTION');
+      expect(banner).toContain('=');
+    });
+
+    it('should include phase details when provided', () => {
+      const logger = new Logger();
+      logger.beginPhase(TestPhase.START_BUTTON_DETECTION, {
+        strategies: ['dom', 'natural_language'],
+        timeout: 90000,
+      });
+
+      const calls = (console.log as ReturnType<typeof mock>).mock.calls;
+      expect(calls.length).toBeGreaterThan(1);
+      
+      // Find the phase details log entry
+      const detailsCall = calls.find(call => {
+        try {
+          const entry = JSON.parse(call[0]);
+          return entry.msg && entry.msg.includes('Phase details');
+        } catch {
+          return false;
+        }
+      });
+      
+      expect(detailsCall).toBeDefined();
+      const entry = JSON.parse(detailsCall![0]);
+      expect(entry.data).toBeDefined();
+      expect(entry.data.strategies).toEqual(['dom', 'natural_language']);
+      expect(entry.data.timeout).toBe(90000);
+    });
+  });
+
+  describe('endPhase() method', () => {
+    it('should output phase end banner with correct format', () => {
+      const logger = new Logger();
+      logger.endPhase(TestPhase.START_BUTTON_DETECTION);
+
+      expect(console.log).toHaveBeenCalled();
+      const calls = (console.log as ReturnType<typeof mock>).mock.calls;
+      
+      const banner = calls[calls.length - 1][0];
+      expect(typeof banner).toBe('string');
+      expect(banner).toContain('END');
+      expect(banner).toContain('START BUTTON DETECTION');
+      expect(banner).toContain('=');
+    });
+
+    it('should include phase summary when provided', () => {
+      const logger = new Logger();
+      logger.endPhase(TestPhase.START_BUTTON_DETECTION, {
+        success: true,
+        strategy: 'dom',
+        totalAttempts: 12,
+        totalDuration: 234,
+      });
+
+      const calls = (console.log as ReturnType<typeof mock>).mock.calls;
+      
+      // Find the phase summary log entry
+      const summaryCall = calls.find(call => {
+        try {
+          const entry = JSON.parse(call[0]);
+          return entry.msg && entry.msg.includes('Phase summary');
+        } catch {
+          return false;
+        }
+      });
+      
+      expect(summaryCall).toBeDefined();
+      const entry = JSON.parse(summaryCall![0]);
+      expect(entry.data).toBeDefined();
+      expect(entry.data.success).toBe(true);
+      expect(entry.data.strategy).toBe('dom');
+      expect(entry.data.totalAttempts).toBe(12);
+    });
+  });
+
+  describe('action() method', () => {
+    it('should format click actions correctly', () => {
+      const logger = new Logger();
+      logger.action('click', {
+        x: 512,
+        y: 384,
+        target: 'Start button',
+        strategy: 'dom',
+      });
+
+      expect(console.log).toHaveBeenCalled();
+      const logCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      const logEntry = JSON.parse(logCall);
+
+      expect(logEntry.msg).toContain('ACTION: click');
+      expect(logEntry.data).toBeDefined();
+      expect(logEntry.data.coordinates).toBe('(512, 384)');
+      expect(logEntry.data.target).toBe('Start button');
+      expect(logEntry.data.strategy).toBe('dom');
+    });
+
+    it('should format keypress actions correctly', () => {
+      const logger = new Logger();
+      logger.action('keypress', {
+        key: 'ArrowUp',
+        duration: 100,
+      });
+
+      expect(console.log).toHaveBeenCalled();
+      const logCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      const logEntry = JSON.parse(logCall);
+
+      expect(logEntry.msg).toContain('ACTION: keypress');
+      expect(logEntry.data).toBeDefined();
+      expect(logEntry.data.key).toBe('ArrowUp');
+      expect(logEntry.data.duration).toBe(100);
+    });
+
+    it('should format screenshot actions correctly', () => {
+      const logger = new Logger();
+      logger.action('screenshot', {
+        stage: 'initial_load',
+        path: '/tmp/screenshot.png',
+        timing: 'before_start_button',
+      });
+
+      expect(console.log).toHaveBeenCalled();
+      const logCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      const logEntry = JSON.parse(logCall);
+
+      expect(logEntry.msg).toContain('ACTION: screenshot');
+      expect(logEntry.data).toBeDefined();
+      expect(logEntry.data.stage).toBe('initial_load');
+      expect(logEntry.data.path).toBe('/tmp/screenshot.png');
+      expect(logEntry.data.timing).toBe('before_start_button');
+    });
+
+    it('should handle unknown action types with default formatting', () => {
+      const logger = new Logger();
+      logger.action('unknown_action', {
+        customField: 'customValue',
+      });
+
+      expect(console.log).toHaveBeenCalled();
+      const logCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      const logEntry = JSON.parse(logCall);
+
+      expect(logEntry.msg).toContain('ACTION: unknown_action');
+      expect(logEntry.data).toBeDefined();
+      expect(logEntry.data.customField).toBe('customValue');
+    });
+  });
+
+  describe('Level-based logging with LOG_LEVEL', () => {
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('should always log ERROR level regardless of LOG_LEVEL', () => {
+      process.env.LOG_LEVEL = 'error';
+      const logger = new Logger();
+      
+      logger.error('Error message');
+      expect(console.log).toHaveBeenCalled();
+      
+      (console.log as ReturnType<typeof mock>).mockClear();
+      logger.warn('Warn message');
+      expect(console.log).not.toHaveBeenCalled();
+      
+      logger.info('Info message');
+      expect(console.log).not.toHaveBeenCalled();
+    });
+
+    it('should log WARN and ERROR when LOG_LEVEL=warn', () => {
+      process.env.LOG_LEVEL = 'warn';
+      const logger = new Logger();
+      
+      logger.error('Error message');
+      expect(console.log).toHaveBeenCalled();
+      
+      (console.log as ReturnType<typeof mock>).mockClear();
+      logger.warn('Warn message');
+      expect(console.log).toHaveBeenCalled();
+      
+      (console.log as ReturnType<typeof mock>).mockClear();
+      logger.info('Info message');
+      expect(console.log).not.toHaveBeenCalled();
+    });
+
+    it('should log INFO, WARN, and ERROR when LOG_LEVEL=info', () => {
+      process.env.LOG_LEVEL = 'info';
+      const logger = new Logger();
+      
+      logger.info('Info message');
+      expect(console.log).toHaveBeenCalled();
+      
+      (console.log as ReturnType<typeof mock>).mockClear();
+      logger.warn('Warn message');
+      expect(console.log).toHaveBeenCalled();
+      
+      (console.log as ReturnType<typeof mock>).mockClear();
+      logger.error('Error message');
+      expect(console.log).toHaveBeenCalled();
+    });
+
+    it('should log DEBUG when LOG_LEVEL=debug', () => {
+      process.env.LOG_LEVEL = 'debug';
+      const logger = new Logger();
+      
+      logger.debug('Debug message');
+      expect(console.log).toHaveBeenCalled();
+    });
+
+    it('should log TRACE when LOG_LEVEL=trace', () => {
+      process.env.LOG_LEVEL = 'trace';
+      const logger = new Logger();
+      
+      logger.trace('Trace message');
+      expect(console.log).toHaveBeenCalled();
+    });
+
+    it('should default to INFO level when LOG_LEVEL not set', () => {
+      delete process.env.LOG_LEVEL;
+      delete process.env.DEBUG;
+      const flags = getFeatureFlags();
+      const logger = new Logger(undefined, flags);
+      
+      logger.info('Info message');
+      expect(console.log).toHaveBeenCalled();
+      
+      (console.log as ReturnType<typeof mock>).mockClear();
+      logger.debug('Debug message');
+      expect(console.log).not.toHaveBeenCalled();
+    });
+
+    it('should respect DEBUG flag for backward compatibility', () => {
+      process.env.DEBUG = 'true';
+      delete process.env.LOG_LEVEL;
+      const flags = getFeatureFlags();
+      const logger = new Logger(undefined, flags);
+      
+      logger.debug('Debug message');
+      expect(console.log).toHaveBeenCalled();
+    });
+  });
+
+  describe('trace() method', () => {
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('should log when LOG_LEVEL=trace', () => {
+      process.env.LOG_LEVEL = 'trace';
+      const logger = new Logger();
+      
+      logger.trace('Trace message');
+      expect(console.log).toHaveBeenCalled();
+      
+      const logCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      const logEntry = JSON.parse(logCall);
+      expect(logEntry.level).toBe('trace');
+      expect(logEntry.msg).toBe('Trace message');
+    });
+
+    it('should not log when LOG_LEVEL=info', () => {
+      process.env.LOG_LEVEL = 'info';
+      const logger = new Logger();
+      
+      logger.trace('Trace message');
+      expect(console.log).not.toHaveBeenCalled();
     });
   });
 });
