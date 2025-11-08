@@ -1,19 +1,17 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 8, 2025
-**Session**: Refactor Phase - Logging and Code Separation
+**Session**: Multiple Action Recommendations Feature
 
 ---
 
 ## Current Focus
 
-### 🔄 REFACTOR: Logging and Code Separation
+### ✨ FEATURE: Multiple Action Recommendations (1-20 actions)
 
-**Goal**: Improve code maintainability and logging clarity without degrading functionality
+**Goal**: Allow LLM to return 1-20 actions per state analysis, all of which will be tried in sequence (no early stop on success). This is especially useful for idle games requiring many clicks to progress.
 
-**Branch**: `refactor/logging-and-separation`
-
-**Status**: Phase 1.1 Complete, Phase 2 Complete, Phase 3 Complete, Phase 4 Next
+**Status**: ✅ COMPLETE
 
 ---
 
@@ -77,11 +75,13 @@
 ## Recent Changes
 
 ### Completed This Session
-- ✅ Phase 3: Adaptive QA Loop - Code Separation (Nov 8, 2025)
-  - Created `src/core/adaptive-qa-loop.ts` with `AdaptiveQALoop` class
-  - Extracted 115 lines from `main.ts` (replaced with 10-line delegation)
-  - All 10 new tests passing, all 60 existing integration tests passing
-  - Logging shows phase banners and action details correctly
+- ✅ Multiple Action Recommendations Feature (Nov 8, 2025)
+  - Updated schema to return array of 1-20 action recommendations
+  - Updated StateAnalyzer to return array instead of single recommendation
+  - Updated prompt to instruct LLM to return 1-20 actions ordered by priority
+  - Updated AdaptiveQALoop to try ALL actions in sequence (no early stop on success)
+  - All 20 tests passing (StateAnalyzer + AdaptiveQALoop)
+  - Supports idle games requiring 100+ clicks to progress
 - ✅ Phase 2: Start Button Detection - Code Separation (Nov 8, 2025)
   - Created `src/core/start-detection/` directory with 7 files
   - Implemented Strategy Pattern with 4 strategies

@@ -29,6 +29,7 @@ export type {
   GameState,
   AlternativeAction,
   ActionRecommendation,
+  ActionRecommendations,
   CapturedState,
 } from './game-test.types';
 

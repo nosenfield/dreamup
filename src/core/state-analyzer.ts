@@ -12,8 +12,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { generateObject, generateText } from 'ai';
 import { Logger } from '../utils/logger';
 import { STATE_ANALYSIS_PROMPT } from '../vision/prompts';
-import { actionRecommendationSchema } from '../vision/schema';
-import type { GameState, ActionRecommendation } from '../types';
+import { actionRecommendationsSchema } from '../vision/schema';
+import type { GameState, ActionRecommendations } from '../types';
 
 /**
  * Configuration for StateAnalyzer.
@@ -79,28 +79,31 @@ export class StateAnalyzer {
   }
 
   /**
-   * Analyze current game state and recommend next action.
+   * Analyze current game state and recommend actions.
    * 
    * Uses GPT-4 Vision to analyze HTML structure and screenshot,
-   * then recommends the best action to achieve the specified goal.
+   * then recommends 1-20 actions to try in sequence to achieve the specified goal.
+   * All actions will be attempted, not just the first successful one.
+   * This is useful for idle games that require many clicks to progress.
    * 
    * @param state - Current game state (HTML + screenshot + history + goal)
-   * @returns Promise that resolves to ActionRecommendation
+   * @returns Promise that resolves to array of 1-20 ActionRecommendations
    * @throws {Error} If screenshot file cannot be read or API call fails
    * 
    * @example
    * ```typescript
-   * const recommendation = await analyzer.analyzeAndRecommendAction({
+   * const recommendations = await analyzer.analyzeAndRecommendAction({
    *   html: '<div>...</div>',
    *   screenshot: '/path/to/screenshot.png',
    *   previousActions: [],
-   *   goal: 'Find and click the start button'
+   *   goal: 'Click multiple buttons to progress'
    * });
+   * // Returns array of 1-20 actions to try in sequence
    * ```
    */
   async analyzeAndRecommendAction(
     state: GameState
-  ): Promise<ActionRecommendation> {
+  ): Promise<ActionRecommendations> {
     this.logger.info('Starting state analysis', {
       goal: state.goal,
       previousActionsCount: state.previousActions.length,
@@ -141,17 +144,21 @@ export class StateAnalyzer {
       const result = await generateObject({
         model: this.openai('gpt-4-turbo'),
         messages: [{ role: 'user' as const, content }],
-        schema: actionRecommendationSchema,
+        schema: actionRecommendationsSchema,
         temperature: 0.3,
       });
 
+      const recommendations = result.object.recommendations;
+
       this.logger.info('State analysis completed', {
-        action: result.object.action,
-        confidence: result.object.confidence,
-        reasoning: result.object.reasoning,
+        actionCount: recommendations.length,
+        actions: recommendations.map(r => ({
+          action: r.action,
+          confidence: r.confidence,
+        })),
       });
 
-      return result.object;
+      return recommendations;
     } catch (error) {
       this.logger.error('State analysis failed', {
         error: error instanceof Error ? error.message : String(error),

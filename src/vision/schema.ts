@@ -218,6 +218,40 @@ export type AlternativeActionFromSchema = z.infer<typeof alternativeActionSchema
 export type ActionRecommendationFromSchema = z.infer<typeof actionRecommendationSchema>;
 
 /**
+ * Schema for validating an array of ActionRecommendation objects.
+ * 
+ * Represents multiple action recommendations from LLM state analysis.
+ * Used when the LLM should return 1-20 actions to try in sequence.
+ * 
+ * Note: This is wrapped in an object schema for generateObject compatibility.
+ */
+const actionRecommendationsArraySchema = z.array(actionRecommendationSchema).min(1).max(20);
+
+/**
+ * Wrapper schema for generateObject (requires object root, not array).
+ * 
+ * The AI SDK's generateObject requires the root schema to be an object,
+ * so we wrap the array in an object with a 'recommendations' property.
+ */
+export const actionRecommendationsSchema = z.object({
+  recommendations: actionRecommendationsArraySchema,
+});
+
+/**
+ * TypeScript type inferred from actionRecommendationsSchema.
+ * 
+ * This type represents the object wrapper with a 'recommendations' property.
+ */
+type ActionRecommendationsObjectFromSchema = z.infer<typeof actionRecommendationsSchema>;
+
+/**
+ * TypeScript type for the array of action recommendations.
+ * 
+ * This is the actual array type that is extracted from the object wrapper.
+ */
+export type ActionRecommendationsFromSchema = ActionRecommendationsObjectFromSchema['recommendations'];
+
+/**
  * Validate an ActionRecommendation object using the actionRecommendationSchema.
  * 
  * @param data - The data to validate (unknown type for safety)
@@ -230,6 +264,27 @@ export function validateActionRecommendation(
   
   if (result.success) {
     return { success: true, data: result.data };
+  }
+  
+  return { success: false, error: result.error };
+}
+
+/**
+ * Validate an array of ActionRecommendation objects using the actionRecommendationsSchema.
+ * 
+ * @param data - The data to validate (unknown type for safety)
+ * @returns Validation result with success flag and data or error
+ * 
+ * Note: The schema wraps the array in an object with a 'recommendations' property
+ * for generateObject compatibility, but this function returns just the array.
+ */
+export function validateActionRecommendations(
+  data: unknown
+): ValidationResult<ActionRecommendationsFromSchema> {
+  const result = actionRecommendationsSchema.safeParse(data);
+  
+  if (result.success) {
+    return { success: true, data: result.data.recommendations };
   }
   
   return { success: false, error: result.error };

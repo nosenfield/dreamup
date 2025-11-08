@@ -10,11 +10,15 @@ import type { GameState } from '../../src/types';
 // Mock OpenAI SDK
 const mockGenerateObject = mock(() => ({
   object: {
-    action: 'click' as const,
-    target: { x: 100, y: 200 },
-    reasoning: 'Test reasoning',
-    confidence: 0.9,
-    alternatives: [],
+    recommendations: [
+      {
+        action: 'click' as const,
+        target: { x: 100, y: 200 },
+        reasoning: 'Test reasoning',
+        confidence: 0.9,
+        alternatives: [],
+      },
+    ],
   },
   usage: {
     promptTokens: 100,
@@ -77,7 +81,7 @@ describe('StateAnalyzer', () => {
   });
 
   describe('analyzeAndRecommendAction', () => {
-    it('should analyze state and return ActionRecommendation', async () => {
+    it('should analyze state and return array of ActionRecommendations', async () => {
       const state: GameState = {
         html: '<div>Test HTML</div>',
         screenshot: '/tmp/test.png',
@@ -101,11 +105,14 @@ describe('StateAnalyzer', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.action).toBe('click');
-      expect(result.confidence).toBeGreaterThanOrEqual(0);
-      expect(result.confidence).toBeLessThanOrEqual(1);
-      expect(result.reasoning).toBeDefined();
-      expect(result.alternatives).toBeInstanceOf(Array);
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result.length).toBeLessThanOrEqual(20);
+      expect(result[0].action).toBe('click');
+      expect(result[0].confidence).toBeGreaterThanOrEqual(0);
+      expect(result[0].confidence).toBeLessThanOrEqual(1);
+      expect(result[0].reasoning).toBeDefined();
+      expect(result[0].alternatives).toBeInstanceOf(Array);
     });
 
     it('should handle missing screenshot file gracefully', async () => {

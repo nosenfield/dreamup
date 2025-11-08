@@ -10,7 +10,7 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import type { StateAnalyzer } from '../../src/core/state-analyzer';
 import type { GameInteractor } from '../../src/core/game-interactor';
 import type { AdaptiveTestConfig } from '../../src/types/config.types';
-import type { GameMetadata, Action, CapturedState, ActionRecommendation } from '../../src/types';
+import type { GameMetadata, Action, CapturedState, ActionRecommendations } from '../../src/types';
 
 describe('AdaptiveQALoop', () => {
   let logger: Logger;
@@ -26,13 +26,15 @@ describe('AdaptiveQALoop', () => {
     
     // Mock StateAnalyzer
     mockStateAnalyzer = {
-      analyzeAndRecommendAction: mock(() => Promise.resolve({
-        action: 'click',
-        target: { x: 100, y: 200 },
-        reasoning: 'Test recommendation',
-        confidence: 0.9,
-        alternatives: [],
-      } as ActionRecommendation)),
+      analyzeAndRecommendAction: mock(() => Promise.resolve([
+        {
+          action: 'click',
+          target: { x: 100, y: 200 },
+          reasoning: 'Test recommendation',
+          confidence: 0.9,
+          alternatives: [],
+        },
+      ] as ActionRecommendations)),
       hasStateProgressed: mock(() => Promise.resolve(true)),
       sanitizeHTML: mock((html: string) => html),
     } as unknown as StateAnalyzer;
@@ -106,13 +108,15 @@ describe('AdaptiveQALoop', () => {
     }, 10000);
 
     it('should terminate when LLM recommends completion', async () => {
-      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce({
-        action: 'complete',
-        target: '',
-        reasoning: 'Test complete',
-        confidence: 1.0,
-        alternatives: [],
-      } as ActionRecommendation);
+      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
+        {
+          action: 'complete',
+          target: '',
+          reasoning: 'Test complete',
+          confidence: 1.0,
+          alternatives: [],
+        },
+      ] as ActionRecommendations);
 
       config.maxActions = 20;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
@@ -131,27 +135,39 @@ describe('AdaptiveQALoop', () => {
       expect(mockGameInteractor.executeRecommendationPublic).toHaveBeenCalled();
     }, 10000);
 
-    it('should try alternatives when primary action fails', async () => {
-      (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValueOnce(false);
-      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce({
-        action: 'click',
-        target: { x: 100, y: 200 },
-        reasoning: 'Test recommendation',
-        confidence: 0.9,
-        alternatives: [{
+    it('should try all actions in sequence (no early stop)', async () => {
+      (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValue(true);
+      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
+        {
+          action: 'click',
+          target: { x: 100, y: 200 },
+          reasoning: 'First action',
+          confidence: 0.9,
+          alternatives: [],
+        },
+        {
           action: 'click',
           target: { x: 150, y: 250 },
-          reasoning: 'Alternative',
-        }],
-      } as ActionRecommendation);
+          reasoning: 'Second action',
+          confidence: 0.8,
+          alternatives: [],
+        },
+        {
+          action: 'click',
+          target: { x: 200, y: 300 },
+          reasoning: 'Third action',
+          confidence: 0.7,
+          alternatives: [],
+        },
+      ] as ActionRecommendations);
 
       config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       await loop.run(mockPage);
 
-      // Should try primary, then alternative
-      expect(mockGameInteractor.executeRecommendationPublic).toHaveBeenCalledTimes(2);
+      // Should try ALL 3 actions in sequence (no early stop on success)
+      expect(mockGameInteractor.executeRecommendationPublic).toHaveBeenCalledTimes(3);
     }, 10000);
 
     it('should check state progression', async () => {

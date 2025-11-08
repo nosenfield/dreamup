@@ -357,10 +357,10 @@ Example 3 - No Crash:
  * });
  * ```
  */
-export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend the next action to achieve a specific goal.
+export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend multiple actions to achieve a specific goal.
 
 **Your Task:**
-Analyze the current game state (HTML structure and screenshot) and recommend the best action to take next. The goal is provided in the context below.
+Analyze the current game state (HTML structure and screenshot) and recommend 1-20 actions to try in sequence. ALL actions will be attempted, not just the first successful one. This is especially useful for idle games that require many clicks to progress. Order actions by priority/confidence (most important first).
 
 **Action Types:**
 - **click**: Click at specific pixel coordinates { x: number, y: number }
@@ -387,10 +387,15 @@ Analyze the current game state (HTML structure and screenshot) and recommend the
 - 0.5-0.69: Somewhat confident, reasonable action
 - Below 0.5: Uncertain, consider alternatives
 
-**Alternative Actions:**
-Provide 1-3 alternative actions if your primary recommendation might fail. This helps recover from failures.
+**Number of Actions:**
+- Return 1-20 actions in an array
+- For simple goals (e.g., "click start button"): Return 1-3 actions
+- For complex goals (e.g., "progress through idle game"): Return 5-20 actions
+- Order by priority: most important/confident actions first
+- All actions will be tried in sequence, so include multiple clicks if needed
 
-**Output Format (actionRecommendationSchema):**
+**Output Format (actionRecommendationsSchema - object with recommendations array):**
+Return an object with a "recommendations" property containing an array of 1-20 actions. Each action has:
 - **action**: One of 'click', 'keypress', 'wait', or 'complete'
 - **target**: 
   - For 'click': { x: number, y: number } coordinates
@@ -399,22 +404,48 @@ Provide 1-3 alternative actions if your primary recommendation might fail. This 
   - For 'complete': not used (can be empty string)
 - **reasoning**: Clear explanation of why this action helps achieve the goal
 - **confidence**: Number between 0 and 1 (certainty of recommendation)
-- **alternatives**: Array of 1-3 alternative actions (same structure)
+- **alternatives**: Empty array [] (not used when returning multiple actions)
 
 **Examples:**
 
-Example 1 - Finding Start Button:
+Example 1 - Finding Start Button (Simple):
 Goal: "Find and click the start/play button to begin the game"
 {
-  "action": "click",
-  "target": { "x": 320, "y": 240 },
-  "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
-  "confidence": 0.95,
-  "alternatives": [
+  "recommendations": [
     {
       "action": "click",
-      "target": { "x": 300, "y": 250 },
-      "reasoning": "Alternative: Click slightly below the main button if there's a secondary start option"
+      "target": { "x": 320, "y": 240 },
+      "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
+      "confidence": 0.95,
+      "alternatives": []
+    }
+  ]
+}
+
+Example 1b - Idle Game Progress (Multiple Actions):
+Goal: "Click multiple buttons to progress in the idle game"
+{
+  "recommendations": [
+    {
+      "action": "click",
+      "target": { "x": 150, "y": 300 },
+      "reasoning": "Click the main upgrade button to increase production",
+      "confidence": 0.90,
+      "alternatives": []
+    },
+    {
+      "action": "click",
+      "target": { "x": 250, "y": 300 },
+      "reasoning": "Click the secondary upgrade button for additional bonuses",
+      "confidence": 0.85,
+      "alternatives": []
+    },
+    {
+      "action": "click",
+      "target": { "x": 350, "y": 300 },
+      "reasoning": "Click the prestige button to reset and gain multipliers",
+      "confidence": 0.80,
+      "alternatives": []
     }
   ]
 }
@@ -422,15 +453,13 @@ Goal: "Find and click the start/play button to begin the game"
 Example 2 - Waiting for Load:
 Goal: "Wait for game to finish loading"
 {
-  "action": "wait",
-  "target": 2000,
-  "reasoning": "The game is still showing a loading indicator. Wait 2 seconds for it to complete loading.",
-  "confidence": 0.90,
-  "alternatives": [
+  "recommendations": [
     {
       "action": "wait",
-      "target": 3000,
-      "reasoning": "Alternative: Wait longer if loading is slow"
+      "target": 2000,
+      "reasoning": "The game is still showing a loading indicator. Wait 2 seconds for it to complete loading.",
+      "confidence": 0.90,
+      "alternatives": []
     }
   ]
 }
@@ -438,15 +467,13 @@ Goal: "Wait for game to finish loading"
 Example 3 - Keypress Action:
 Goal: "Start the game by pressing a key"
 {
-  "action": "keypress",
-  "target": "Space",
-  "reasoning": "The game shows 'Press Space to Start' text. Pressing Space will begin the game.",
-  "confidence": 0.92,
-  "alternatives": [
+  "recommendations": [
     {
       "action": "keypress",
-      "target": "Enter",
-      "reasoning": "Alternative: Try Enter key if Space doesn't work"
+      "target": "Space",
+      "reasoning": "The game shows 'Press Space to Start' text. Pressing Space will begin the game.",
+      "confidence": 0.92,
+      "alternatives": []
     }
   ]
 }
@@ -454,20 +481,25 @@ Goal: "Start the game by pressing a key"
 Example 4 - Goal Complete:
 Goal: "Find and click the start button"
 {
-  "action": "complete",
-  "target": "",
-  "reasoning": "The game has already started. The main menu is gone and gameplay has begun. Goal achieved.",
-  "confidence": 0.98,
-  "alternatives": []
+  "recommendations": [
+    {
+      "action": "complete",
+      "target": "",
+      "reasoning": "The game has already started. The main menu is gone and gameplay has begun. Goal achieved.",
+      "confidence": 0.98,
+      "alternatives": []
+    }
+  ]
 }
 
 **Important:**
 - Analyze both the HTML structure (if provided) and the screenshot
 - Consider previous actions (if provided) to avoid repeating failed attempts
-- Provide clear reasoning for your recommendation
-- Include alternatives for robustness
+- Return 1-20 actions ordered by priority (most important first)
+- ALL actions will be attempted in sequence - don't stop at the first one
+- For idle games requiring many clicks, return 10-20 click actions
 - Ensure coordinates are accurate (center of clickable element)
 - Use correct key names for keypress actions
-- Return data that strictly matches the actionRecommendationSchema structure`;
+- Return data that strictly matches the actionRecommendationsSchema structure (object with "recommendations" array of 1-20 actions)`;
 
 

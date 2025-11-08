@@ -16,7 +16,7 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger, TestPhase } from '../utils/logger';
 import type { StateAnalyzer } from './state-analyzer';
 import type { GameInteractor } from './game-interactor';
-import type { GameMetadata, Action } from '../types';
+import type { GameMetadata, Action, ActionRecommendations } from '../types';
 import type { AdaptiveTestConfig } from '../types/config.types';
 import { calculateEstimatedCost } from '../utils/adaptive-qa';
 
@@ -153,9 +153,9 @@ export class AdaptiveQALoop {
         ? 'Start the game and begin playing'
         : 'Continue playing and progress through the game';
 
-      this.logger.info('Requesting action recommendation', { goal });
+      this.logger.info('Requesting action recommendations', { goal });
 
-      const recommendation = await this.stateAnalyzer.analyzeAndRecommendAction({
+      const recommendations: ActionRecommendations = await this.stateAnalyzer.analyzeAndRecommendAction({
         html: currentState.html,
         screenshot: currentState.screenshot.path,
         previousActions: actionHistory,
@@ -163,69 +163,77 @@ export class AdaptiveQALoop {
         goal,
       });
 
-      this.logger.info('Received recommendation', {
-        action: recommendation.action,
-        confidence: recommendation.confidence,
-        reasoning: recommendation.reasoning,
+      this.logger.info('Received recommendations', {
+        actionCount: recommendations.length,
+        actions: recommendations.map(r => ({
+          action: r.action,
+          confidence: r.confidence,
+        })),
       });
 
-      // Check if LLM says we're done
-      if (recommendation.action === 'complete') {
-        this.logger.info('LLM recommends completion', {
-          reasoning: recommendation.reasoning,
-        });
-        completionReason = 'llm_complete';
-        break;
-      }
+      // Try ALL recommendations in sequence (no early stop on success)
+      for (let actionIdx = 0; actionIdx < recommendations.length; actionIdx++) {
+        const recommendation = recommendations[actionIdx];
 
-      // Execute recommended action
-      const executed = await this.gameInteractor.executeRecommendationPublic(page, recommendation);
+        // Check if LLM says we're done
+        if (recommendation.action === 'complete') {
+          this.logger.info('LLM recommends completion', {
+            reasoning: recommendation.reasoning,
+            actionIndex: actionIdx + 1,
+            totalActions: recommendations.length,
+          });
+          completionReason = 'llm_complete';
+          break;
+        }
 
-      if (executed) {
-        const action: Action = {
+        this.logger.info('Executing recommendation', {
+          actionIndex: actionIdx + 1,
+          totalActions: recommendations.length,
           action: recommendation.action,
-          target: recommendation.target,
-          reasoning: recommendation.reasoning,
-          timestamp: Date.now(),
-        };
-        actionHistory.push(action);
-
-        // Log the action with full details
-        this.logger.action(recommendation.action, {
-          ...(recommendation.action === 'click' && typeof recommendation.target === 'object'
-            ? { x: recommendation.target.x, y: recommendation.target.y }
-            : { key: recommendation.target }),
           confidence: recommendation.confidence,
           reasoning: recommendation.reasoning,
         });
-      } else {
-        this.logger.warn('Recommendation execution failed, trying alternative', {
-          action: recommendation.action,
-        });
 
-        // Try alternative if available
-        if (recommendation.alternatives.length > 0) {
-          const alternative = recommendation.alternatives[0];
-          this.logger.info('Trying alternative action', {
-            action: alternative.action,
-            reasoning: alternative.reasoning,
+        // Execute recommended action
+        const executed = await this.gameInteractor.executeRecommendationPublic(page, recommendation);
+
+        if (executed) {
+          const action: Action = {
+            action: recommendation.action,
+            target: recommendation.target,
+            reasoning: recommendation.reasoning,
+            timestamp: Date.now(),
+          };
+          actionHistory.push(action);
+
+          // Log the action with full details
+          this.logger.action(recommendation.action, {
+            ...(recommendation.action === 'click' && typeof recommendation.target === 'object'
+              ? { x: recommendation.target.x, y: recommendation.target.y }
+              : { key: recommendation.target }),
+            confidence: recommendation.confidence,
+            reasoning: recommendation.reasoning,
+            actionIndex: actionIdx + 1,
+            totalActions: recommendations.length,
           });
-
-          const altExecuted = await this.gameInteractor.executeRecommendationPublic(page, {
-            ...alternative,
-            confidence: 0.5,
-            alternatives: [],
+        } else {
+          this.logger.warn('Recommendation execution failed', {
+            actionIndex: actionIdx + 1,
+            totalActions: recommendations.length,
+            action: recommendation.action,
+            willContinue: actionIdx < recommendations.length - 1,
           });
-
-          if (altExecuted) {
-            actionHistory.push({
-              action: alternative.action,
-              target: alternative.target,
-              reasoning: alternative.reasoning,
-              timestamp: Date.now(),
-            });
-          }
         }
+
+        // If we hit a 'complete' action, break out of the recommendations loop
+        if (completionReason === 'llm_complete') {
+          break;
+        }
+      }
+
+      // If we hit a 'complete' action, break out of the outer loop too
+      if (completionReason === 'llm_complete') {
+        break;
       }
 
       // Wait for state change

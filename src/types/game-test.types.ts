@@ -474,6 +474,15 @@ export interface ActionRecommendation {
 }
 
 /**
+ * Array of action recommendations from LLM state analysis.
+ * 
+ * Represents 1-20 action recommendations to try in sequence.
+ * All actions will be attempted, not just the first successful one.
+ * This is useful for idle games that require many clicks to progress.
+ */
+export type ActionRecommendations = ActionRecommendation[];
+
+/**
  * Captured game state for adaptive QA loop.
  * 
  * Represents a snapshot of the game state at a point in time,

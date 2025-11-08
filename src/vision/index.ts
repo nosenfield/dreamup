@@ -20,17 +20,20 @@ export {
   clickableElementSchema,
   issueSchema,
   actionRecommendationSchema,
+  actionRecommendationsSchema,
   alternativeActionSchema,
   validateGameTestResult,
   validateClickableElement,
   validateIssue,
   validateActionRecommendation,
+  validateActionRecommendations,
 } from './schema';
 export type {
   GameTestResultFromSchema,
   ClickableElementFromSchema,
   IssueFromSchema,
   ActionRecommendationFromSchema,
+  ActionRecommendationsFromSchema,
   AlternativeActionFromSchema,
 } from './schema';
 
