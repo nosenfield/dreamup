@@ -299,7 +299,7 @@ export class GameInteractor {
       visionAnalyzer: this.visionAnalyzer,
       screenshotCapturer: this.screenshotCapturer,
       stateAnalyzer: this.stateAnalyzer,
-      metadata: this.metadata,
+          metadata: this.metadata,
     });
 
     const result = await detector.findAndClickStart(page);
@@ -435,7 +435,10 @@ export class GameInteractor {
     this.logger.debug('Capturing current game state', {});
 
     // Capture screenshot (use 'after_interaction' stage as placeholder)
-    const screenshot = await this.screenshotCapturer.capture(page, 'after_interaction');
+    // Pass metadata to capture() for canvas detection
+    const screenshot = await this.screenshotCapturer.capture(page, 'after_interaction', {
+      metadata: this.metadata,
+    });
 
     // Capture and sanitize HTML using Stagehand's evaluate method
     const html = await (page as any).evaluate(() => {

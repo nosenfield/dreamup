@@ -1,15 +1,15 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 8, 2025
-**Session**: Action Success Feedback Mechanism
+**Session**: Canvas-Specific Screenshot Capture
 
 ---
 
 ## Current Focus
 
-### ✨ FEATURE: Action Success Feedback Mechanism
+### ✨ FEATURE: Canvas-Specific Screenshot Capture
 
-**Goal**: Provide meaningful feedback to the LLM about which actions were successful so it can generate multiple related actions based on successful patterns. Build confidence in successful actions and reduce confidence in failed ones.
+**Goal**: Use `canvas.toDataURL()` for canvas-based games to capture cleaner screenshots without page noise (ads, navigation, etc.). Fallback to `page.screenshot()` for non-canvas games or if canvas capture fails.
 
 **Status**: ✅ COMPLETE
 
@@ -75,6 +75,15 @@
 ## Recent Changes
 
 ### Completed This Session
+- ✅ Canvas-Specific Screenshot Capture (Nov 8, 2025)
+  - Added `CaptureOptions` interface with optional `gameType` and `metadata` parameters
+  - Added `isCanvasGame()` helper method to detect canvas games from gameType, metadata, or page evaluation
+  - Added `captureCanvasScreenshot()` method that uses `canvas.toDataURL('image/png')` to capture canvas content
+  - Updated `capture()` method to use canvas capture for canvas games, fallback to `page.screenshot()` for others
+  - Updated `GameInteractor.captureCurrentState()` to pass metadata to `capture()` for canvas detection
+  - Updated `captureAtOptimalTime()` to pass metadata to `capture()`
+  - All 22 screenshot-capturer tests passing (including 7 new canvas-specific tests)
+  - Canvas games now get cleaner screenshots without page noise
 - ✅ Action Success Feedback Mechanism (Nov 8, 2025)
   - Added mandatory `success` and `stateProgressed` fields to Action interface
   - Updated AdaptiveQALoop to check state after EACH action (not after all actions)

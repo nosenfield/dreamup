@@ -15,6 +15,7 @@ import { FileManager } from '../utils/file-manager';
 import { withTimeout } from '../utils/timeout';
 import { TIMEOUTS } from '../config/constants';
 import type { Screenshot, GameMetadata, LoadingIndicator, SuccessIndicator } from '../types/game-test.types';
+import { GameType } from './game-detector';
 
 /**
  * Configuration for ScreenshotCapturer.
@@ -28,6 +29,16 @@ export interface ScreenshotCapturerConfig {
   
   /** Optional timeout for screenshot capture (default: SCREENSHOT_TIMEOUT) */
   screenshotTimeout?: number;
+}
+
+/**
+ * Options for screenshot capture.
+ */
+export interface CaptureOptions {
+  /** Optional game type to determine capture method */
+  gameType?: GameType;
+  /** Optional game metadata for context */
+  metadata?: GameMetadata;
 }
 
 /**
@@ -69,8 +80,12 @@ export class ScreenshotCapturer {
    * Captures a screenshot from the provided page object, saves it via
    * FileManager, and returns a Screenshot object with metadata.
    * 
+   * For canvas-based games, uses canvas.toDataURL() for cleaner screenshots.
+   * For other games, uses page.screenshot() as fallback.
+   * 
    * @param page - The Stagehand page object
    * @param stage - Stage of the test when screenshot is taken
+   * @param options - Optional capture options (gameType, metadata)
    * @returns Promise that resolves to Screenshot object
    * @throws {TimeoutError} If screenshot capture exceeds timeout
    * @throws {Error} If page doesn't have screenshot method or save fails
@@ -78,17 +93,61 @@ export class ScreenshotCapturer {
    * @example
    * ```typescript
    * const screenshot = await capturer.capture(page, 'initial_load');
-   * console.log(`Screenshot saved: ${screenshot.path}`);
+   * // Or with options:
+   * const screenshot = await capturer.capture(page, 'initial_load', { gameType: GameType.CANVAS });
    * ```
    */
-  async capture(page: AnyPage, stage: Screenshot['stage']): Promise<Screenshot> {
+  async capture(
+    page: AnyPage,
+    stage: Screenshot['stage'],
+    options?: CaptureOptions
+  ): Promise<Screenshot> {
     this.logger.info('Capturing screenshot', {
       stage,
       timeout: this.screenshotTimeout,
+      gameType: options?.gameType,
     });
 
-    // Validate page has screenshot method
     const pageAny = page as any;
+
+    // Check if this is a canvas game
+    const isCanvasGame = await this.isCanvasGame(page, options?.gameType, options?.metadata);
+
+    if (isCanvasGame) {
+      // Try canvas capture first
+      try {
+        this.logger.debug('Attempting canvas screenshot capture', { stage });
+        const screenshotBuffer = await withTimeout(
+          this.captureCanvasScreenshot(page),
+          this.screenshotTimeout,
+          `Canvas screenshot capture timed out after ${this.screenshotTimeout}ms`
+        ) as Buffer | Uint8Array;
+
+        this.logger.info('Canvas screenshot captured', {
+          stage,
+          bufferSize: screenshotBuffer.length,
+        });
+
+        // Save screenshot via FileManager
+        const screenshot = await this.fileManager.saveScreenshot(screenshotBuffer, stage);
+
+        this.logger.info('Canvas screenshot saved successfully', {
+          stage,
+          screenshotId: screenshot.id,
+          screenshotPath: screenshot.path,
+        });
+
+        return screenshot;
+      } catch (error) {
+        // Fallback to page.screenshot() if canvas capture fails
+        this.logger.warn('Canvas screenshot capture failed, falling back to page.screenshot()', {
+          stage,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Fallback to page.screenshot() for non-canvas games or if canvas capture failed
     if (!pageAny.screenshot || typeof pageAny.screenshot !== 'function') {
       const error = new Error('Page does not have screenshot method');
       this.logger.error('Screenshot capture failed - invalid page', {
@@ -108,6 +167,7 @@ export class ScreenshotCapturer {
       this.logger.info('Screenshot captured from page', {
         stage,
         bufferSize: screenshotBuffer.length,
+        method: isCanvasGame ? 'fallback' : 'page.screenshot()',
       });
 
       // Save screenshot via FileManager
@@ -233,7 +293,8 @@ export class ScreenshotCapturer {
     }
 
     // Capture screenshot (either after indicators appear or immediately if wait failed)
-    return this.capture(page, stage);
+    // Pass metadata to capture() for canvas detection
+    return this.capture(page, stage, { metadata });
   }
 
   /**
@@ -316,6 +377,110 @@ export class ScreenshotCapturer {
       await new Promise(resolve => setTimeout(resolve, 500)); // Poll every 500ms
     }
     throw new Error(`Text "${text}" not found within timeout`);
+  }
+
+  /**
+   * Detect if this is a canvas-based game.
+   * 
+   * Checks gameType, metadata, or page evaluation to determine if canvas capture should be used.
+   * 
+   * @param page - The Stagehand page object
+   * @param gameType - Optional game type from GameDetector
+   * @param metadata - Optional game metadata
+   * @returns Promise that resolves to true if canvas game, false otherwise
+   * @private
+   */
+  private async isCanvasGame(
+    page: AnyPage,
+    gameType?: GameType,
+    metadata?: GameMetadata
+  ): Promise<boolean> {
+    // Check gameType first (most reliable)
+    if (gameType === GameType.CANVAS) {
+      return true;
+    }
+
+    // If explicitly not canvas, return false
+    if (gameType && gameType !== GameType.CANVAS) {
+      return false;
+    }
+
+    // If no gameType provided, check page for canvas element
+    const pageAny = page as any;
+    if (pageAny.evaluate) {
+      try {
+        const result = await (pageAny.evaluate(() => {
+          // @ts-ignore - Code runs in browser context where document exists
+          const canvases = Array.from(document.querySelectorAll('canvas'));
+          return {
+            hasCanvas: canvases.length > 0,
+            canvasCount: canvases.length,
+          };
+        }) as Promise<{ hasCanvas: boolean; canvasCount: number }>);
+
+        return result.hasCanvas && result.canvasCount > 0;
+      } catch (error) {
+        // Evaluation failed, fallback to false
+        this.logger.debug('Failed to evaluate canvas detection', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Capture screenshot from canvas element using canvas.toDataURL().
+   * 
+   * Uses canvas.toDataURL('image/png') to capture canvas content directly,
+   * providing cleaner screenshots for canvas-based games without page noise.
+   * 
+   * @param page - The Stagehand page object
+   * @returns Promise that resolves to Buffer containing PNG image data
+   * @throws {Error} If canvas element not found or toDataURL() fails
+   * @private
+   */
+  private async captureCanvasScreenshot(page: AnyPage): Promise<Buffer> {
+    const pageAny = page as any;
+    
+    if (!pageAny.evaluate) {
+      throw new Error('Page does not have evaluate method');
+    }
+
+    const base64Data = await (pageAny.evaluate(() => {
+      // @ts-ignore - Code runs in browser context where document exists
+      const canvas = document.querySelector('canvas');
+      
+      if (!canvas) {
+        return null;
+      }
+
+      // Use canvas.toDataURL() to get base64 PNG
+      try {
+        return (canvas as HTMLCanvasElement).toDataURL('image/png');
+      } catch (error) {
+        // Cross-origin or other error
+        return null;
+      }
+    }) as Promise<string | null>);
+
+    if (!base64Data) {
+      throw new Error('Canvas element not found or toDataURL() failed');
+    }
+
+    // Convert base64 data URL to Buffer
+    // Format: "data:image/png;base64,iVBORw0KGgo..."
+    const base64Match = base64Data.match(/^data:image\/png;base64,(.+)$/);
+    if (!base64Match || !base64Match[1]) {
+      throw new Error('Invalid base64 data URL format');
+    }
+
+    const base64String = base64Match[1];
+    const buffer = Buffer.from(base64String, 'base64');
+
+    return buffer;
   }
 }
 
