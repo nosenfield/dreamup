@@ -12,6 +12,7 @@
 import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger, TestPhase } from '../../utils/logger';
 import { getFeatureFlags } from '../../config/feature-flags';
+import { categorizeError } from '../../utils/errors';
 import { BaseStartStrategy, StartButtonResult } from './base-strategy';
 import { DOMStrategy } from './dom-strategy';
 import { NaturalLanguageStrategy } from './natural-language-strategy';
@@ -150,8 +151,12 @@ export class StartDetector {
           });
         }
       } catch (error) {
+        const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
         this.logger.error(`Strategy error: ${strategyName}`, {
-          error: error instanceof Error ? error.message : String(error),
+          category: qaError.category,
+          message: qaError.message,
+          recoverable: qaError.recoverable,
+          context: qaError.context,
         });
       }
     }

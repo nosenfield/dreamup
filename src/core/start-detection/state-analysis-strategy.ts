@@ -14,6 +14,8 @@ import type { StateAnalyzer } from '../state-analyzer';
 import type { ScreenshotCapturer } from '../screenshot-capturer';
 import type { GameMetadata } from '../../types';
 import { TIMEOUTS } from '../../config/constants';
+import { categorizeError } from '../../utils/errors';
+import { TestPhase } from '../../utils/logger';
 
 /**
  * LLM state analysis strategy for start button detection.
@@ -155,12 +157,19 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
         error: 'No click action recommended',
       };
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
+      this.logger.debug('State analysis strategy error', {
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
+      });
       return {
         success: false,
         strategy: 'state_analysis',
         attempts: 1,
         duration: Date.now() - startTime,
-        error: error instanceof Error ? error.message : String(error),
+        error: qaError.message,
       };
     }
   }

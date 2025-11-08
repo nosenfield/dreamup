@@ -20,3 +20,6 @@ export { FileManager } from './file-manager';
 // Export adaptive QA helpers
 export * from './adaptive-qa';
 
+// Export error handling utilities
+export { ErrorCategory, QAError, categorizeError } from './errors';
+

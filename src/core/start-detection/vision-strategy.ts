@@ -13,6 +13,8 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import type { VisionAnalyzer } from '../../vision/analyzer';
 import type { ScreenshotCapturer } from '../screenshot-capturer';
 import { TIMEOUTS } from '../../config/constants';
+import { categorizeError } from '../../utils/errors';
+import { TestPhase } from '../../utils/logger';
 
 /**
  * Vision-based strategy for start button detection.
@@ -127,12 +129,19 @@ export class VisionStrategy extends BaseStartStrategy {
         coordinates: { x: bestElement.x, y: bestElement.y },
       };
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
+      this.logger.debug('Vision strategy error', {
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
+      });
       return {
         success: false,
         strategy: 'vision',
         attempts: 1,
         duration: Date.now() - startTime,
-        error: error instanceof Error ? error.message : String(error),
+        error: qaError.message,
       };
     }
   }

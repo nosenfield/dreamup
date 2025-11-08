@@ -15,6 +15,7 @@ import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, Error
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger, TestPhase } from './utils/logger';
+import { categorizeError, QAError, ErrorCategory } from './utils/errors';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
@@ -91,8 +92,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await errorMonitor.startMonitoring(page);
       logger.info('Error monitoring started', {});
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.INITIALIZATION);
       logger.warn('Failed to start error monitoring', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
     }
 
@@ -101,8 +106,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       gameType = await gameDetector.detectType(page);
       logger.info('Game type detected', { gameType });
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.GAME_DETECTION);
       logger.warn('Failed to detect game type', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       gameType = GameType.UNKNOWN;
     }
@@ -112,8 +121,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await gameDetector.waitForGameReady(page, TIMEOUTS.GAME_LOAD_TIMEOUT);
       logger.info('Game ready state confirmed', {});
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.GAME_DETECTION);
       logger.warn('Failed to confirm game ready state', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       // Continue anyway - game may still be functional
     }
@@ -132,8 +145,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         logger.warn('OPENAI_API_KEY not found - vision and state analysis will be skipped', {});
       }
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.INITIALIZATION);
       logger.warn('Failed to initialize vision/state analyzers', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       visionAnalyzer = null;
       stateAnalyzer = null;
@@ -189,8 +206,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         logger.warn('Start button not found - continuing with test anyway', {});
       }
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
       logger.warn('Failed to find and click start button', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       // Continue anyway - start button may not be required
     }
@@ -247,8 +268,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         consoleErrors = await errorMonitor.getErrors(page);
         logger.info('Console errors retrieved', { errorCount: consoleErrors.length });
       } catch (error) {
+        const qaError = categorizeError(error, TestPhase.VISION_ANALYSIS);
         logger.warn('Failed to retrieve console errors', {
-          error: error instanceof Error ? error.message : String(error),
+          category: qaError.category,
+          message: qaError.message,
+          recoverable: qaError.recoverable,
+          context: qaError.context,
         });
       }
     }
@@ -281,8 +306,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
           tokens: visionAnalysisTokens,
         });
       } catch (error) {
+        const qaError = categorizeError(error, TestPhase.VISION_ANALYSIS);
         logger.warn('Vision analysis failed - using default score', {
-          error: error instanceof Error ? error.message : String(error),
+          category: qaError.category,
+          message: qaError.message,
+          recoverable: qaError.recoverable,
+          context: qaError.context,
         });
         // Continue with default score
       }
@@ -325,8 +354,13 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     return result;
 
   } catch (error) {
+    const qaError = categorizeError(error, TestPhase.INITIALIZATION);
     logger.error('QA test failed', {
-      error: error instanceof Error ? error.message : String(error),
+      category: qaError.category,
+      message: qaError.message,
+      phase: qaError.phase,
+      recoverable: qaError.recoverable,
+      context: qaError.context,
       errorType: error instanceof Error ? error.constructor.name : typeof error,
     });
 
