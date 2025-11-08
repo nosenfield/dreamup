@@ -11,14 +11,14 @@
 
 import { nanoid } from 'nanoid';
 import { resolve } from 'path';
-import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType, StateAnalyzer } from './core';
+import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType, StateAnalyzer, AdaptiveQALoop } from './core';
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
-import { calculateEstimatedCost, mergeAdaptiveConfig } from './utils/adaptive-qa';
+import { mergeAdaptiveConfig } from './utils/adaptive-qa';
 import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig, Action, Screenshot } from './types/game-test.types';
 
 /**
@@ -545,132 +545,20 @@ export async function runAdaptiveQA(
       await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
     }
 
-    // Capture initial state
-    logger.info('Capturing initial state', {});
-    let currentState = await gameInteractor.captureCurrentState(page);
-    const screenshots: string[] = [currentState.screenshot.path];
-    const actionHistory: Action[] = [];
+    // Run adaptive QA loop
+    const adaptiveLoop = new AdaptiveQALoop(
+      logger,
+      stateAnalyzer,
+      gameInteractor,
+      adaptiveConfig,
+      metadata
+    );
 
-    // Adaptive loop
-    const loopStartTime = Date.now();
-    let stateCheckCount = 0;
+    const loopResult = await adaptiveLoop.run(page);
 
-    for (let i = 0; i < adaptiveConfig.maxActions; i++) {
-      // Check duration limit
-      const elapsed = Date.now() - loopStartTime;
-      if (elapsed >= adaptiveConfig.maxDuration) {
-        logger.info('Max duration reached, stopping adaptive loop', {
-          elapsed,
-          maxDuration: adaptiveConfig.maxDuration,
-        });
-        break;
-      }
-
-      logger.info('Adaptive loop iteration', {
-        iteration: i + 1,
-        actionsPerformed: actionHistory.length,
-        elapsed,
-      });
-
-      // Check budget
-      const estimatedCost = calculateEstimatedCost(
-        actionHistory.length,
-        screenshots.length,
-        stateCheckCount
-      );
-      if (estimatedCost >= adaptiveConfig.maxBudget * 0.9) {
-        logger.warn('Approaching budget limit, stopping adaptive loop', {
-          estimatedCost,
-          maxBudget: adaptiveConfig.maxBudget,
-        });
-        break;
-      }
-
-      // Ask LLM: "What should I do next?"
-      const goal = i === 0
-        ? 'Start the game and begin playing'
-        : 'Continue playing and progress through the game';
-
-      const recommendation = await stateAnalyzer.analyzeAndRecommendAction({
-        html: currentState.html,
-        screenshot: currentState.screenshot.path,
-        previousActions: actionHistory,
-        metadata,
-        goal,
-      });
-
-      // Check if LLM says we're done
-      if (recommendation.action === 'complete') {
-        logger.info('LLM recommends completing test', {
-          reasoning: recommendation.reasoning,
-        });
-        break;
-      }
-
-      // Execute recommended action
-      const executed = await gameInteractor.executeRecommendationPublic(page, recommendation);
-
-      if (executed) {
-        actionHistory.push({
-          action: recommendation.action,
-          target: recommendation.target,
-          reasoning: recommendation.reasoning,
-          timestamp: Date.now(),
-        });
-      } else {
-        logger.warn('Recommendation execution failed, trying alternative', {
-          action: recommendation.action,
-        });
-
-        // Try alternative if available
-        if (recommendation.alternatives.length > 0) {
-          const alternative = recommendation.alternatives[0];
-          logger.info('Trying alternative action', {
-            alternative: alternative.action,
-          });
-          const altExecuted = await gameInteractor.executeRecommendationPublic(page, {
-            ...alternative,
-            confidence: 0.5, // Lower confidence for alternatives
-            alternatives: [],
-          });
-          if (altExecuted) {
-            actionHistory.push({
-              action: alternative.action,
-              target: alternative.target,
-              reasoning: alternative.reasoning,
-              timestamp: Date.now(),
-            });
-          }
-        }
-      }
-
-      // Wait for state change
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Capture new state
-      const newState = await gameInteractor.captureCurrentState(page);
-      screenshots.push(newState.screenshot.path);
-
-      // Check if state actually changed (detect stuck loops)
-      stateCheckCount++;
-      const hasProgressed = await stateAnalyzer.hasStateProgressed(
-        currentState.screenshot.path,
-        newState.screenshot.path,
-      );
-
-      if (!hasProgressed && actionHistory.length > 0) {
-        logger.warn('State has not progressed, may be stuck', {
-          lastAction: actionHistory[actionHistory.length - 1].action,
-        });
-      }
-
-      currentState = newState;
-    }
-
-    logger.info('Adaptive loop completed', {
-      actionsPerformed: actionHistory.length,
-      screenshotsCaptured: screenshots.length,
-    });
+    const screenshots = loopResult.screenshots;
+    const actionHistory = loopResult.actionHistory;
+    const stateCheckCount = loopResult.stateCheckCount;
 
     // Retrieve console errors
     let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
@@ -725,12 +613,8 @@ export async function runAdaptiveQA(
       }
     }
 
-    // Calculate final cost estimate
-    const finalCost = calculateEstimatedCost(
-      actionHistory.length,
-      screenshots.length,
-      stateCheckCount
-    );
+    // Use final cost from adaptive loop
+    const finalCost = loopResult.estimatedCost;
 
     // Determine pass/fail status
     const status: 'pass' | 'fail' = playabilityScore >= 50 ? 'pass' : 'fail';

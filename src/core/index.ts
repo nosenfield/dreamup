@@ -27,3 +27,6 @@ export type { StateAnalyzerConfig } from './state-analyzer';
 
 export * from './start-detection';
 
+export { AdaptiveQALoop } from './adaptive-qa-loop';
+export type { AdaptiveLoopResult } from './adaptive-qa-loop';
+

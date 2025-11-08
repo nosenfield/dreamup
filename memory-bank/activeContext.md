@@ -13,7 +13,7 @@
 
 **Branch**: `refactor/logging-and-separation`
 
-**Status**: Phase 1.1 Complete, Phase 2 Complete, Phase 3 Next
+**Status**: Phase 1.1 Complete, Phase 2 Complete, Phase 3 Complete, Phase 4 Next
 
 ---
 
@@ -42,11 +42,15 @@
 - All 38 existing GameInteractor tests passing (backward compatible)
 - Logging shows phase banners and action details correctly
 
-### 📋 Phase 3: Adaptive QA Loop - Code Separation - NEXT (3 hours)
-- Create `src/core/adaptive-qa-loop.ts`
-- Extract 115+ lines from main.ts
+### ✅ Phase 3: Adaptive QA Loop - Code Separation - COMPLETE (Nov 8, 2025)
+- Created `src/core/adaptive-qa-loop.ts` with `AdaptiveQALoop` class
+- Extracted 115 lines from `main.ts` (replaced with 10-line delegation)
+- Implemented `AdaptiveLoopResult` interface
+- All 10 new tests passing
+- All 60 existing integration tests passing (backward compatible)
+- Logging shows phase banners and action details correctly
 
-### 📋 Phase 4: Screenshot Timing Fix - PENDING (1 hour)
+### 📋 Phase 4: Screenshot Timing Fix - NEXT (1 hour)
 - Add pre-start screenshot capture
 - Update ScreenshotStage type
 
@@ -73,6 +77,11 @@
 ## Recent Changes
 
 ### Completed This Session
+- ✅ Phase 3: Adaptive QA Loop - Code Separation (Nov 8, 2025)
+  - Created `src/core/adaptive-qa-loop.ts` with `AdaptiveQALoop` class
+  - Extracted 115 lines from `main.ts` (replaced with 10-line delegation)
+  - All 10 new tests passing, all 60 existing integration tests passing
+  - Logging shows phase banners and action details correctly
 - ✅ Phase 2: Start Button Detection - Code Separation (Nov 8, 2025)
   - Created `src/core/start-detection/` directory with 7 files
   - Implemented Strategy Pattern with 4 strategies
@@ -99,16 +108,18 @@
 ### Being Refactored
 - `src/utils/logger.ts` - Enhanced with phase separation ✅
 - `src/core/game-interactor.ts` - Start detection extracted ✅ (Phase 2)
-- `src/main.ts` - Will extract adaptive loop (Phase 3)
+- `src/main.ts` - Adaptive loop extracted ✅ (Phase 3)
 
 ### New Files Created
 - `src/core/start-detection/` - Strategy pattern implementation ✅ (Phase 2)
   - `base-strategy.ts`, `dom-strategy.ts`, `natural-language-strategy.ts`
   - `vision-strategy.ts`, `state-analysis-strategy.ts`, `start-detector.ts`
   - `index.ts` - Module exports
+- `src/core/adaptive-qa-loop.ts` - Extracted loop logic ✅ (Phase 3)
+  - `AdaptiveQALoop` class with `run()` method
+  - `AdaptiveLoopResult` interface
 
 ### New Files to Create
-- `src/core/adaptive-qa-loop.ts` - Extracted loop logic (Phase 3)
 - `src/utils/errors.ts` - Structured error types (Phase 5)
 
 ---
