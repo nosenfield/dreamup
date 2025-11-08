@@ -175,7 +175,7 @@ export interface Screenshot {
   timestamp: number;
   
   /** Stage of the test when the screenshot was taken */
-  stage: 'initial_load' | 'after_interaction' | 'final_state';
+  stage: 'pre_start' | 'post_start' | 'after_interaction' | 'final_state';
 }
 
 /**

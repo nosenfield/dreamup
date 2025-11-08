@@ -209,8 +209,8 @@ export class ScreenshotCapturer {
     }
 
     try {
-      if (stage === 'initial_load' && metadata.loadingIndicators) {
-        // Wait for loading indicators before capturing initial screenshot
+      if (stage === 'post_start' && metadata.loadingIndicators) {
+        // Wait for loading indicators before capturing post-start screenshot
         this.logger.info('Waiting for loading indicators before capture', {
           stage,
           indicatorCount: metadata.loadingIndicators.length,

@@ -57,8 +57,8 @@ export class VisionStrategy extends BaseStartStrategy {
     this.logger.debug('Vision strategy starting', { timeout });
 
     try {
-      // Take screenshot for vision analysis
-      const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
+      // Take screenshot for vision analysis (pre-start baseline)
+      const screenshot = await this.screenshotCapturer.capture(page, 'pre_start');
       this.logger.trace('Screenshot captured for vision analysis', { path: screenshot.path });
 
       // Find clickable elements using vision

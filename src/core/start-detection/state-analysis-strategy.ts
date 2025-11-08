@@ -60,10 +60,10 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
     this.logger.debug('State analysis strategy starting', { timeout });
 
     try {
-      // Capture HTML and screenshot for state analysis
+      // Capture HTML and screenshot for state analysis (pre-start baseline)
       const pageAny = page as any;
       const html = await pageAny.evaluate(() => document.documentElement.outerHTML);
-      const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
+      const screenshot = await this.screenshotCapturer.capture(page, 'pre_start');
 
       this.logger.trace('State captured for LLM analysis', {
         htmlLength: html.length,

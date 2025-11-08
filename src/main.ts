@@ -14,7 +14,7 @@ import { resolve } from 'path';
 import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType, StateAnalyzer, AdaptiveQALoop } from './core';
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
-import { Logger } from './utils/logger';
+import { Logger, TestPhase } from './utils/logger';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
@@ -170,6 +170,16 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
     }
 
+    // Capture pre-start screenshot (TRUE baseline before any interaction)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'pre_start' });
+    const preStartScreenshot = await screenshotCapturer.capture(page, 'pre_start');
+    logger.action('screenshot', {
+      stage: 'pre_start',
+      path: preStartScreenshot.path,
+      timing: 'before_start_button',
+    });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: preStartScreenshot.id });
+
     // Try to find and click start button before interaction
     try {
       const startButtonClicked = await gameInteractor.findAndClickStart(page);
@@ -185,15 +195,17 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       // Continue anyway - start button may not be required
     }
 
-    // Capture initial screenshot (using metadata-based timing if available)
-    logger.info('Capturing initial screenshot', { hasMetadata: !!metadata });
-    const initialScreenshot = metadata
-      ? await screenshotCapturer.captureAtOptimalTime(page, 'initial_load', metadata)
-      : await screenshotCapturer.capture(page, 'initial_load');
-    logger.info('Initial screenshot captured', {
-      screenshotId: initialScreenshot.id,
-      screenshotPath: initialScreenshot.path,
+    // Capture post-start screenshot (after start button clicked)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'post_start' });
+    const postStartScreenshot = metadata
+      ? await screenshotCapturer.captureAtOptimalTime(page, 'post_start', metadata)
+      : await screenshotCapturer.capture(page, 'post_start');
+    logger.action('screenshot', {
+      stage: 'post_start',
+      path: postStartScreenshot.path,
+      timing: 'after_start_button',
     });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: postStartScreenshot.id });
 
     // Simulate gameplay inputs (use metadata if available, otherwise generic inputs)
     const interactionDuration = metadata?.testingStrategy?.interactionDuration ?? 30000;
@@ -249,11 +261,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     if (visionAnalyzer) {
       try {
         logger.info('Starting vision analysis', {
-          screenshotCount: 3,
+          screenshotCount: 4,
         });
 
         const visionResult = await visionAnalyzer.analyzeScreenshots([
-          initialScreenshot,
+          preStartScreenshot,
+          postStartScreenshot,
           afterInteractionScreenshot,
           finalScreenshot,
         ], metadata);
@@ -287,7 +300,8 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       playability_score: playabilityScore,
       issues: visionIssues,
       screenshots: [
-        initialScreenshot.path,
+        preStartScreenshot.path,
+        postStartScreenshot.path,
         afterInteractionScreenshot.path,
         finalScreenshot.path,
       ],
@@ -589,7 +603,7 @@ export async function runAdaptiveQA(
           id: `screenshot-${index}`,
           path,
           timestamp: Date.now(),
-          stage: (index === 0 ? 'initial_load' : index === screenshots.length - 1 ? 'final_state' : 'after_interaction') as 'initial_load' | 'after_interaction' | 'final_state',
+          stage: (index === 0 ? 'pre_start' : index === screenshots.length - 1 ? 'final_state' : 'after_interaction') as 'pre_start' | 'post_start' | 'after_interaction' | 'final_state',
         }));
 
         const visionResult = await visionAnalyzer.analyzeScreenshots(

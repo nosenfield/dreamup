@@ -45,9 +45,10 @@ export const PROMPT_VERSION = '1.1.0';
 export const GAME_ANALYSIS_PROMPT = `You are analyzing a sequence of screenshots from a browser game test to determine playability and identify issues.
 
 **Screenshot Sequence:**
-- Screenshot 1: Initial game load (taken immediately after navigation)
-- Screenshot 2: After user interaction (taken after keyboard/mouse inputs were sent)
-- Screenshot 3: Final game state (taken at the end of the test)
+- Screenshot 1: Pre-start (taken before any interaction, true baseline)
+- Screenshot 2: Post-start (taken after start button was clicked)
+- Screenshot 3: After user interaction (taken after keyboard/mouse inputs were sent)
+- Screenshot 4: Final game state (taken at the end of the test)
 
 **Evaluation Criteria:**
 
@@ -59,14 +60,14 @@ export const GAME_ANALYSIS_PROMPT = `You are analyzing a sequence of screenshots
 
 2. **Control Responsiveness** (Major):
    - Determine if the game responded to user interactions
-   - Compare Screenshot 1 vs Screenshot 2: Did visual changes occur?
+   - Compare Screenshot 2 (post-start) vs Screenshot 3 (after interaction): Did visual changes occur?
    - Check for game state changes (character movement, UI updates, animations)
    - Examples of failures: Frozen screen, no response to input, static image
 
 3. **Crash Detection** (Critical):
    - Identify if the game crashed or froze during the test
    - Look for error messages, crash indicators, or frozen states
-   - Compare Screenshot 3: Is the game still running or did it stop?
+   - Compare Screenshot 4 (final state): Is the game still running or did it stop?
    - Examples: "Game crashed", frozen screen, JavaScript error overlay
 
 4. **Overall Playability Score** (0-100):
@@ -99,7 +100,7 @@ Example 1 - Working Game:
       "timestamp": "2025-11-04T12:00:00Z"
     }
   ],
-  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png"],
+  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png", "/path/to/screenshot4.png"],
   "timestamp": "2025-11-04T12:00:00Z"
 }
 
@@ -119,7 +120,7 @@ Example 2 - Broken Game:
       "timestamp": "2025-11-04T12:00:00Z"
     }
   ],
-  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png"],
+  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png", "/path/to/screenshot4.png"],
   "timestamp": "2025-11-04T12:00:00Z"
 }
 
