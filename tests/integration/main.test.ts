@@ -242,9 +242,10 @@ describe('runQA()', () => {
     expect(mockErrorMonitorInstance.startMonitoring).toHaveBeenCalledTimes(1);
     expect(mockErrorMonitorInstance.startMonitoring).toHaveBeenCalledWith(mockPage);
     
-    // Verify 3 screenshots were captured (initial, after interaction, final)
-    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledTimes(3);
-    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'initial_load');
+    // Verify 4 screenshots were captured (pre_start, post_start, after interaction, final)
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledTimes(4);
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'pre_start');
+    expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'post_start');
     expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'after_interaction');
     expect(mockScreenshotCapturerInstance.capture).toHaveBeenCalledWith(mockPage, 'final_state');
     
@@ -275,10 +276,11 @@ describe('runQA()', () => {
     expect(result.status).toBe('pass');
     expect(result.playability_score).toBe(50);
     expect(result.issues).toEqual([]);
-    expect(result.screenshots).toHaveLength(3); // Three screenshots
+    expect(result.screenshots).toHaveLength(4); // Four screenshots
     expect(result.screenshots[0]).toContain('.png');
     expect(result.screenshots[1]).toContain('.png');
     expect(result.screenshots[2]).toContain('.png');
+    expect(result.screenshots[3]).toContain('.png');
     
     // Verify metadata includes game type and errors
     expect(result.metadata).toBeDefined();
@@ -399,13 +401,15 @@ describe('runQA()', () => {
     const gameUrl = 'https://example.com/game';
     const result = await runQA(gameUrl);
 
-    expect(result.screenshots).toHaveLength(3); // Three screenshots
-    expect(result.screenshots[0]).toContain('test-screenshot-initial_load');
-    expect(result.screenshots[1]).toContain('test-screenshot-after_interaction');
-    expect(result.screenshots[2]).toContain('test-screenshot-final_state');
+    expect(result.screenshots).toHaveLength(4); // Four screenshots
+    expect(result.screenshots[0]).toContain('test-screenshot-pre_start');
+    expect(result.screenshots[1]).toContain('test-screenshot-post_start');
+    expect(result.screenshots[2]).toContain('test-screenshot-after_interaction');
+    expect(result.screenshots[3]).toContain('test-screenshot-final_state');
     expect(result.screenshots[0]).toMatch(/\.png$/);
     expect(result.screenshots[1]).toMatch(/\.png$/);
     expect(result.screenshots[2]).toMatch(/\.png$/);
+    expect(result.screenshots[3]).toMatch(/\.png$/);
   });
 
   it('should handle missing environment variables', async () => {
@@ -559,11 +563,12 @@ describe('runQA()', () => {
       
       expect(mockVisionAnalyzerInstance.analyzeScreenshots).toHaveBeenCalledTimes(1);
       expect(mockVisionAnalyzerInstance.analyzeScreenshots).toHaveBeenCalledWith([
-        expect.objectContaining({ stage: 'initial_load' }),
+        expect.objectContaining({ stage: 'pre_start' }),
+        expect.objectContaining({ stage: 'post_start' }),
         expect.objectContaining({ stage: 'after_interaction' }),
         expect.objectContaining({ stage: 'final_state' }),
       ], undefined);
-      expect(screenshotCalls[2]).toBeLessThan(visionCall); // Last screenshot before vision
+      expect(screenshotCalls[3]).toBeLessThan(visionCall); // Last screenshot before vision
     });
 
     it('should use vision analysis playability score', async () => {
@@ -986,7 +991,7 @@ describe('runQA()', () => {
         const result = await runQA(gameUrl, { metadata: metadataResult.data });
 
         expect(result.status).toBeDefined();
-        expect(result.screenshots.length).toBe(3);
+        expect(result.screenshots.length).toBe(4);
         expect(result.metadata).toBeDefined();
       }
     });

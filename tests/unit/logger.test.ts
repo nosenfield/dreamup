@@ -608,5 +608,54 @@ describe('Logger', () => {
       expect(console.log).not.toHaveBeenCalled();
     });
   });
+
+  describe('iteration() method', () => {
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+      (console.log as ReturnType<typeof mock>).mockClear();
+    });
+
+    it('should output iteration banner with plain text', () => {
+      const logger = new Logger();
+      
+      logger.iteration(1, 10);
+      
+      expect(console.log).toHaveBeenCalled();
+      const bannerCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      expect(bannerCall).toContain('--- Iteration 1/10 ---');
+      expect(bannerCall).toContain('-'.repeat(60));
+    });
+
+    it('should include iteration details when provided', () => {
+      const logger = new Logger();
+      
+      logger.iteration(2, 5, {
+        elapsed: 1000,
+        actionsPerformed: 3,
+        screenshotsCaptured: 4,
+      });
+      
+      expect(console.log).toHaveBeenCalledTimes(2); // Banner + details
+      const bannerCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      expect(bannerCall).toContain('--- Iteration 2/5 ---');
+      
+      const detailsCall = (console.log as ReturnType<typeof mock>).mock.calls[1][0];
+      const detailsEntry = JSON.parse(detailsCall);
+      expect(detailsEntry.msg).toBe('Iteration details');
+      expect(detailsEntry.data.elapsed).toBe(1000);
+      expect(detailsEntry.data.actionsPerformed).toBe(3);
+      expect(detailsEntry.data.screenshotsCaptured).toBe(4);
+    });
+
+    it('should not include details when not provided', () => {
+      const logger = new Logger();
+      
+      logger.iteration(3, 8);
+      
+      expect(console.log).toHaveBeenCalledTimes(1); // Only banner
+      const bannerCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
+      expect(bannerCall).toContain('--- Iteration 3/8 ---');
+    });
+  });
 });
 

@@ -119,7 +119,7 @@ export class AdaptiveQALoop {
     for (let i = 0; i < this.config.maxActions; i++) {
       const elapsed = Date.now() - loopStartTime;
 
-      this.logger.info(`\n--- Iteration ${i + 1}/${this.config.maxActions} ---`, {
+      this.logger.iteration(i + 1, this.config.maxActions, {
         elapsed,
         actionsPerformed: actionHistory.length,
         screenshotsCaptured: screenshots.length,

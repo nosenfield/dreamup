@@ -419,6 +419,25 @@ export class Logger {
   }
 
   /**
+   * Log an iteration separator with visual banner.
+   * 
+   * Creates a clear visual separator for loop iterations, making it easy
+   * to distinguish between different iterations in the logs.
+   * 
+   * @param iteration - Current iteration number (1-based)
+   * @param total - Total number of iterations
+   * @param details - Optional iteration details (elapsed time, actions performed, etc.)
+   */
+  iteration(iteration: number, total: number, details?: Record<string, unknown>): void {
+    const banner = `\n${'-'.repeat(60)}\n--- Iteration ${iteration}/${total} ---\n${'-'.repeat(60)}`;
+    this.outputPlain(banner);
+    
+    if (details) {
+      this.info('Iteration details', details);
+    }
+  }
+
+  /**
    * Log an action with formatted details.
    * 
    * Formats action details based on action type (click, keypress, screenshot).
