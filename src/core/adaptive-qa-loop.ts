@@ -172,6 +172,7 @@ export class AdaptiveQALoop {
       });
 
       // Try ALL recommendations in sequence (no early stop on success)
+      // Check state after EACH action to provide feedback
       for (let actionIdx = 0; actionIdx < recommendations.length; actionIdx++) {
         const recommendation = recommendations[actionIdx];
 
@@ -194,36 +195,75 @@ export class AdaptiveQALoop {
           reasoning: recommendation.reasoning,
         });
 
+        // Capture state BEFORE action
+        const stateBeforeAction = currentState;
+
         // Execute recommended action
         const executed = await this.gameInteractor.executeRecommendationPublic(page, recommendation);
 
-        if (executed) {
-          const action: Action = {
-            action: recommendation.action,
-            target: recommendation.target,
-            reasoning: recommendation.reasoning,
-            timestamp: Date.now(),
-          };
-          actionHistory.push(action);
+        // Wait for state change
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-          // Log the action with full details
-          this.logger.action(recommendation.action, {
-            ...(recommendation.action === 'click' && typeof recommendation.target === 'object'
-              ? { x: recommendation.target.x, y: recommendation.target.y }
-              : { key: recommendation.target }),
-            confidence: recommendation.confidence,
-            reasoning: recommendation.reasoning,
+        // Capture state AFTER action
+        const stateAfterAction = await this.gameInteractor.captureCurrentState(page);
+        screenshots.push(stateAfterAction.screenshot.path);
+
+        // Check if state progressed after this specific action
+        stateCheckCount++;
+        this.logger.debug('Checking state progression after action', {
+          actionIndex: actionIdx + 1,
+          action: recommendation.action,
+        });
+        const stateProgressed = await this.stateAnalyzer.hasStateProgressed(
+          stateBeforeAction.screenshot.path,
+          stateAfterAction.screenshot.path
+        );
+
+        // Create Action with success and stateProgressed fields
+        const action: Action = {
+          action: recommendation.action,
+          target: recommendation.target,
+          reasoning: recommendation.reasoning,
+          timestamp: Date.now(),
+          success: executed,
+          stateProgressed,
+        };
+
+        // Add to actionHistory (both successful and failed actions)
+        actionHistory.push(action);
+
+        // Log the action with full details including outcome
+        this.logger.action(recommendation.action, {
+          ...(recommendation.action === 'click' && typeof recommendation.target === 'object'
+            ? { x: recommendation.target.x, y: recommendation.target.y }
+            : { key: recommendation.target }),
+          confidence: recommendation.confidence,
+          reasoning: recommendation.reasoning,
+          actionIndex: actionIdx + 1,
+          totalActions: recommendations.length,
+          success: executed,
+          stateProgressed,
+        });
+
+        if (executed && stateProgressed) {
+          this.logger.info('Action executed successfully and state progressed', {
             actionIndex: actionIdx + 1,
-            totalActions: recommendations.length,
+            action: recommendation.action,
+          });
+        } else if (executed && !stateProgressed) {
+          this.logger.warn('Action executed but state did not progress', {
+            actionIndex: actionIdx + 1,
+            action: recommendation.action,
           });
         } else {
-          this.logger.warn('Recommendation execution failed', {
+          this.logger.warn('Action execution failed', {
             actionIndex: actionIdx + 1,
-            totalActions: recommendations.length,
             action: recommendation.action,
-            willContinue: actionIdx < recommendations.length - 1,
           });
         }
+
+        // Update current state for next action
+        currentState = stateAfterAction;
 
         // If we hit a 'complete' action, break out of the recommendations loop
         if (completionReason === 'llm_complete') {
@@ -235,38 +275,6 @@ export class AdaptiveQALoop {
       if (completionReason === 'llm_complete') {
         break;
       }
-
-      // Wait for state change
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Capture new state
-      const newState = await this.gameInteractor.captureCurrentState(page);
-      screenshots.push(newState.screenshot.path);
-
-      this.logger.action('screenshot', {
-        stage: `iteration_${i + 1}`,
-        path: newState.screenshot.path,
-        timing: 'post_action',
-      });
-
-      // Check if state actually changed (detect stuck loops)
-      stateCheckCount++;
-      this.logger.debug('Checking state progression');
-      const hasProgressed = await this.stateAnalyzer.hasStateProgressed(
-        currentState.screenshot.path,
-        newState.screenshot.path
-      );
-
-      if (!hasProgressed && actionHistory.length > 0) {
-        this.logger.warn('State has not progressed - may be stuck', {
-          lastAction: actionHistory[actionHistory.length - 1].action,
-          iteration: i + 1,
-        });
-      } else if (hasProgressed) {
-        this.logger.info('State progressed successfully');
-      }
-
-      currentState = newState;
     }
 
     const finalCost = calculateEstimatedCost(

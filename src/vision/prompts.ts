@@ -362,6 +362,13 @@ export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommen
 **Your Task:**
 Analyze the current game state (HTML structure and screenshot) and recommend 1-20 actions to try in sequence. ALL actions will be attempted, not just the first successful one. This is especially useful for idle games that require many clicks to progress. Order actions by priority/confidence (most important first).
 
+**CRITICAL: Use Feedback from Previous Actions**
+- You will receive feedback about which previous actions were successful and which failed
+- **BUILD ON SUCCESSFUL PATTERNS**: If clicking at (400, 500) was successful, generate multiple related clicks around that area (e.g., (400, 510), (410, 500), (390, 500))
+- **AVOID FAILED ACTIONS**: Do not repeat actions that failed or didn't change game state
+- **GENERATE VARIATIONS**: When a pattern works, create multiple variations of that successful pattern
+- **LEARN FROM SUCCESS**: Use successful action patterns to guide your recommendations
+
 **Action Types:**
 - **click**: Click at specific pixel coordinates { x: number, y: number }
 - **keypress**: Press a keyboard key (e.g., "Space", "ArrowUp", "Enter")
@@ -494,10 +501,13 @@ Goal: "Find and click the start button"
 
 **Important:**
 - Analyze both the HTML structure (if provided) and the screenshot
-- Consider previous actions (if provided) to avoid repeating failed attempts
+- **PRIORITIZE SUCCESSFUL PATTERNS**: If you see successful click patterns, generate multiple related clicks around those coordinates
+- **AVOID FAILED ACTIONS**: Do not repeat actions that failed or didn't change game state
+- **BUILD CONFIDENCE**: Actions similar to successful ones should have higher confidence scores
+- **GENERATE VARIATIONS**: When a pattern works, create 5-10 variations of that successful pattern
 - Return 1-20 actions ordered by priority (most important first)
 - ALL actions will be attempted in sequence - don't stop at the first one
-- For idle games requiring many clicks, return 10-20 click actions
+- For idle games requiring many clicks, return 10-20 click actions based on successful patterns
 - Ensure coordinates are accurate (center of clickable element)
 - Use correct key names for keypress actions
 - Return data that strictly matches the actionRecommendationsSchema structure (object with "recommendations" array of 1-20 actions)`;

@@ -280,13 +280,84 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
     // Add goal context
     prompt += `\n\n**Current Goal:** ${state.goal}`;
 
-    // Add previous actions context if available
+    // Add previous actions context with success/failure feedback
     if (state.previousActions.length > 0) {
-      prompt += `\n\n**Previous Actions Taken:**`;
-      state.previousActions.slice(-5).forEach((action, index) => {
-        prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
-      });
-      prompt += `\n\n**Note:** Avoid repeating these exact actions if they didn't work.`;
+      // Get last 20 actions for feedback (prioritize recent actions)
+      const recentActions = state.previousActions.slice(-20);
+      
+      // Separate successful and failed actions
+      const successfulActions = recentActions.filter(a => a.success && a.stateProgressed);
+      const failedActions = recentActions.filter(a => !a.success || !a.stateProgressed);
+      
+      // Build patterns from successful actions
+      if (successfulActions.length > 0) {
+        prompt += `\n\n**✅ Successful Actions (Build on these patterns):**`;
+        
+        // Group successful actions by type and extract patterns
+        const clickActions = successfulActions.filter(a => a.action === 'click' && typeof a.target === 'object');
+        const keypressActions = successfulActions.filter(a => a.action === 'keypress');
+        
+        if (clickActions.length > 0) {
+          prompt += `\n\n**Successful Click Patterns:**`;
+          clickActions.slice(-10).forEach((action, index) => {
+            const target = action.target as { x: number; y: number };
+            prompt += `\n${index + 1}. Click at (${target.x}, ${target.y}) - ${action.reasoning}`;
+            prompt += `\n   ✅ This action successfully changed game state.`;
+          });
+          prompt += `\n\n**Strategy:** Generate multiple related click actions around these successful coordinates. For example, if clicking at (400, 500) was successful, try clicking at nearby coordinates like (400, 510), (410, 500), (390, 500), etc.`;
+        }
+        
+        if (keypressActions.length > 0) {
+          prompt += `\n\n**Successful Keypress Patterns:**`;
+          keypressActions.slice(-10).forEach((action, index) => {
+            prompt += `\n${index + 1}. Keypress "${action.target}" - ${action.reasoning}`;
+            prompt += `\n   ✅ This action successfully changed game state.`;
+          });
+          prompt += `\n\n**Strategy:** Continue using these successful keypress patterns.`;
+        }
+        
+        // Show other successful actions
+        const otherSuccessful = successfulActions.filter(a => 
+          !(a.action === 'click' && typeof a.target === 'object') && a.action !== 'keypress'
+        );
+        if (otherSuccessful.length > 0) {
+          prompt += `\n\n**Other Successful Actions:**`;
+          otherSuccessful.slice(-5).forEach((action, index) => {
+            prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
+            prompt += `\n   ✅ This action successfully changed game state.`;
+          });
+        }
+      }
+      
+      // Show failed actions to avoid repeating
+      if (failedActions.length > 0) {
+        prompt += `\n\n**❌ Failed Actions (Avoid repeating these):**`;
+        failedActions.slice(-10).forEach((action, index) => {
+          const failureReason = !action.success 
+            ? 'execution failed' 
+            : 'execution succeeded but state did not progress';
+          prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
+          prompt += `\n   ❌ ${failureReason}. Do not repeat this exact action.`;
+        });
+        prompt += `\n\n**Strategy:** Avoid repeating these exact failed actions. Try different approaches or coordinates.`;
+      }
+      
+      // Summary of action outcomes
+      const totalActions = recentActions.length;
+      const successRate = successfulActions.length / totalActions;
+      prompt += `\n\n**Action Outcome Summary:**`;
+      prompt += `\n- Total actions: ${totalActions}`;
+      prompt += `\n- Successful (executed + state progressed): ${successfulActions.length}`;
+      prompt += `\n- Failed: ${failedActions.length}`;
+      prompt += `\n- Success rate: ${(successRate * 100).toFixed(1)}%`;
+      
+      if (successRate > 0.5) {
+        prompt += `\n\n**Note:** You're doing well! Continue building on successful patterns.`;
+      } else if (successRate > 0.2) {
+        prompt += `\n\n**Note:** Some actions are working. Focus on successful patterns and try variations.`;
+      } else {
+        prompt += `\n\n**Note:** Most actions are failing. Try completely different approaches or coordinates.`;
+      }
     }
 
     // Add metadata context if available

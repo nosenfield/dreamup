@@ -1,15 +1,15 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 8, 2025
-**Session**: Multiple Action Recommendations Feature
+**Session**: Action Success Feedback Mechanism
 
 ---
 
 ## Current Focus
 
-### ✨ FEATURE: Multiple Action Recommendations (1-20 actions)
+### ✨ FEATURE: Action Success Feedback Mechanism
 
-**Goal**: Allow LLM to return 1-20 actions per state analysis, all of which will be tried in sequence (no early stop on success). This is especially useful for idle games requiring many clicks to progress.
+**Goal**: Provide meaningful feedback to the LLM about which actions were successful so it can generate multiple related actions based on successful patterns. Build confidence in successful actions and reduce confidence in failed ones.
 
 **Status**: ✅ COMPLETE
 
@@ -75,13 +75,14 @@
 ## Recent Changes
 
 ### Completed This Session
-- ✅ Multiple Action Recommendations Feature (Nov 8, 2025)
-  - Updated schema to return array of 1-20 action recommendations
-  - Updated StateAnalyzer to return array instead of single recommendation
-  - Updated prompt to instruct LLM to return 1-20 actions ordered by priority
-  - Updated AdaptiveQALoop to try ALL actions in sequence (no early stop on success)
-  - All 20 tests passing (StateAnalyzer + AdaptiveQALoop)
-  - Supports idle games requiring 100+ clicks to progress
+- ✅ Action Success Feedback Mechanism (Nov 8, 2025)
+  - Added mandatory `success` and `stateProgressed` fields to Action interface
+  - Updated AdaptiveQALoop to check state after EACH action (not after all actions)
+  - Updated AdaptiveQALoop to track ALL actions (successful and failed) with outcomes
+  - Updated StateAnalyzer to provide feedback about successful/failed actions
+  - Updated prompt to instruct LLM to build on successful patterns and avoid failed actions
+  - All 22 tests passing (StateAnalyzer + AdaptiveQALoop)
+  - LLM now receives feedback about which actions worked and can generate related actions
 - ✅ Phase 2: Start Button Detection - Code Separation (Nov 8, 2025)
   - Created `src/core/start-detection/` directory with 7 files
   - Implemented Strategy Pattern with 4 strategies

@@ -390,6 +390,9 @@ export interface GameMetadata {
  * 
  * Represents a single action taken by the QA agent with context
  * for tracking action history and avoiding repetition.
+ * 
+ * Every action must have a known outcome (success/failure) and
+ * state progression result to provide meaningful feedback to the LLM.
  */
 export interface Action {
   /** Type of action performed */
@@ -403,6 +406,12 @@ export interface Action {
   
   /** Timestamp when the action was performed */
   timestamp: number;
+  
+  /** Whether the action executed successfully (true) or failed (false) */
+  success: boolean;
+  
+  /** Whether the game state progressed after this action (true) or remained unchanged (false) */
+  stateProgressed: boolean;
 }
 
 /**

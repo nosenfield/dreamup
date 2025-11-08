@@ -170,13 +170,84 @@ describe('AdaptiveQALoop', () => {
       expect(mockGameInteractor.executeRecommendationPublic).toHaveBeenCalledTimes(3);
     }, 10000);
 
-    it('should check state progression', async () => {
+    it('should check state progression after each action', async () => {
+      (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValue(true);
+      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
+        {
+          action: 'click',
+          target: { x: 100, y: 200 },
+          reasoning: 'First action',
+          confidence: 0.9,
+          alternatives: [],
+        },
+        {
+          action: 'click',
+          target: { x: 150, y: 250 },
+          reasoning: 'Second action',
+          confidence: 0.8,
+          alternatives: [],
+        },
+      ] as ActionRecommendations);
+
       config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       await loop.run(mockPage);
 
-      expect(mockStateAnalyzer.hasStateProgressed).toHaveBeenCalled();
+      // Should check state progression after EACH action (2 actions = 2 checks)
+      expect(mockStateAnalyzer.hasStateProgressed).toHaveBeenCalledTimes(2);
+    }, 10000);
+
+    it('should track success and stateProgressed for each action', async () => {
+      (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValue(true);
+      (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValueOnce(true);
+      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
+        {
+          action: 'click',
+          target: { x: 100, y: 200 },
+          reasoning: 'Test action',
+          confidence: 0.9,
+          alternatives: [],
+        },
+      ] as ActionRecommendations);
+
+      config.maxActions = 1;
+      const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
+
+      const result = await loop.run(mockPage);
+
+      // Check that action has mandatory fields
+      expect(result.actionHistory.length).toBeGreaterThan(0);
+      const action = result.actionHistory[0];
+      expect(action).toHaveProperty('success');
+      expect(action).toHaveProperty('stateProgressed');
+      expect(typeof action.success).toBe('boolean');
+      expect(typeof action.stateProgressed).toBe('boolean');
+    }, 10000);
+
+    it('should track failed actions', async () => {
+      (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValue(false);
+      (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValueOnce(false);
+      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
+        {
+          action: 'click',
+          target: { x: 100, y: 200 },
+          reasoning: 'Failed action',
+          confidence: 0.9,
+          alternatives: [],
+        },
+      ] as ActionRecommendations);
+
+      config.maxActions = 1;
+      const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
+
+      const result = await loop.run(mockPage);
+
+      // Failed actions should still be tracked
+      expect(result.actionHistory.length).toBe(1);
+      const action = result.actionHistory[0];
+      expect(action.success).toBe(false);
+      expect(action.stateProgressed).toBe(false);
     }, 10000);
 
     it('should calculate estimated cost', async () => {
