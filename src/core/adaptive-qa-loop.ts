@@ -214,7 +214,12 @@ export class AdaptiveQALoop {
       const iterationSuccessfulGroups: SuccessfulActionGroup[] = [];
 
       // Inner loop: Execute groups in confidence order
-      for (const group of sortedGroups) {
+      for (let groupIndex = 0; groupIndex < sortedGroups.length; groupIndex++) {
+        const group = sortedGroups[groupIndex];
+        
+        // Log action group separator
+        this.logger.separator(`\n${'='.repeat(60)}\n>>> Executing Action Group ${groupIndex + 1}/${sortedGroups.length} <<<\n${'='.repeat(60)}`);
+        
         // Execute group and assess
         const result = await this.executeActionGroup(page, group, currentState);
 
@@ -303,7 +308,7 @@ export class AdaptiveQALoop {
     success: boolean;
     stateProgressed: boolean;
   }> {
-    this.logger.info('Executing Action Group', {
+    this.logger.info('Action Group Details', {
       reasoning: group.reasoning,
       confidence: group.confidence,
       actionCount: group.actions.length,
@@ -316,8 +321,14 @@ export class AdaptiveQALoop {
     // Execute all actions in the group
     const executedActions: Action[] = [];
     
+    // Log action separator banner
+    this.logger.separator(`\n${'-'.repeat(60)}\n--- Executing ${group.actions.length} Action(s) in Group ---\n${'-'.repeat(60)}`);
+    
     for (let i = 0; i < group.actions.length; i++) {
       const actionRec = group.actions[i];
+      
+      // Log individual action separator
+      this.logger.separator(`\n--- Action ${i + 1}/${group.actions.length} ---`);
 
       // Check if LLM says we're done
       if (actionRec.action === 'complete') {

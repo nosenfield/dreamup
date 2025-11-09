@@ -336,6 +336,17 @@ export class Logger {
   }
 
   /**
+   * Output a plain text separator/banner (for action groups, actions, etc.).
+   * 
+   * Outputs plain text without JSON formatting, useful for visual separators.
+   * 
+   * @param message - Plain text banner/separator to output
+   */
+  separator(message: string): void {
+    this.outputPlain(message);
+  }
+
+  /**
    * Log an info-level message.
    * 
    * Use for important business events (user login, order placed, job completed).
