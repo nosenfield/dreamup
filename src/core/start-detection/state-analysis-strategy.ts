@@ -93,13 +93,15 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
       // Execute recommendation
       if (recommendation.action === 'click' && typeof recommendation.target === 'object') {
         const { x, y } = recommendation.target as { x: number; y: number };
-        await pageAny.click(x, y);
+        const roundedX = Math.round(x);
+        const roundedY = Math.round(y);
+        await pageAny.click(roundedX, roundedY);
 
         this.logger.action('click', {
           strategy: 'state_analysis',
           target: 'LLM recommended',
-          x,
-          y,
+          x: roundedX,
+          y: roundedY,
           confidence: recommendation.confidence,
           reasoning: recommendation.reasoning,
         });
@@ -111,7 +113,7 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
           strategy: 'state_analysis',
           attempts: 1,
           duration: Date.now() - startTime,
-          coordinates: { x, y },
+          coordinates: { x: roundedX, y: roundedY },
         };
       }
 
@@ -120,20 +122,22 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
         const alt = recommendation.alternatives[i];
         if (alt.action === 'click' && typeof alt.target === 'object') {
           const { x, y } = alt.target as { x: number; y: number };
+          const roundedX = Math.round(x);
+          const roundedY = Math.round(y);
 
           this.logger.debug('Trying alternative recommendation', {
             alternative: i + 1,
-            x,
-            y,
+            x: roundedX,
+            y: roundedY,
           });
 
-          await pageAny.click(x, y);
+          await pageAny.click(roundedX, roundedY);
 
           this.logger.action('click', {
             strategy: 'state_analysis',
             target: `LLM alternative ${i + 1}`,
-            x,
-            y,
+            x: roundedX,
+            y: roundedY,
             reasoning: alt.reasoning,
           });
 
@@ -144,7 +148,7 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
             strategy: 'state_analysis',
             attempts: i + 2,
             duration: Date.now() - startTime,
-            coordinates: { x, y },
+            coordinates: { x: roundedX, y: roundedY },
           };
         }
       }

@@ -593,6 +593,47 @@ export async function runAdaptiveQA(
       await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
     }
 
+    // Capture pre-start screenshot (TRUE baseline before any interaction)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'pre_start' });
+    const preStartScreenshot = await screenshotCapturer.capture(page, 'pre_start');
+    logger.action('screenshot', {
+      stage: 'pre_start',
+      path: preStartScreenshot.path,
+      timing: 'before_start_button',
+    });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: preStartScreenshot.id });
+
+    // Try to find and click start button before interaction
+    try {
+      const startButtonClicked = await gameInteractor.findAndClickStart(page);
+      if (startButtonClicked) {
+        logger.info('Start button found and clicked', {});
+      } else {
+        logger.warn('Start button not found - continuing with test anyway', {});
+      }
+    } catch (error) {
+      const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
+      logger.warn('Failed to find and click start button', {
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
+      });
+      // Continue anyway - start button may not be required
+    }
+
+    // Capture post-start screenshot (after start button clicked)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'post_start' });
+    const postStartScreenshot = metadata
+      ? await screenshotCapturer.captureAtOptimalTime(page, 'post_start', metadata)
+      : await screenshotCapturer.capture(page, 'post_start');
+    logger.action('screenshot', {
+      stage: 'post_start',
+      path: postStartScreenshot.path,
+      timing: 'after_start_button',
+    });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: postStartScreenshot.id });
+
     // Run adaptive QA loop
     const adaptiveLoop = new AdaptiveQALoop(
       logger,

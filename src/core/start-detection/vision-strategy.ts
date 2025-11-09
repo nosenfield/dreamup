@@ -107,15 +107,17 @@ export class VisionStrategy extends BaseStartStrategy {
         confidence: bestElement.confidence,
       });
 
-      // Click at the coordinates
+      // Click at the coordinates (round to integers)
+      const roundedX = Math.round(bestElement.x);
+      const roundedY = Math.round(bestElement.y);
       const pageAny = page as any;
-      await pageAny.click(bestElement.x, bestElement.y);
+      await pageAny.click(roundedX, roundedY);
 
       this.logger.action('click', {
         strategy: 'vision',
         target: bestElement.label,
-        x: bestElement.x,
-        y: bestElement.y,
+        x: roundedX,
+        y: roundedY,
         confidence: bestElement.confidence,
       });
 
@@ -126,7 +128,7 @@ export class VisionStrategy extends BaseStartStrategy {
         strategy: 'vision',
         attempts: 1,
         duration: Date.now() - startTime,
-        coordinates: { x: bestElement.x, y: bestElement.y },
+        coordinates: { x: roundedX, y: roundedY },
       };
     } catch (error) {
       const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);

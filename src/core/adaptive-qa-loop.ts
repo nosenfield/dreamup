@@ -167,7 +167,7 @@ export class AdaptiveQALoop {
 
       // Ask LLM: "What Action Groups should I try?"
       const goal = currentIteration === 1
-        ? 'Start the game and begin playing'
+        ? 'Play the game'
         : 'Continue playing and progress through the game';
 
       this.logger.info('Requesting Action Groups', {
@@ -379,7 +379,7 @@ export class AdaptiveQALoop {
       // Log the action
       this.logger.action(actionRec.action, {
         ...(actionRec.action === 'click' && typeof actionRec.target === 'object'
-          ? { x: actionRec.target.x, y: actionRec.target.y }
+          ? { x: Math.round(actionRec.target.x), y: Math.round(actionRec.target.y) }
           : { key: actionRec.target }),
         confidence: actionRec.confidence,
         reasoning: actionRec.reasoning,

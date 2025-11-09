@@ -224,20 +224,24 @@ export class GameInteractor {
    * ```
    */
   async clickAtCoordinates(page: AnyPage, x: number, y: number): Promise<void> {
+    // Round coordinates to integers
+    const roundedX = Math.round(x);
+    const roundedY = Math.round(y);
+
     // Validate coordinates
-    if (x < 0 || y < 0 || !Number.isInteger(x) || !Number.isInteger(y)) {
-      const error = new Error(`Invalid coordinates: x=${x}, y=${y}. Coordinates must be non-negative integers.`);
+    if (roundedX < 0 || roundedY < 0) {
+      const error = new Error(`Invalid coordinates: x=${roundedX}, y=${roundedY}. Coordinates must be non-negative integers.`);
       this.logger.error('Mouse click failed - invalid coordinates', {
-        x,
-        y,
+        x: roundedX,
+        y: roundedY,
         error: error.message,
       });
       throw error;
     }
 
     this.logger.info('Clicking at coordinates', {
-      x,
-      y,
+      x: roundedX,
+      y: roundedY,
       timeout: this.interactionTimeout,
     });
 
@@ -249,19 +253,19 @@ export class GameInteractor {
       // Use Stagehand's click(x, y) method
       // Stagehand Page exposes click directly with coordinates
       await withTimeout(
-        pageAny.click(x, y),
+        pageAny.click(roundedX, roundedY),
         this.interactionTimeout,
         `Mouse click timed out after ${this.interactionTimeout}ms`
       );
 
       this.logger.info('Mouse click completed', {
-        x,
-        y,
+        x: roundedX,
+        y: roundedY,
       });
     } catch (error) {
       this.logger.error('Mouse click failed', {
-        x,
-        y,
+        x: roundedX,
+        y: roundedY,
         error: error instanceof Error ? error.message : String(error),
         errorType: error instanceof Error ? error.constructor.name : typeof error,
       });
@@ -341,12 +345,14 @@ export class GameInteractor {
       if (recommendation.action === 'click') {
         if (typeof recommendation.target === 'object' && 'x' in recommendation.target && 'y' in recommendation.target) {
           const { x, y } = recommendation.target;
+          const roundedX = Math.round(x);
+          const roundedY = Math.round(y);
           this.logger.info('Executing click recommendation', {
-            coordinates: { x, y },
+            coordinates: { x: roundedX, y: roundedY },
             reasoning: recommendation.reasoning,
             confidence: recommendation.confidence,
           });
-          await this.clickAtCoordinates(page, x, y);
+          await this.clickAtCoordinates(page, roundedX, roundedY);
           return true;
         } else {
           this.logger.warn('Invalid click recommendation target', {
