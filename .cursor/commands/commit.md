@@ -113,7 +113,6 @@ EOF
 After committing:
 1. Show the commit hash and message
 2. Run `git log --oneline -1` to verify
-3. Ask if user wants to push to remote
 
 ## Safety Checks
 
@@ -139,8 +138,3 @@ Use commit type: `docs: Update Memory Bank - <what changed>`
 
 ### Case 4: Large refactoring (10+ files)
 Break into multiple commits if possible, or ask user if they want one commit.
-
-## Example Session
-
-```
-User: /commit
