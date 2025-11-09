@@ -1,0 +1,53 @@
+{
+  "metadataVersion": "1.0.0",
+  "genre": "idle clicker",
+  "description": "An idle brick breaker game where players click on bricks to destroy them and earn money, which can be spent on purchasing balls to automate brick breaking. The game features a grid of numbered bricks, a money counter, and ball purchase buttons.",
+  "expectedControls": "Mouse clicking on bricks to destroy them and on UI buttons to purchase balls",
+  "inputSchema": {
+    "type": "semantic",
+    "content": "This is a mouse-only clicker/idle game. Players interact by clicking on bricks in the game grid to destroy them and earn money. Money can be spent by clicking on ball purchase buttons (yellow circular button labeled $25 and magenta circular button labeled $200 at top-left). The game is entirely mouse-driven with no keyboard controls required. The primary gameplay loop is: click bricks to earn money, then spend money to purchase balls that automate brick destruction."
+  },
+  "loadingIndicators": [
+    {
+      "type": "element",
+      "pattern": "canvas",
+      "description": "Game canvas element should be visible and rendered",
+      "selector": "canvas"
+    },
+    {
+      "type": "text",
+      "pattern": "BALLS",
+      "description": "Ball counter should be visible in the UI showing current/total balls"
+    },
+    {
+      "type": "text",
+      "pattern": "LEVEL",
+      "description": "Level indicator should be visible in the UI"
+    }
+  ],
+  "successIndicators": [
+    {
+      "type": "score_change",
+      "description": "Money counter (top-right with dollar sign icon) should increase when bricks are clicked",
+      "selector": "text containing '$' or dollar sign"
+    },
+    {
+      "type": "animation",
+      "description": "Bricks should visually change or disappear when clicked"
+    },
+    {
+      "type": "interaction_response",
+      "description": "Game should respond to clicks on bricks with visual feedback (brick damage/destruction)"
+    },
+    {
+      "type": "element_visible",
+      "description": "Ball counter should show current/total balls (e.g., '0/50 BALLS') and update when balls are purchased"
+    }
+  ],
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 45000,
+    "instructions": "Focus on clicking bricks in the central grid area to destroy them and earn money. The brick grid occupies the center portion of the screen within a white border frame. After earning enough money, click on the ball purchase buttons (yellow circular button $25 and magenta circular button $200 at top-left) to buy balls. Prioritize clicking on lower-numbered bricks as they are easier to destroy and provide immediate feedback. The money counter is displayed at the top-right with a dollar sign icon. The primary goal is to earn money by clicking bricks, then spend that money to purchase balls that will automate the brick-breaking process."
+  }
+}
+

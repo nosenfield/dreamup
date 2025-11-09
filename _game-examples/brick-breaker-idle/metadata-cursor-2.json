@@ -1,0 +1,53 @@
+{
+  "metadataVersion": "1.0.0",
+  "genre": "idle clicker",
+  "description": "An idle brick breaker game where players click on bricks multiple times to destroy them. Each brick displays a number indicating how many clicks are required to destroy it. Destroying bricks earns money. The game features a grid of numbered bricks, a money counter, and ball purchase buttons.",
+  "expectedControls": "Mouse clicking on bricks multiple times based on their displayed number",
+  "inputSchema": {
+    "type": "semantic",
+    "content": "This is a mouse-only clicker/idle game. Players interact by clicking on bricks in the game grid multiple times to destroy them. Each brick displays a number (e.g., '1', '2', '3') which indicates how many times that brick must be clicked before it is destroyed. Lower-numbered bricks require fewer clicks and are easier to destroy. Destroying bricks earns money. The game is entirely mouse-driven with no keyboard controls required. The primary mechanic is clicking bricks repeatedly until they are destroyed based on their displayed number."
+  },
+  "loadingIndicators": [
+    {
+      "type": "element",
+      "pattern": "canvas",
+      "description": "Game canvas element should be visible and rendered",
+      "selector": "canvas"
+    },
+    {
+      "type": "text",
+      "pattern": "BALLS",
+      "description": "Ball counter should be visible in the UI showing current/total balls"
+    },
+    {
+      "type": "text",
+      "pattern": "LEVEL",
+      "description": "Level indicator should be visible in the UI"
+    }
+  ],
+  "successIndicators": [
+    {
+      "type": "score_change",
+      "description": "Money counter (top-right with dollar sign icon) should increase when bricks are destroyed",
+      "selector": "text containing '$' or dollar sign"
+    },
+    {
+      "type": "animation",
+      "description": "Bricks should visually change when clicked and disappear when their click count reaches zero"
+    },
+    {
+      "type": "interaction_response",
+      "description": "Game should respond to clicks on bricks with visual feedback. Brick numbers should decrease with each click until the brick is destroyed."
+    },
+    {
+      "type": "element_visible",
+      "description": "Brick numbers should be visible and decrease with each click until the brick is destroyed"
+    }
+  ],
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 45000,
+    "instructions": "Focus exclusively on clicking bricks in the central grid area. Each brick displays a number indicating how many clicks are required to destroy it. Click each brick repeatedly until its number reaches zero and it is destroyed. Prioritize bricks with lower numbers (e.g., '1', '2') as they require fewer clicks and provide faster feedback. The brick grid occupies the center portion of the screen within a white border frame. Observe how brick numbers decrease with each click. Continue clicking bricks systematically to destroy them and earn money. The money counter is displayed at the top-right with a dollar sign icon and will increase when bricks are successfully destroyed."
+  }
+}
+
