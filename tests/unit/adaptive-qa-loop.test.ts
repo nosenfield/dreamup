@@ -10,7 +10,7 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import type { StateAnalyzer } from '../../src/core/state-analyzer';
 import type { GameInteractor } from '../../src/core/game-interactor';
 import type { AdaptiveTestConfig } from '../../src/types/config.types';
-import type { GameMetadata, Action, CapturedState, ActionRecommendations } from '../../src/types';
+import type { GameMetadata, Action, CapturedState, ActionGroups } from '../../src/types';
 
 describe('AdaptiveQALoop', () => {
   let logger: Logger;
@@ -28,13 +28,19 @@ describe('AdaptiveQALoop', () => {
     mockStateAnalyzer = {
       analyzeAndRecommendAction: mock(() => Promise.resolve([
         {
-          action: 'click',
-          target: { x: 100, y: 200 },
-          reasoning: 'Test recommendation',
+          reasoning: 'Test strategy',
           confidence: 0.9,
-          alternatives: [],
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Test recommendation',
+              confidence: 0.9,
+              alternatives: [],
+            },
+          ],
         },
-      ] as ActionRecommendations)),
+      ] as ActionGroups)),
       hasStateProgressed: mock(() => Promise.resolve(true)),
       sanitizeHTML: mock((html: string) => html),
     } as unknown as StateAnalyzer;
@@ -75,7 +81,6 @@ describe('AdaptiveQALoop', () => {
 
   describe('run', () => {
     it('should return AdaptiveLoopResult', async () => {
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
       
       const result = await loop.run(mockPage);
@@ -85,11 +90,10 @@ describe('AdaptiveQALoop', () => {
       expect(result.actionHistory).toBeInstanceOf(Array);
       expect(result.stateCheckCount).toBeGreaterThanOrEqual(0);
       expect(result.estimatedCost).toBeGreaterThanOrEqual(0);
-      expect(['max_actions', 'max_duration', 'budget_limit', 'llm_complete', 'error']).toContain(result.completionReason);
+      expect(['max_duration', 'budget_limit', 'llm_complete', 'zero_successful_groups', 'error']).toContain(result.completionReason);
     }, 10000);
 
     it('should capture initial state', async () => {
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
       
       await loop.run(mockPage);
@@ -97,28 +101,21 @@ describe('AdaptiveQALoop', () => {
       expect(mockGameInteractor.captureCurrentState).toHaveBeenCalled();
     }, 10000);
 
-    it('should terminate at maxActions', async () => {
-      config.maxActions = 2;
+    it('should terminate when zero successful groups', async () => {
+      // Mock hasStateProgressed to return false (no state progression)
+      (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValue(false);
+      
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       const result = await loop.run(mockPage);
 
-      expect(result.completionReason).toBe('max_actions');
-      expect(result.actionHistory.length).toBeLessThanOrEqual(2);
+      expect(result.completionReason).toBe('zero_successful_groups');
     }, 10000);
 
     it('should terminate when LLM recommends completion', async () => {
-      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
-        {
-          action: 'complete',
-          target: '',
-          reasoning: 'Test complete',
-          confidence: 1.0,
-          alternatives: [],
-        },
-      ] as ActionRecommendations);
+      // Mock to return zero groups (LLM says no more strategies)
+      (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([] as ActionGroups);
 
-      config.maxActions = 20;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
       
       const result = await loop.run(mockPage);
@@ -127,7 +124,6 @@ describe('AdaptiveQALoop', () => {
     }, 10000);
 
     it('should execute recommended actions', async () => {
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       await loop.run(mockPage);
@@ -135,67 +131,77 @@ describe('AdaptiveQALoop', () => {
       expect(mockGameInteractor.executeRecommendationPublic).toHaveBeenCalled();
     }, 10000);
 
-    it('should try all actions in sequence (no early stop)', async () => {
+    it('should try all actions in a group in sequence', async () => {
       (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValue(true);
       (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
         {
-          action: 'click',
-          target: { x: 100, y: 200 },
-          reasoning: 'First action',
+          reasoning: 'Test strategy with multiple actions',
           confidence: 0.9,
-          alternatives: [],
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'First action',
+              confidence: 0.9,
+              alternatives: [],
+            },
+            {
+              action: 'click',
+              target: { x: 150, y: 250 },
+              reasoning: 'Second action',
+              confidence: 0.8,
+              alternatives: [],
+            },
+            {
+              action: 'click',
+              target: { x: 200, y: 300 },
+              reasoning: 'Third action',
+              confidence: 0.7,
+              alternatives: [],
+            },
+          ],
         },
-        {
-          action: 'click',
-          target: { x: 150, y: 250 },
-          reasoning: 'Second action',
-          confidence: 0.8,
-          alternatives: [],
-        },
-        {
-          action: 'click',
-          target: { x: 200, y: 300 },
-          reasoning: 'Third action',
-          confidence: 0.7,
-          alternatives: [],
-        },
-      ] as ActionRecommendations);
+      ] as ActionGroups);
 
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       await loop.run(mockPage);
 
-      // Should try ALL 3 actions in sequence (no early stop on success)
+      // Should try ALL 3 actions in the group in sequence
       expect(mockGameInteractor.executeRecommendationPublic).toHaveBeenCalledTimes(3);
     }, 10000);
 
-    it('should check state progression after each action', async () => {
+    it('should check state progression after each group', async () => {
       (mockGameInteractor.executeRecommendationPublic as ReturnType<typeof mock>).mockResolvedValue(true);
       (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
         {
-          action: 'click',
-          target: { x: 100, y: 200 },
-          reasoning: 'First action',
+          reasoning: 'Test strategy',
           confidence: 0.9,
-          alternatives: [],
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'First action',
+              confidence: 0.9,
+              alternatives: [],
+            },
+            {
+              action: 'click',
+              target: { x: 150, y: 250 },
+              reasoning: 'Second action',
+              confidence: 0.8,
+              alternatives: [],
+            },
+          ],
         },
-        {
-          action: 'click',
-          target: { x: 150, y: 250 },
-          reasoning: 'Second action',
-          confidence: 0.8,
-          alternatives: [],
-        },
-      ] as ActionRecommendations);
+      ] as ActionGroups);
 
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       await loop.run(mockPage);
 
-      // Should check state progression after EACH action (2 actions = 2 checks)
-      expect(mockStateAnalyzer.hasStateProgressed).toHaveBeenCalledTimes(2);
+      // Should check state progression after the group (1 group = 1 check)
+      expect(mockStateAnalyzer.hasStateProgressed).toHaveBeenCalledTimes(1);
     }, 10000);
 
     it('should track success and stateProgressed for each action', async () => {
@@ -203,15 +209,20 @@ describe('AdaptiveQALoop', () => {
       (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValueOnce(true);
       (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
         {
-          action: 'click',
-          target: { x: 100, y: 200 },
-          reasoning: 'Test action',
+          reasoning: 'Test strategy',
           confidence: 0.9,
-          alternatives: [],
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Test action',
+              confidence: 0.9,
+              alternatives: [],
+            },
+          ],
         },
-      ] as ActionRecommendations);
+      ] as ActionGroups);
 
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       const result = await loop.run(mockPage);
@@ -230,15 +241,20 @@ describe('AdaptiveQALoop', () => {
       (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValueOnce(false);
       (mockStateAnalyzer.analyzeAndRecommendAction as ReturnType<typeof mock>).mockResolvedValueOnce([
         {
-          action: 'click',
-          target: { x: 100, y: 200 },
-          reasoning: 'Failed action',
+          reasoning: 'Failed strategy',
           confidence: 0.9,
-          alternatives: [],
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Failed action',
+              confidence: 0.9,
+              alternatives: [],
+            },
+          ],
         },
-      ] as ActionRecommendations);
+      ] as ActionGroups);
 
-      config.maxActions = 1;
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       const result = await loop.run(mockPage);
@@ -251,7 +267,9 @@ describe('AdaptiveQALoop', () => {
     }, 10000);
 
     it('should calculate estimated cost', async () => {
-      config.maxActions = 1;
+      // Make hasStateProgressed return false to terminate after first iteration
+      (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValue(false);
+      
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       const result = await loop.run(mockPage);
@@ -265,7 +283,9 @@ describe('AdaptiveQALoop', () => {
       logger.beginPhase = beginPhaseSpy;
       logger.endPhase = endPhaseSpy;
 
-      config.maxActions = 1;
+      // Make hasStateProgressed return false to terminate after first iteration
+      (mockStateAnalyzer.hasStateProgressed as ReturnType<typeof mock>).mockResolvedValue(false);
+      
       const loop = new AdaptiveQALoop(logger, mockStateAnalyzer, mockGameInteractor, config, metadata);
 
       await loop.run(mockPage);

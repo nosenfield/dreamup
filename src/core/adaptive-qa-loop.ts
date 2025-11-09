@@ -2,12 +2,21 @@
  * Adaptive QA Loop for iterative action-based game testing.
  *
  * This module provides the AdaptiveQALoop class that coordinates an iterative
- * loop of LLM-powered action recommendations and game state analysis. The loop
- * continues until one of the termination conditions is met:
- * - Maximum actions reached
+ * loop of LLM-powered Action Group recommendations and game state analysis.
+ * 
+ * The loop uses an Action Group-based approach:
+ * - Iteration 1: 1-3 Action Groups, each with 1 action (different strategies)
+ * - Iteration 2+: 1 Action Group per successful group, each with 1-5 actions
+ * - Iteration 3+: 1 Action Group per successful group, each with 1-10 actions
+ * 
+ * Groups are executed in confidence order within each iteration.
+ * Success is measured at the group level (strategy level), not individual action level.
+ * 
+ * The loop continues until one of the termination conditions is met:
  * - Maximum duration reached
  * - Budget limit reached
- * - LLM recommends completion
+ * - LLM recommends completion (returns 0 groups)
+ * - Zero successful groups in an iteration
  *
  * @module core.adaptive-qa-loop
  */
@@ -16,7 +25,7 @@ import type { AnyPage } from '@browserbasehq/stagehand';
 import { Logger, TestPhase } from '../utils/logger';
 import type { StateAnalyzer } from './state-analyzer';
 import type { GameInteractor } from './game-interactor';
-import type { GameMetadata, Action, ActionRecommendations } from '../types';
+import type { GameMetadata, Action, ActionGroups, ActionGroup, SuccessfulActionGroup, CapturedState } from '../types';
 import type { AdaptiveTestConfig } from '../types/config.types';
 import { calculateEstimatedCost } from '../utils/adaptive-qa';
 
@@ -37,17 +46,22 @@ export interface AdaptiveLoopResult {
   estimatedCost: number;
   
   /** Reason why the loop terminated */
-  completionReason: 'max_actions' | 'max_duration' | 'budget_limit' | 'llm_complete' | 'error';
+  completionReason: 'max_duration' | 'budget_limit' | 'llm_complete' | 'zero_successful_groups' | 'error';
 }
 
 /**
  * Adaptive QA Loop class for iterative action-based game testing.
  *
  * Coordinates an iterative loop of:
- * 1. LLM-powered action recommendations
- * 2. Action execution
- * 3. State capture and progression checking
+ * 1. LLM-powered Action Group recommendations
+ * 2. Group execution (actions executed in confidence order)
+ * 3. State capture and progression checking (at group level)
  * 4. Budget and duration monitoring
+ *
+ * Uses Action Group-based approach:
+ * - Actions grouped by strategy/reasoning
+ * - Success measured at group level
+ * - Iterations expand successful strategies
  *
  * The loop continues until one of the termination conditions is met.
  *
@@ -95,7 +109,6 @@ export class AdaptiveQALoop {
    */
   async run(page: AnyPage): Promise<AdaptiveLoopResult> {
     this.logger.beginPhase(TestPhase.ADAPTIVE_QA_LOOP, {
-      maxActions: this.config.maxActions,
       maxDuration: this.config.maxDuration,
       maxBudget: this.config.maxBudget,
     });
@@ -108,7 +121,9 @@ export class AdaptiveQALoop {
 
     const loopStartTime = Date.now();
     let stateCheckCount = 0;
-    let completionReason: AdaptiveLoopResult['completionReason'] = 'max_actions';
+    let completionReason: AdaptiveLoopResult['completionReason'] = 'max_duration';
+    let currentIteration = 1;
+    let successfulGroups: SuccessfulActionGroup[] = [];
 
     this.logger.action('screenshot', {
       stage: 'initial',
@@ -116,13 +131,15 @@ export class AdaptiveQALoop {
       timing: 'loop_start',
     });
 
-    for (let i = 0; i < this.config.maxActions; i++) {
+    // Outer loop: Iterations (no max, continues until termination)
+    while (true) {
       const elapsed = Date.now() - loopStartTime;
 
-      this.logger.iteration(i + 1, this.config.maxActions, {
+      this.logger.iteration(currentIteration, Infinity, {
         elapsed,
         actionsPerformed: actionHistory.length,
         screenshotsCaptured: screenshots.length,
+        successfulGroupsFromPreviousIteration: successfulGroups.length,
       });
 
       // Check duration limit
@@ -148,133 +165,94 @@ export class AdaptiveQALoop {
         break;
       }
 
-      // Ask LLM: "What should I do next?"
-      const goal = i === 0
+      // Ask LLM: "What Action Groups should I try?"
+      const goal = currentIteration === 1
         ? 'Start the game and begin playing'
         : 'Continue playing and progress through the game';
 
-      this.logger.info('Requesting action recommendations', { goal });
-
-      const recommendations: ActionRecommendations = await this.stateAnalyzer.analyzeAndRecommendAction({
-        html: currentState.html,
-        screenshot: currentState.screenshot.path,
-        previousActions: actionHistory,
-        metadata: this.metadata,
+      this.logger.info('Requesting Action Groups', {
+        iteration: currentIteration,
         goal,
+        successfulGroupsCount: successfulGroups.length,
       });
 
-      this.logger.info('Received recommendations', {
-        actionCount: recommendations.length,
-        actions: recommendations.map(r => ({
-          action: r.action,
-          confidence: r.confidence,
+      const groups: ActionGroups = await this.stateAnalyzer.analyzeAndRecommendAction(
+        {
+          html: currentState.html,
+          screenshot: currentState.screenshot.path,
+          previousActions: actionHistory,
+          metadata: this.metadata,
+          goal,
+        },
+        currentIteration,
+        successfulGroups.length > 0 ? successfulGroups : undefined
+      );
+
+      // If no groups returned, terminate
+      if (groups.length === 0) {
+        this.logger.info('LLM returned zero groups - terminating', {
+          iteration: currentIteration,
+        });
+        completionReason = 'llm_complete';
+        break;
+      }
+
+      this.logger.info('Received Action Groups', {
+        iteration: currentIteration,
+        groupCount: groups.length,
+        groups: groups.map(g => ({
+          reasoning: g.reasoning,
+          confidence: g.confidence,
+          actionCount: g.actions.length,
         })),
       });
 
-      // Try ALL recommendations in sequence (no early stop on success)
-      // Check state after EACH action to provide feedback
-      for (let actionIdx = 0; actionIdx < recommendations.length; actionIdx++) {
-        const recommendation = recommendations[actionIdx];
+      // Sort groups by confidence (descending - highest first)
+      const sortedGroups = [...groups].sort((a, b) => b.confidence - a.confidence);
 
-        // Check if LLM says we're done
-        if (recommendation.action === 'complete') {
-          this.logger.info('LLM recommends completion', {
-            reasoning: recommendation.reasoning,
-            actionIndex: actionIdx + 1,
-            totalActions: recommendations.length,
+      // Track successful groups for this iteration
+      const iterationSuccessfulGroups: SuccessfulActionGroup[] = [];
+
+      // Inner loop: Execute groups in confidence order
+      for (const group of sortedGroups) {
+        // Execute group and assess
+        const result = await this.executeActionGroup(page, group, currentState);
+
+        // Add all executed actions to history
+        actionHistory.push(...result.executedActions);
+
+        // Add screenshots
+        screenshots.push(result.afterScreenshot);
+
+        // If group was successful, track it for next iteration
+        if (result.success && result.stateProgressed) {
+          iterationSuccessfulGroups.push({
+            reasoning: group.reasoning,
+            actions: result.executedActions,
+            beforeScreenshot: result.beforeScreenshot,
+            afterScreenshot: result.afterScreenshot,
+            confidence: group.confidence,
           });
-          completionReason = 'llm_complete';
-          break;
         }
 
-        this.logger.info('Executing recommendation', {
-          actionIndex: actionIdx + 1,
-          totalActions: recommendations.length,
-          action: recommendation.action,
-          confidence: recommendation.confidence,
-          reasoning: recommendation.reasoning,
-        });
-
-        // Capture state BEFORE action
-        const stateBeforeAction = currentState;
-
-        // Execute recommended action
-        const executed = await this.gameInteractor.executeRecommendationPublic(page, recommendation);
-
-        // Wait for state change
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Capture state AFTER action
-        const stateAfterAction = await this.gameInteractor.captureCurrentState(page);
-        screenshots.push(stateAfterAction.screenshot.path);
-
-        // Check if state progressed after this specific action
+        // Update current state for next group
+        currentState = result.afterState;
         stateCheckCount++;
-        this.logger.debug('Checking state progression after action', {
-          actionIndex: actionIdx + 1,
-          action: recommendation.action,
-        });
-        const stateProgressed = await this.stateAnalyzer.hasStateProgressed(
-          stateBeforeAction.screenshot.path,
-          stateAfterAction.screenshot.path
-        );
-
-        // Create Action with success and stateProgressed fields
-        const action: Action = {
-          action: recommendation.action,
-          target: recommendation.target,
-          reasoning: recommendation.reasoning,
-          timestamp: Date.now(),
-          success: executed,
-          stateProgressed,
-        };
-
-        // Add to actionHistory (both successful and failed actions)
-        actionHistory.push(action);
-
-        // Log the action with full details including outcome
-        this.logger.action(recommendation.action, {
-          ...(recommendation.action === 'click' && typeof recommendation.target === 'object'
-            ? { x: recommendation.target.x, y: recommendation.target.y }
-            : { key: recommendation.target }),
-          confidence: recommendation.confidence,
-          reasoning: recommendation.reasoning,
-          actionIndex: actionIdx + 1,
-          totalActions: recommendations.length,
-          success: executed,
-          stateProgressed,
-        });
-
-        if (executed && stateProgressed) {
-          this.logger.info('Action executed successfully and state progressed', {
-            actionIndex: actionIdx + 1,
-            action: recommendation.action,
-          });
-        } else if (executed && !stateProgressed) {
-          this.logger.warn('Action executed but state did not progress', {
-            actionIndex: actionIdx + 1,
-            action: recommendation.action,
-          });
-        } else {
-          this.logger.warn('Action execution failed', {
-            actionIndex: actionIdx + 1,
-            action: recommendation.action,
-          });
-        }
-
-        // Update current state for next action
-        currentState = stateAfterAction;
-
-        // If we hit a 'complete' action, break out of the recommendations loop
-        if (completionReason === 'llm_complete') {
-          break;
-        }
       }
 
-      // If we hit a 'complete' action, break out of the outer loop too
-      if (completionReason === 'llm_complete') {
+      // If zero successful groups, terminate
+      if (iterationSuccessfulGroups.length === 0) {
+        this.logger.warn('Zero successful groups in iteration', {
+          iteration: currentIteration,
+          groupCount: groups.length,
+        });
+        completionReason = 'zero_successful_groups';
         break;
       }
+
+      // Prepare for next iteration
+      successfulGroups = iterationSuccessfulGroups;
+      currentIteration++;
     }
 
     const finalCost = calculateEstimatedCost(
@@ -284,6 +262,7 @@ export class AdaptiveQALoop {
     );
 
     this.logger.endPhase(TestPhase.ADAPTIVE_QA_LOOP, {
+      iterations: currentIteration,
       actionsPerformed: actionHistory.length,
       screenshotsCaptured: screenshots.length,
       stateChecks: stateCheckCount,
@@ -297,6 +276,171 @@ export class AdaptiveQALoop {
       stateCheckCount,
       estimatedCost: finalCost,
       completionReason,
+    };
+  }
+
+  /**
+   * Execute an Action Group and assess success at group level.
+   * 
+   * Executes all actions in the group sequentially, then assesses
+   * state progression by comparing before-first-action vs after-last-action.
+   * 
+   * @param page - The Stagehand page object
+   * @param group - The Action Group to execute
+   * @param currentState - Current game state before group execution
+   * @returns Result with executed actions, screenshots, and success status
+   */
+  private async executeActionGroup(
+    page: AnyPage,
+    group: ActionGroup,
+    currentState: CapturedState
+  ): Promise<{
+    executedActions: Action[];
+    beforeScreenshot: string;
+    afterScreenshot: string;
+    beforeState: CapturedState;
+    afterState: CapturedState;
+    success: boolean;
+    stateProgressed: boolean;
+  }> {
+    this.logger.info('Executing Action Group', {
+      reasoning: group.reasoning,
+      confidence: group.confidence,
+      actionCount: group.actions.length,
+    });
+
+    // Capture state BEFORE first action
+    const beforeState = currentState;
+    const beforeScreenshot = beforeState.screenshot.path;
+
+    // Execute all actions in the group
+    const executedActions: Action[] = [];
+    
+    for (let i = 0; i < group.actions.length; i++) {
+      const actionRec = group.actions[i];
+
+      // Check if LLM says we're done
+      if (actionRec.action === 'complete') {
+        this.logger.info('LLM recommends completion within group', {
+          reasoning: actionRec.reasoning,
+          actionIndex: i + 1,
+          totalActions: group.actions.length,
+        });
+        // Still execute the action to record it, but mark as complete
+        executedActions.push({
+          action: 'complete',
+          target: '',
+          reasoning: actionRec.reasoning,
+          timestamp: Date.now(),
+          success: true,
+          stateProgressed: true,
+        });
+        break;
+      }
+
+      this.logger.info('Executing action in group', {
+        actionIndex: i + 1,
+        totalActions: group.actions.length,
+        action: actionRec.action,
+        confidence: actionRec.confidence,
+        reasoning: actionRec.reasoning,
+      });
+
+      // Execute action
+      const executed = await this.gameInteractor.executeRecommendationPublic(page, actionRec);
+
+      // Wait for state change
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Create Action with success (execution result)
+      // Note: stateProgressed will be set after all actions are executed
+      const action: Action = {
+        action: actionRec.action,
+        target: actionRec.target,
+        reasoning: actionRec.reasoning,
+        timestamp: Date.now(),
+        success: executed,
+        stateProgressed: false, // Will be updated after group assessment
+      };
+
+      executedActions.push(action);
+
+      // Log the action
+      this.logger.action(actionRec.action, {
+        ...(actionRec.action === 'click' && typeof actionRec.target === 'object'
+          ? { x: actionRec.target.x, y: actionRec.target.y }
+          : { key: actionRec.target }),
+        confidence: actionRec.confidence,
+        reasoning: actionRec.reasoning,
+        actionIndex: i + 1,
+        totalActions: group.actions.length,
+        success: executed,
+      });
+
+      if (executed) {
+        this.logger.info('Action executed successfully', {
+          actionIndex: i + 1,
+          action: actionRec.action,
+        });
+      } else {
+        this.logger.warn('Action execution failed', {
+          actionIndex: i + 1,
+          action: actionRec.action,
+        });
+      }
+    }
+
+    // Capture state AFTER last action
+    const afterState = await this.gameInteractor.captureCurrentState(page);
+    const afterScreenshot = afterState.screenshot.path;
+
+    // Check if state progressed (compare before-first vs after-last)
+    this.logger.debug('Checking state progression for group', {
+      reasoning: group.reasoning,
+      actionCount: executedActions.length,
+    });
+    
+    const stateProgressed = await this.stateAnalyzer.hasStateProgressed(
+      beforeScreenshot,
+      afterScreenshot
+    );
+
+    // Determine group success: all actions executed AND state progressed
+    const allActionsExecuted = executedActions.every(a => a.success);
+    const groupSuccess = allActionsExecuted && stateProgressed;
+
+    // Update stateProgressed for all actions in the group
+    executedActions.forEach(action => {
+      action.stateProgressed = stateProgressed;
+    });
+
+    // Log group result
+    if (groupSuccess) {
+      this.logger.info('Action Group executed successfully and state progressed', {
+        reasoning: group.reasoning,
+        actionCount: executedActions.length,
+      });
+    } else if (allActionsExecuted && !stateProgressed) {
+      this.logger.warn('Action Group executed but state did not progress', {
+        reasoning: group.reasoning,
+        actionCount: executedActions.length,
+      });
+    } else {
+      this.logger.warn('Action Group execution failed', {
+        reasoning: group.reasoning,
+        actionCount: executedActions.length,
+        failedActions: executedActions.filter(a => !a.success).length,
+      });
+    }
+
+    return {
+      executedActions,
+      beforeScreenshot,
+      afterScreenshot,
+      beforeState,
+      afterState,
+      success: groupSuccess,
+      stateProgressed,
     };
   }
 }

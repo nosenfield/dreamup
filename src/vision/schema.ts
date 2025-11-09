@@ -290,3 +290,162 @@ export function validateActionRecommendations(
   return { success: false, error: result.error };
 }
 
+/**
+ * Schema for validating ActionGroup objects.
+ * 
+ * Represents a strategy with multiple related actions that share reasoning.
+ * Actions in a group share the same logical reasoning/strategy.
+ * Success is measured at the group level, not individual action level.
+ */
+export const actionGroupSchema = z.object({
+  /** Shared reasoning/strategy description for all actions in this group */
+  reasoning: z.string().min(10).max(500),
+  
+  /** LLM confidence score (0-1) for this strategy */
+  confidence: z.number().min(0).max(1),
+  
+  /** Array of actions in this group (1-10 depending on iteration) */
+  actions: z.array(actionRecommendationSchema),
+});
+
+/**
+ * TypeScript type inferred from actionGroupSchema.
+ * 
+ * This type matches the runtime schema validation and can be used
+ * interchangeably with the ActionGroup interface from types.
+ */
+export type ActionGroupFromSchema = z.infer<typeof actionGroupSchema>;
+
+/**
+ * Schema for validating ActionGroups array.
+ * 
+ * Represents multiple strategies to try in an iteration.
+ * Groups are ordered by confidence and executed sequentially.
+ * 
+ * Note: This is wrapped in an object schema for generateObject compatibility.
+ */
+const actionGroupsArraySchema = z.array(actionGroupSchema);
+
+/**
+ * Wrapper schema for generateObject (requires object root, not array).
+ * 
+ * The AI SDK's generateObject requires the root schema to be an object,
+ * so we wrap the array in an object with a 'groups' property.
+ */
+export const actionGroupsSchema = z.object({
+  groups: actionGroupsArraySchema,
+});
+
+/**
+ * TypeScript type inferred from actionGroupsSchema.
+ * 
+ * This type represents the object wrapper with a 'groups' property.
+ */
+type ActionGroupsObjectFromSchema = z.infer<typeof actionGroupsSchema>;
+
+/**
+ * TypeScript type for the array of action groups.
+ * 
+ * This is the actual array type that is extracted from the object wrapper.
+ */
+export type ActionGroupsFromSchema = ActionGroupsObjectFromSchema['groups'];
+
+/**
+ * Validate an ActionGroup object using the actionGroupSchema.
+ * 
+ * @param data - The data to validate (unknown type for safety)
+ * @returns Validation result with success flag and data or error
+ */
+export function validateActionGroup(
+  data: unknown
+): ValidationResult<ActionGroupFromSchema> {
+  const result = actionGroupSchema.safeParse(data);
+  
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  
+  return { success: false, error: result.error };
+}
+
+/**
+ * Validate an array of ActionGroup objects using the actionGroupsSchema.
+ * 
+ * Validates group count and action count based on iteration number:
+ * - Iteration 1: 1-3 groups, exactly 1 action per group
+ * - Iteration 2: Variable groups (1 per successful group), 1-5 actions per group
+ * - Iteration 3+: Variable groups (1 per successful group), 1-10 actions per group
+ * 
+ * @param data - The data to validate (unknown type for safety)
+ * @param iterationNumber - The iteration number (1, 2, 3+, etc.)
+ * @returns Validation result with success flag and data or error
+ * 
+ * Note: The schema wraps the array in an object with a 'groups' property
+ * for generateObject compatibility, but this function returns just the array.
+ */
+export function validateActionGroups(
+  data: unknown,
+  iterationNumber: number
+): ValidationResult<ActionGroupsFromSchema> {
+  const result = actionGroupsSchema.safeParse(data);
+  
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+  
+  const groups = result.data.groups;
+  
+  // Validate group count based on iteration
+  if (iterationNumber === 1 && (groups.length < 1 || groups.length > 3)) {
+    return {
+      success: false,
+      error: new z.ZodError([{
+        code: 'custom',
+        path: ['groups'],
+        message: `Iteration 1 must have 1-3 groups, got ${groups.length}`,
+      }]),
+    };
+  }
+  
+  // Validate action count per group based on iteration
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i];
+    const actionCount = group.actions.length;
+    
+    if (iterationNumber === 1 && actionCount !== 1) {
+      return {
+        success: false,
+        error: new z.ZodError([{
+          code: 'custom',
+          path: ['groups', i, 'actions'],
+          message: `Iteration 1 groups must have exactly 1 action, got ${actionCount}`,
+        }]),
+      };
+    }
+    
+    if (iterationNumber === 2 && (actionCount < 1 || actionCount > 5)) {
+      return {
+        success: false,
+        error: new z.ZodError([{
+          code: 'custom',
+          path: ['groups', i, 'actions'],
+          message: `Iteration 2 groups must have 1-5 actions, got ${actionCount}`,
+        }]),
+      };
+    }
+    
+    if (iterationNumber >= 3 && (actionCount < 1 || actionCount > 10)) {
+      return {
+        success: false,
+        error: new z.ZodError([{
+          code: 'custom',
+          path: ['groups', i, 'actions'],
+          message: `Iteration 3+ groups must have 1-10 actions, got ${actionCount}`,
+        }]),
+      };
+    }
+  }
+  
+  return { success: true, data: groups };
+}
+

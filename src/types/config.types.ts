@@ -95,8 +95,11 @@ export interface AdaptiveTestConfig {
   /** Maximum duration in milliseconds (default: 240000 = 4 minutes) */
   maxDuration: number;
   
-  /** Maximum number of actions to perform (default: 20) */
-  maxActions: number;
+  /** 
+   * Maximum number of actions to perform (deprecated - not used in Action Group-based approach)
+   * @deprecated Use maxDuration and maxBudget instead. This field is ignored.
+   */
+  maxActions?: number;
   
   /** Screenshot capture strategy: 'fixed' (distribute evenly) or 'adaptive' (based on state changes) */
   screenshotStrategy: 'fixed' | 'adaptive';

@@ -12,11 +12,11 @@ const mockGenerateObject = mock(() => ({
   object: {
     recommendations: [
       {
-        action: 'click' as const,
-        target: { x: 100, y: 200 },
-        reasoning: 'Test reasoning',
-        confidence: 0.9,
-        alternatives: [],
+    action: 'click' as const,
+    target: { x: 100, y: 200 },
+    reasoning: 'Test reasoning',
+    confidence: 0.9,
+    alternatives: [],
       },
     ],
   },
@@ -81,7 +81,7 @@ describe('StateAnalyzer', () => {
   });
 
   describe('analyzeAndRecommendAction', () => {
-    it('should analyze state and return array of ActionRecommendations', async () => {
+    it('should analyze state and return array of ActionGroups', async () => {
       const state: GameState = {
         html: '<div>Test HTML</div>',
         screenshot: '/tmp/test.png',
@@ -99,20 +99,32 @@ describe('StateAnalyzer', () => {
       const testFile = Bun.file('/tmp/test-screenshot.png');
       await Bun.write(testFile, Buffer.from('fake-png-data'));
 
-      const result = await analyzer.analyzeAndRecommendAction({
-        ...state,
-        screenshot: '/tmp/test-screenshot.png',
-      });
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-screenshot.png',
+        },
+        1, // iterationNumber
+        undefined // successfulGroups
+      );
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThanOrEqual(1);
-      expect(result.length).toBeLessThanOrEqual(20);
-      expect(result[0].action).toBe('click');
+      expect(result.length).toBeLessThanOrEqual(3); // Iteration 1: 1-3 groups
+      expect(result[0].reasoning).toBeDefined();
       expect(result[0].confidence).toBeGreaterThanOrEqual(0);
       expect(result[0].confidence).toBeLessThanOrEqual(1);
-      expect(result[0].reasoning).toBeDefined();
-      expect(result[0].alternatives).toBeInstanceOf(Array);
+      expect(result[0].actions).toBeInstanceOf(Array);
+      expect(result[0].actions.length).toBeGreaterThanOrEqual(1);
+      expect(result[0].actions.length).toBeLessThanOrEqual(1); // Iteration 1: exactly 1 action per group
+      if (result[0].actions.length > 0) {
+        expect(result[0].actions[0].action).toBeDefined();
+        expect(result[0].actions[0].confidence).toBeGreaterThanOrEqual(0);
+        expect(result[0].actions[0].confidence).toBeLessThanOrEqual(1);
+        expect(result[0].actions[0].reasoning).toBeDefined();
+        expect(result[0].actions[0].alternatives).toBeInstanceOf(Array);
+      }
     });
 
     it('should handle missing screenshot file gracefully', async () => {
@@ -124,7 +136,7 @@ describe('StateAnalyzer', () => {
       };
 
       await expect(
-        analyzer.analyzeAndRecommendAction(state)
+        analyzer.analyzeAndRecommendAction(state, 1, undefined)
       ).rejects.toThrow();
     });
   });

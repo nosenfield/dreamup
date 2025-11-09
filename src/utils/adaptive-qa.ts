@@ -120,7 +120,6 @@ export function mergeAdaptiveConfig(
   const defaults = {
     maxBudget: 0.50,
     maxDuration: 240000,
-    maxActions: 20,
     screenshotStrategy: 'fixed' as const,
     llmCallStrategy: 'eager' as const,
   };

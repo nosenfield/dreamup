@@ -30,6 +30,9 @@ export type {
   AlternativeAction,
   ActionRecommendation,
   ActionRecommendations,
+  ActionGroup,
+  ActionGroups,
+  SuccessfulActionGroup,
   CapturedState,
 } from './game-test.types';
 

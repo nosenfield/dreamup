@@ -341,8 +341,8 @@ Example 3 - No Crash:
 /**
  * Prompt for state analysis and action recommendation.
  * 
- * This prompt is used with the actionRecommendationSchema to analyze
- * current game state and recommend the next action to take.
+ * This prompt is used with the actionGroupsSchema to analyze
+ * current game state and recommend Action Groups (strategies with related actions).
  * Used when heuristic approaches fail and LLM analysis is needed.
  * 
  * @example
@@ -353,14 +353,17 @@ Example 3 - No Crash:
  *     { type: 'text', text: STATE_ANALYSIS_PROMPT },
  *     { type: 'image', image: screenshot },
  *   ]}],
- *   schema: actionRecommendationSchema,
+ *   schema: actionGroupsSchema,
  * });
  * ```
  */
-export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend multiple actions to achieve a specific goal.
+export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend Action Groups (strategies with related actions) to achieve a specific goal.
+
+**Action Groups Concept:**
+Actions should be organized into Action Groups. Each Action Group represents a strategy with multiple related actions that share the same logical reasoning. Success is measured at the group level (strategy level), not individual action level.
 
 **Your Task:**
-Analyze the current game state (HTML structure and screenshot) and recommend 1-20 actions to try in sequence. ALL actions will be attempted, not just the first successful one. This is especially useful for idle games that require many clicks to progress. Order actions by priority/confidence (most important first).
+Analyze the current game state (HTML structure and screenshot) and recommend Action Groups. Each group contains related actions that follow the same strategy/reasoning. Groups are executed in confidence order (highest confidence first).
 
 **CRITICAL: Use Feedback from Previous Actions**
 - You will receive feedback about which previous actions were successful and which failed
@@ -394,107 +397,158 @@ Analyze the current game state (HTML structure and screenshot) and recommend 1-2
 - 0.5-0.69: Somewhat confident, reasonable action
 - Below 0.5: Uncertain, consider alternatives
 
-**Number of Actions:**
-- Return 1-20 actions in an array
-- For simple goals (e.g., "click start button"): Return 1-3 actions
-- For complex goals (e.g., "progress through idle game"): Return 5-20 actions
-- Order by priority: most important/confident actions first
-- All actions will be tried in sequence, so include multiple clicks if needed
-
-**Output Format (actionRecommendationsSchema - object with recommendations array):**
-Return an object with a "recommendations" property containing an array of 1-20 actions. Each action has:
-- **action**: One of 'click', 'keypress', 'wait', or 'complete'
-- **target**: 
-  - For 'click': { x: number, y: number } coordinates
-  - For 'keypress': string key name
-  - For 'wait': number duration in milliseconds
-  - For 'complete': not used (can be empty string)
-- **reasoning**: Clear explanation of why this action helps achieve the goal
-- **confidence**: Number between 0 and 1 (certainty of recommendation)
-- **alternatives**: Empty array [] (not used when returning multiple actions)
+**Output Format (actionGroupsSchema - object with groups array):**
+Return an object with a "groups" property containing an array of Action Groups. Each group has:
+- **reasoning**: Strategy description shared by all actions in this group
+- **confidence**: Your confidence in this strategy (0-1), used to order groups
+- **actions**: Array of actions in this group (1-10 depending on iteration)
+  - Each action has:
+    - **action**: One of 'click', 'keypress', 'wait', or 'complete'
+    - **target**: 
+      - For 'click': { x: number, y: number } coordinates
+      - For 'keypress': string key name
+      - For 'wait': number duration in milliseconds
+      - For 'complete': not used (can be empty string)
+    - **reasoning**: Clear explanation of why this action helps achieve the goal
+    - **confidence**: Number between 0 and 1 (certainty of recommendation)
+    - **alternatives**: Empty array [] (not used in Action Groups)
 
 **Examples:**
 
-Example 1 - Finding Start Button (Simple):
+Example 1 - Iteration 1 (Finding Start Button):
 Goal: "Find and click the start/play button to begin the game"
 {
-  "recommendations": [
+  "groups": [
     {
-      "action": "click",
-      "target": { "x": 320, "y": 240 },
-      "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
-      "confidence": 0.95,
-      "alternatives": []
+      "reasoning": "Click the start button to begin the game",
+      "confidence": 0.9,
+      "actions": [
+        {
+          "action": "click",
+          "target": { "x": 320, "y": 240 },
+          "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
+          "confidence": 0.95,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "reasoning": "Press Enter key to start the game",
+      "confidence": 0.7,
+      "actions": [
+        {
+          "action": "keypress",
+          "target": "Enter",
+          "reasoning": "Enter key might start the game as an alternative to clicking",
+          "confidence": 0.7,
+          "alternatives": []
+        }
+      ]
     }
   ]
 }
 
-Example 1b - Idle Game Progress (Multiple Actions):
-Goal: "Click multiple buttons to progress in the idle game"
+Example 2 - Iteration 2+ (Idle Game Progress):
+Goal: "Continue clicking the upgrade button multiple times to progress"
+Based on successful group: "Click the upgrade button" (clicked at 500, 400 successfully)
 {
-  "recommendations": [
+  "groups": [
     {
-      "action": "click",
-      "target": { "x": 150, "y": 300 },
-      "reasoning": "Click the main upgrade button to increase production",
-      "confidence": 0.90,
-      "alternatives": []
-    },
-    {
-      "action": "click",
-      "target": { "x": 250, "y": 300 },
-      "reasoning": "Click the secondary upgrade button for additional bonuses",
+      "reasoning": "Continue clicking the upgrade button multiple times to progress",
       "confidence": 0.85,
-      "alternatives": []
-    },
-    {
-      "action": "click",
-      "target": { "x": 350, "y": 300 },
-      "reasoning": "Click the prestige button to reset and gain multipliers",
-      "confidence": 0.80,
-      "alternatives": []
+      "actions": [
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "First upgrade click - building on successful pattern",
+          "confidence": 0.85,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Second upgrade click - continue the successful strategy",
+          "confidence": 0.85,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Third upgrade click - expand the successful pattern",
+          "confidence": 0.85,
+          "alternatives": []
+        }
+      ]
     }
   ]
 }
 
-Example 2 - Waiting for Load:
-Goal: "Wait for game to finish loading"
+Example 3 - Iteration 3+ (Expanded Strategy):
+Goal: "Expand the successful upgrade clicking strategy"
+Based on successful group: "Continue clicking the upgrade button" (5 clicks at 500, 400 successfully)
 {
-  "recommendations": [
+  "groups": [
     {
-      "action": "wait",
-      "target": 2000,
-      "reasoning": "The game is still showing a loading indicator. Wait 2 seconds for it to complete loading.",
-      "confidence": 0.90,
-      "alternatives": []
-    }
-  ]
-}
-
-Example 3 - Keypress Action:
-Goal: "Start the game by pressing a key"
-{
-  "recommendations": [
-    {
-      "action": "keypress",
-      "target": "Space",
-      "reasoning": "The game shows 'Press Space to Start' text. Pressing Space will begin the game.",
-      "confidence": 0.92,
-      "alternatives": []
-    }
-  ]
-}
-
-Example 4 - Goal Complete:
-Goal: "Find and click the start button"
-{
-  "recommendations": [
-    {
-      "action": "complete",
-      "target": "",
-      "reasoning": "The game has already started. The main menu is gone and gameplay has begun. Goal achieved.",
-      "confidence": 0.98,
-      "alternatives": []
+      "reasoning": "Expand the successful upgrade clicking strategy with more clicks",
+      "confidence": 0.9,
+      "actions": [
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 1 - continue successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 2 - continue successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 3 - continue successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 4 - continue successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 5 - continue successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 6 - expand successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 7 - expand successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        },
+        {
+          "action": "click",
+          "target": { "x": 500, "y": 400 },
+          "reasoning": "Click 8 - expand successful pattern",
+          "confidence": 0.9,
+          "alternatives": []
+        }
+      ]
     }
   ]
 }
@@ -504,12 +558,13 @@ Goal: "Find and click the start button"
 - **PRIORITIZE SUCCESSFUL PATTERNS**: If you see successful click patterns, generate multiple related clicks around those coordinates
 - **AVOID FAILED ACTIONS**: Do not repeat actions that failed or didn't change game state
 - **BUILD CONFIDENCE**: Actions similar to successful ones should have higher confidence scores
-- **GENERATE VARIATIONS**: When a pattern works, create 5-10 variations of that successful pattern
-- Return 1-20 actions ordered by priority (most important first)
-- ALL actions will be attempted in sequence - don't stop at the first one
-- For idle games requiring many clicks, return 10-20 click actions based on successful patterns
+- **GENERATE VARIATIONS**: When a pattern works, create multiple variations of that successful pattern
+- **GROUP RELATED ACTIONS**: Actions that share the same reasoning/strategy should be in the same group
+- **ORDER GROUPS BY CONFIDENCE**: Groups with higher confidence will be executed first
+- All actions in a group will be executed before assessing success
+- Success is measured at the group level (strategy level), not individual action level
 - Ensure coordinates are accurate (center of clickable element)
 - Use correct key names for keypress actions
-- Return data that strictly matches the actionRecommendationsSchema structure (object with "recommendations" array of 1-20 actions)`;
+- Return data that strictly matches the actionGroupsSchema structure (object with "groups" array)`;
 
 

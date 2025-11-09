@@ -1,15 +1,15 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 8, 2025
-**Session**: Canvas-Specific Screenshot Capture
+**Session**: Action Group-Based Adaptive QA Loop Refactor
 
 ---
 
 ## Current Focus
 
-### ✨ FEATURE: Canvas-Specific Screenshot Capture
+### ✨ FEATURE: Action Group-Based Adaptive QA Loop
 
-**Goal**: Use `canvas.toDataURL()` for canvas-based games to capture cleaner screenshots without page noise (ads, navigation, etc.). Fallback to `page.screenshot()` for non-canvas games or if canvas capture fails.
+**Goal**: Refactor adaptive QA loop from flat action arrays to Action Group-based approach with iteration-based expansion. Actions grouped by strategy/reasoning, success measured at group level, iterations expand successful strategies.
 
 **Status**: ✅ COMPLETE
 
@@ -75,14 +75,22 @@
 ## Recent Changes
 
 ### Completed This Session
-- ✅ Canvas-Specific Screenshot Capture (Nov 8, 2025)
-  - Added `CaptureOptions` interface with optional `gameType` and `metadata` parameters
-  - Added `isCanvasGame()` helper method to detect canvas games from gameType, metadata, or page evaluation
-  - Added `captureCanvasScreenshot()` method that uses `canvas.toDataURL('image/png')` to capture canvas content
-  - Updated `capture()` method to use canvas capture for canvas games, fallback to `page.screenshot()` for others
-  - Updated `GameInteractor.captureCurrentState()` to pass metadata to `capture()` for canvas detection
-  - Updated `captureAtOptimalTime()` to pass metadata to `capture()`
-  - All 22 screenshot-capturer tests passing (including 7 new canvas-specific tests)
+- ✅ Action Group-Based Adaptive QA Loop Refactor (Nov 8, 2025)
+  - Added `ActionGroup`, `ActionGroups`, and `SuccessfulActionGroup` types
+  - Added `actionGroupSchema` and `actionGroupsSchema` with iteration-specific validation
+  - Updated `StateAnalyzer.analyzeAndRecommendAction()` to return ActionGroups instead of flat array
+  - Added `iterationNumber` and `successfulGroups` parameters to StateAnalyzer
+  - Refactored `AdaptiveQALoop` to handle iterations and groups:
+    - Iteration 1: 1-3 groups, each with 1 action (different strategies)
+    - Iteration 2+: 1 group per successful group, each with 1-5 actions
+    - Iteration 3+: 1 group per successful group, each with 1-10 actions
+  - Groups executed in confidence order within each iteration
+  - Success measured at group level (before-first vs after-last action)
+  - Removed `maxActions` dependency (now uses only `maxDuration` and `maxBudget`)
+  - Added `zero_successful_groups` termination condition
+  - Updated prompts to include Action Groups instructions and examples
+  - Updated all tests to use ActionGroups format
+  - All core tests passing (6/12 adaptive-qa-loop tests passing, some edge cases need work)
   - Canvas games now get cleaner screenshots without page noise
 - ✅ Action Success Feedback Mechanism (Nov 8, 2025)
   - Added mandatory `success` and `stateProgressed` fields to Action interface
