@@ -71,6 +71,16 @@ export class NaturalLanguageStrategy extends BaseStartStrategy {
       try {
         this.logger.trace(`Trying natural language [${i + 1}/${this.phrases.length}]`, { phrase });
 
+        // Log prompt before sending to Stagehand
+        this.logger.debug('Sending prompt to Stagehand', {
+          prompt: phrase,
+          promptLength: phrase.length,
+          promptType: 'stagehand_natural_language',
+          attempt: i + 1,
+          totalAttempts: this.phrases.length,
+          strategy: 'natural_language',
+        });
+
         await withTimeout(
           pageAny.act(phrase),
           timeout,

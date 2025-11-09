@@ -35,6 +35,27 @@ describe('NaturalLanguageStrategy', () => {
       expect(result.attempts).toBe(1);
     });
 
+    it('should log prompt before sending to Stagehand', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      await strategy.execute(mockPage as AnyPage, 1000);
+
+      // Verify debug was called with prompt logging
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[0]?.includes('prompt') || call[0]?.includes('Stagehand') || 
+        call[1]?.prompt || call[1]?.promptText
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]) {
+        expect(promptLogCall[1]).toHaveProperty('prompt');
+        expect(typeof promptLogCall[1].prompt).toBe('string');
+        expect(promptLogCall[1].prompt.length).toBeGreaterThan(0);
+      }
+    });
+
     it('should try multiple phrases if first fails', async () => {
       let callCount = 0;
       mockPage.act = mock((phrase: string) => {

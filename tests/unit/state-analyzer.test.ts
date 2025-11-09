@@ -10,13 +10,19 @@ import type { GameState } from '../../src/types';
 // Mock OpenAI SDK
 const mockGenerateObject = mock(() => ({
   object: {
-    recommendations: [
+    groups: [
       {
-    action: 'click' as const,
-    target: { x: 100, y: 200 },
-    reasoning: 'Test reasoning',
-    confidence: 0.9,
-    alternatives: [],
+        reasoning: 'Test reasoning for group',
+        confidence: 0.9,
+        actions: [
+          {
+            action: 'click' as const,
+            target: { x: 100, y: 200 },
+            reasoning: 'Test reasoning',
+            confidence: 0.9,
+            alternatives: [],
+          },
+        ],
       },
     ],
   },
@@ -124,6 +130,46 @@ describe('StateAnalyzer', () => {
         expect(result[0].actions[0].confidence).toBeLessThanOrEqual(1);
         expect(result[0].actions[0].reasoning).toBeDefined();
         expect(result[0].actions[0].alternatives).toBeInstanceOf(Array);
+      }
+    });
+
+    it('should log prompt before sending to LLM', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Find start button',
+      };
+
+      // Create a temporary file for testing
+      const testFile = Bun.file('/tmp/test-screenshot-prompt.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-screenshot-prompt.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify debug was called with prompt logging
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[0]?.includes('prompt') || call[1]?.prompt || call[1]?.promptText
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]) {
+        expect(promptLogCall[1]).toHaveProperty('prompt');
+        expect(typeof promptLogCall[1].prompt).toBe('string');
+        expect(promptLogCall[1].prompt.length).toBeGreaterThan(0);
+        expect(promptLogCall[1]).toHaveProperty('promptLength');
+        expect(promptLogCall[1]).toHaveProperty('estimatedTokens');
       }
     });
 

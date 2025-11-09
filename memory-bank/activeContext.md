@@ -1,17 +1,17 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 8, 2025
-**Session**: Action Group-Based Adaptive QA Loop Refactor
+**Session**: Prompt Logging Feature Implementation
 
 ---
 
 ## Current Focus
 
-### ✨ FEATURE: Action Group-Based Adaptive QA Loop
+### ✨ FEATURE: Prompt Logging for LLM and Stagehand
 
-**Goal**: Refactor adaptive QA loop from flat action arrays to Action Group-based approach with iteration-based expansion. Actions grouped by strategy/reasoning, success measured at group level, iterations expand successful strategies.
+**Goal**: Display all prompts sent to LLM or Stagehand in logs to understand the flow of data and debug prompt-related issues.
 
-**Status**: ✅ COMPLETE
+**Status**: ✅ COMPLETE (Nov 8, 2025)
 
 ---
 
@@ -75,6 +75,16 @@
 ## Recent Changes
 
 ### Completed This Session
+- ✅ Prompt Logging Feature (Nov 8, 2025)
+  - Added prompt logging to StateAnalyzer.analyzeAndRecommendAction()
+  - Added prompt logging to VisionAnalyzer.analyzeScreenshots()
+  - Added prompt logging to VisionAnalyzer.findClickableElements()
+  - Added prompt logging to VisionAnalyzer.detectCrash()
+  - Added prompt logging to NaturalLanguageStrategy.execute() (Stagehand)
+  - All prompts logged at DEBUG level with full text, length, token estimates
+  - Consistent log format with promptType, model, and context metadata
+  - All 5 new tests passing (StateAnalyzer, VisionAnalyzer x3, NaturalLanguageStrategy)
+  - Logs include: prompt text, promptLength, estimatedTokens, promptType, model, and context
 - ✅ Action Group-Based Adaptive QA Loop Refactor (Nov 8, 2025)
   - Added `ActionGroup`, `ActionGroups`, and `SuccessfulActionGroup` types
   - Added `actionGroupSchema` and `actionGroupsSchema` with iteration-specific validation

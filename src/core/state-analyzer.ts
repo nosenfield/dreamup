@@ -147,6 +147,20 @@ export class StateAnalyzer {
       // Build prompt with state context
       const prompt = this.buildStateAnalysisPrompt(state, iterationNumber, successfulGroups);
 
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt,
+        promptLength: prompt.length,
+        estimatedTokens: Math.ceil(prompt.length / 4),
+        promptType: 'state_analysis',
+        model: 'gpt-4-turbo',
+        iterationNumber,
+        goal: state.goal,
+        hasMetadata: !!state.metadata,
+        hasPreviousActions: state.previousActions.length > 0,
+        hasHTML: !!state.html,
+      });
+
       // Build multi-modal prompt content
       const content = [
         {

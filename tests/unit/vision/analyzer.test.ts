@@ -178,6 +178,41 @@ describe('VisionAnalyzer', () => {
       await Bun.write('/tmp/test-screenshot3.png', '');
     });
 
+    it('should log prompt before sending to LLM in analyzeScreenshots', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const screenshots: Screenshot[] = [
+        {
+          id: 'screenshot1',
+          path: '/tmp/test-screenshot-prompt1.png',
+          timestamp: Date.now(),
+          stage: 'initial_load',
+        },
+      ];
+
+      const pngBuffer = Buffer.from('fake-png-data');
+      await Bun.write('/tmp/test-screenshot-prompt1.png', pngBuffer);
+
+      await analyzer.analyzeScreenshots(screenshots);
+
+      // Verify debug was called with prompt logging
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[0]?.includes('prompt') || call[1]?.prompt || call[1]?.promptText
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]) {
+        expect(promptLogCall[1]).toHaveProperty('prompt');
+        expect(typeof promptLogCall[1].prompt).toBe('string');
+        expect(promptLogCall[1].prompt.length).toBeGreaterThan(0);
+      }
+
+      // Cleanup
+      await Bun.write('/tmp/test-screenshot-prompt1.png', '');
+    });
+
     it('should handle API errors gracefully', async () => {
       mockGenerateObject.mockImplementationOnce(() => {
         throw new Error('OpenAI API error');
@@ -256,6 +291,33 @@ describe('VisionAnalyzer', () => {
       await Bun.write(screenshotPath, '');
     });
 
+    it('should log prompt before sending to LLM in findClickableElements', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const screenshotPath = '/tmp/test-screenshot-prompt.png';
+      const pngBuffer = Buffer.from('fake-png-data');
+      await Bun.write(screenshotPath, pngBuffer);
+
+      await analyzer.findClickableElements(screenshotPath);
+
+      // Verify debug was called with prompt logging
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[0]?.includes('prompt') || call[1]?.prompt || call[1]?.promptText
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]) {
+        expect(promptLogCall[1]).toHaveProperty('prompt');
+        expect(typeof promptLogCall[1].prompt).toBe('string');
+        expect(promptLogCall[1].prompt.length).toBeGreaterThan(0);
+      }
+
+      // Cleanup
+      await Bun.write(screenshotPath, '');
+    });
+
     it('should return empty array on API error', async () => {
       mockGenerateObject.mockImplementationOnce(() => {
         throw new Error('OpenAI API error');
@@ -300,6 +362,41 @@ describe('VisionAnalyzer', () => {
       const isCrash = await analyzer.detectCrash(screenshotPath);
 
       expect(isCrash).toBe(false);
+
+      // Cleanup
+      await Bun.write(screenshotPath, '');
+    });
+
+    it('should log prompt before sending to LLM in detectCrash', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      mockGenerateText.mockImplementationOnce(() => Promise.resolve({
+        text: 'The game appears to be running normally.',
+        usage: {
+          promptTokens: 50,
+          completionTokens: 20,
+        },
+      }));
+
+      const screenshotPath = '/tmp/test-screenshot-prompt.png';
+      const pngBuffer = Buffer.from('fake-png-data');
+      await Bun.write(screenshotPath, pngBuffer);
+
+      await analyzer.detectCrash(screenshotPath);
+
+      // Verify debug was called with prompt logging
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[0]?.includes('prompt') || call[1]?.prompt || call[1]?.promptText
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]) {
+        expect(promptLogCall[1]).toHaveProperty('prompt');
+        expect(typeof promptLogCall[1].prompt).toBe('string');
+        expect(promptLogCall[1].prompt.length).toBeGreaterThan(0);
+      }
 
       // Cleanup
       await Bun.write(screenshotPath, '');

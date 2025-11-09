@@ -124,6 +124,17 @@ export class VisionAnalyzer {
       // Build prompt with metadata context if available
       const prompt = buildGameAnalysisPrompt(metadata);
 
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt,
+        promptLength: prompt.length,
+        estimatedTokens: Math.ceil(prompt.length / 4),
+        promptType: 'game_analysis',
+        model: 'gpt-4-turbo',
+        screenshotCount: screenshots.length,
+        hasMetadata: !!metadata,
+      });
+
       // Build multi-modal prompt content
       const content = [
         {
@@ -206,6 +217,16 @@ export class VisionAnalyzer {
       const base64 = Buffer.from(buffer).toString('base64');
       const imageDataUri = `data:image/png;base64,${base64}`;
 
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt: FIND_CLICKABLE_ELEMENTS_PROMPT,
+        promptLength: FIND_CLICKABLE_ELEMENTS_PROMPT.length,
+        estimatedTokens: Math.ceil(FIND_CLICKABLE_ELEMENTS_PROMPT.length / 4),
+        promptType: 'find_elements',
+        model: 'gpt-4o',
+        screenshotPath,
+      });
+
       // Build multi-modal prompt content
       const content = [
         {
@@ -277,6 +298,16 @@ export class VisionAnalyzer {
       const buffer = await file.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
       const imageDataUri = `data:image/png;base64,${base64}`;
+
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt: DETECT_CRASH_PROMPT,
+        promptLength: DETECT_CRASH_PROMPT.length,
+        estimatedTokens: Math.ceil(DETECT_CRASH_PROMPT.length / 4),
+        promptType: 'detect_crash',
+        model: 'gpt-4-turbo',
+        screenshotPath,
+      });
 
       // Build multi-modal prompt content
       const content = [
