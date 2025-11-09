@@ -422,9 +422,10 @@ export class BrowserManager {
   }
 
   /**
-   * Open debugger URL in default browser.
+   * Open debugger URL in browser.
    * 
-   * Automatically opens the Browserbase debugger URL in the default browser.
+   * Attempts to open the Browserbase debugger URL in Cursor IDE's browser tab if available,
+   * otherwise falls back to the default system browser.
    * This is a best-effort operation - failures are logged but don't throw errors.
    * 
    * @param url - Optional debugger URL (if not provided, will fetch it)
@@ -438,8 +439,54 @@ export class BrowserManager {
         return;
       }
 
-      // Use Bun's spawn to open URL in default browser
-      // On macOS, this uses the `open` command
+      // Check if we should use Cursor IDE browser (via environment variable)
+      const useCursorBrowser = process.env.USE_CURSOR_BROWSER === 'true' || 
+                               process.env.CURSOR_BROWSER === 'true';
+
+      if (useCursorBrowser) {
+        // Try to use Cursor IDE browser via MCP
+        // Note: This requires the MCP browser server to be available
+        // If not available, we'll fall back to system browser
+        try {
+          // Check if we're in a Cursor environment by checking for CURSOR_* env vars
+          const cursorEnv = process.env.CURSOR_SESSION_ID || process.env.CURSOR_WORKSPACE;
+          
+          if (cursorEnv) {
+            this.logger.info('Attempting to open debugger URL in Cursor IDE browser', {
+              debuggerUrl,
+            });
+            
+            // Log the URL for Cursor to pick up, or use a Cursor-specific mechanism
+            // Since MCP tools aren't directly callable from user code, we'll log it
+            // and suggest the user can manually open it, or we can try a Cursor command
+            this.logger.info('Debugger URL for Cursor IDE browser', {
+              debuggerUrl,
+              note: 'Open this URL in Cursor IDE browser tab',
+            });
+            
+            // Try to use cursor command if available (Cursor CLI)
+            try {
+              const cursorCommand = Bun.spawn(['cursor', '--open-url', debuggerUrl], {
+                stdio: ['ignore', 'ignore', 'ignore'],
+              });
+              // Don't wait for it
+              this.logger.info('Debugger URL opened via Cursor CLI', {
+                debuggerUrl,
+              });
+              return;
+            } catch {
+              // Cursor CLI not available, fall through to system browser
+              this.logger.debug('Cursor CLI not available, falling back to system browser');
+            }
+          }
+        } catch (error) {
+          this.logger.debug('Failed to use Cursor browser, falling back to system browser', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // Fall back to system default browser
       const platform = process.platform;
 
       let command: string;
@@ -468,7 +515,7 @@ export class BrowserManager {
       // Note: The process will run in the background and open the browser
       // We don't need to wait for it or track it
       
-      this.logger.info('Debugger URL opened in browser', {
+      this.logger.info('Debugger URL opened in system browser', {
         debuggerUrl,
         platform,
       });

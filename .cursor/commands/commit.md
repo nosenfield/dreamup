@@ -8,7 +8,6 @@ You are helping the user create a git commit with proper staging and commit mess
 2. **Always list files explicitly** - Show the user what will be committed
 3. **Use a single `git add` command** - List all files in one command, not multiple individual commands
 4. **Create meaningful commit messages** - Follow conventional commit format
-5. **Include Claude Code attribution** - Add the footer to all commits
 
 ## Workflow
 
