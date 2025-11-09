@@ -279,14 +279,51 @@ export class Logger {
   }
 
   /**
-   * Output a log entry as JSON string.
+   * Check if REFORMAT_LOGS environment variable is enabled.
    * 
-   * Uses console.log to output structured JSON for CloudWatch compatibility.
+   * @returns true if REFORMAT_LOGS is enabled, false otherwise
+   */
+  private shouldReformatLogs(): boolean {
+    return process.env.REFORMAT_LOGS === 'true' || process.env.REFORMAT_LOGS === '1';
+  }
+
+  /**
+   * Format log entry as "msg | data" string.
+   * 
+   * Unwraps the log entry object and formats it as "msg | data",
+   * where data is only the "data" field from the log entry.
+   * 
+   * @param entry - Log entry to format
+   * @returns Formatted string in "msg | data" format
+   */
+  private formatReformattedLog(entry: LogEntry): string {
+    const msg = entry.msg;
+    
+    // Only use the "data" field from the entry
+    const data = entry.data;
+    
+    // Format data as JSON string if present, otherwise empty string
+    const dataStr = data && Object.keys(data).length > 0 ? JSON.stringify(data) : '';
+    
+    // Format as "msg | data" or just "msg" if no data
+    return dataStr ? `${msg} | ${dataStr}` : msg;
+  }
+
+  /**
+   * Output a log entry as JSON string or reformatted string.
+   * 
+   * Uses console.log to output structured JSON for CloudWatch compatibility,
+   * or reformatted "msg | data" format if REFORMAT_LOGS is enabled.
    * 
    * @param entry - Log entry to output
    */
   private output(entry: LogEntry): void {
-    console.log(JSON.stringify(entry));
+    if (this.shouldReformatLogs()) {
+      const reformatted = this.formatReformattedLog(entry);
+      console.log(reformatted);
+    } else {
+      console.log(JSON.stringify(entry));
+    }
   }
 
   /**
