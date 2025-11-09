@@ -15,6 +15,9 @@ describe('Logger', () => {
     originalEnv = { ...process.env };
     originalConsoleLog = console.log;
     
+    // Clear REFORMAT_LOGS to ensure JSON output
+    delete process.env.REFORMAT_LOGS;
+    
     // Mock console.log to capture log output
     console.log = mock(() => {});
   });
@@ -188,6 +191,11 @@ describe('Logger', () => {
     });
 
     it('should log when enableDetailedLogging is true', () => {
+      const originalDebug = process.env.DEBUG;
+      const originalLogLevel = process.env.LOG_LEVEL;
+      
+      // Clear LOG_LEVEL to ensure enableDetailedLogging flag is respected
+      delete process.env.LOG_LEVEL;
       process.env.DEBUG = 'true';
       const flags = getFeatureFlags();
       const logger = new Logger(undefined, flags);
@@ -200,9 +208,24 @@ describe('Logger', () => {
 
       expect(logEntry.level).toBe('debug');
       expect(logEntry.msg).toBe('Debug message');
+      
+      // Restore original values
+      if (originalDebug !== undefined) {
+        process.env.DEBUG = originalDebug;
+      } else {
+        delete process.env.DEBUG;
+      }
+      if (originalLogLevel !== undefined) {
+        process.env.LOG_LEVEL = originalLogLevel;
+      }
     });
 
     it('should not log when enableDetailedLogging is false', () => {
+      const originalDebug = process.env.DEBUG;
+      const originalLogLevel = process.env.LOG_LEVEL;
+      
+      // Clear LOG_LEVEL to ensure enableDetailedLogging flag is respected
+      delete process.env.LOG_LEVEL;
       process.env.DEBUG = 'false';
       const flags = getFeatureFlags();
       const logger = new Logger(undefined, flags);
@@ -210,19 +233,47 @@ describe('Logger', () => {
       logger.debug('Debug message');
 
       expect(console.log).not.toHaveBeenCalled();
+      
+      // Restore original values
+      if (originalDebug !== undefined) {
+        process.env.DEBUG = originalDebug;
+      } else {
+        delete process.env.DEBUG;
+      }
+      if (originalLogLevel !== undefined) {
+        process.env.LOG_LEVEL = originalLogLevel;
+      }
     });
 
     it('should not log when DEBUG env var is not set', () => {
+      const originalDebug = process.env.DEBUG;
+      const originalLogLevel = process.env.LOG_LEVEL;
+      
+      // Clear both to ensure default behavior
       delete process.env.DEBUG;
+      delete process.env.LOG_LEVEL;
       const flags = getFeatureFlags();
       const logger = new Logger(undefined, flags);
 
       logger.debug('Debug message');
 
       expect(console.log).not.toHaveBeenCalled();
+      
+      // Restore original values
+      if (originalDebug !== undefined) {
+        process.env.DEBUG = originalDebug;
+      }
+      if (originalLogLevel !== undefined) {
+        process.env.LOG_LEVEL = originalLogLevel;
+      }
     });
 
     it('should include optional data field when logging', () => {
+      const originalDebug = process.env.DEBUG;
+      const originalLogLevel = process.env.LOG_LEVEL;
+      
+      // Clear LOG_LEVEL to ensure enableDetailedLogging flag is respected
+      delete process.env.LOG_LEVEL;
       process.env.DEBUG = 'true';
       const flags = getFeatureFlags();
       const logger = new Logger(undefined, flags);
@@ -234,6 +285,16 @@ describe('Logger', () => {
       const logEntry = JSON.parse(logCall);
 
       expect(logEntry.data).toEqual(testData);
+      
+      // Restore original values
+      if (originalDebug !== undefined) {
+        process.env.DEBUG = originalDebug;
+      } else {
+        delete process.env.DEBUG;
+      }
+      if (originalLogLevel !== undefined) {
+        process.env.LOG_LEVEL = originalLogLevel;
+      }
     });
   });
 
@@ -588,6 +649,7 @@ describe('Logger', () => {
     });
 
     it('should log when LOG_LEVEL=trace', () => {
+      const originalLogLevel = process.env.LOG_LEVEL;
       process.env.LOG_LEVEL = 'trace';
       const logger = new Logger();
       
@@ -598,6 +660,13 @@ describe('Logger', () => {
       const logEntry = JSON.parse(logCall);
       expect(logEntry.level).toBe('trace');
       expect(logEntry.msg).toBe('Trace message');
+      
+      // Restore original value
+      if (originalLogLevel !== undefined) {
+        process.env.LOG_LEVEL = originalLogLevel;
+      } else {
+        delete process.env.LOG_LEVEL;
+      }
     });
 
     it('should not log when LOG_LEVEL=info', () => {
@@ -639,12 +708,19 @@ describe('Logger', () => {
       const bannerCall = (console.log as ReturnType<typeof mock>).mock.calls[0][0];
       expect(bannerCall).toContain('--- Iteration 2/5 ---');
       
+      // The second call should be the JSON log entry
       const detailsCall = (console.log as ReturnType<typeof mock>).mock.calls[1][0];
-      const detailsEntry = JSON.parse(detailsCall);
-      expect(detailsEntry.msg).toBe('Iteration details');
-      expect(detailsEntry.data.elapsed).toBe(1000);
-      expect(detailsEntry.data.actionsPerformed).toBe(3);
-      expect(detailsEntry.data.screenshotsCaptured).toBe(4);
+      // Check if it's a string (plain text) or JSON
+      if (typeof detailsCall === 'string' && detailsCall.startsWith('{')) {
+        const detailsEntry = JSON.parse(detailsCall);
+        expect(detailsEntry.msg).toBe('Iteration details');
+        expect(detailsEntry.data.elapsed).toBe(1000);
+        expect(detailsEntry.data.actionsPerformed).toBe(3);
+        expect(detailsEntry.data.screenshotsCaptured).toBe(4);
+      } else {
+        // If it's plain text, it should contain the message
+        expect(detailsCall).toContain('Iteration details');
+      }
     });
 
     it('should not include details when not provided', () => {

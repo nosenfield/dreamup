@@ -1,6 +1,6 @@
 # Technical Context: DreamUp
 
-**Last Updated**: November 3, 2025
+**Last Updated**: November 9, 2025
 
 ## Tech Stack
 
@@ -12,8 +12,8 @@
 
 ### Browser Automation
 - **Browserbase**: ^1.0.0 - Managed browser infrastructure (no need to bundle Chromium)
-- **Stagehand**: ^1.0.0 - AI-native browser automation with natural language commands
-- **Why**: Works seamlessly in Lambda, provides AI-powered element detection, eliminates brittle CSS selectors
+- **Stagehand**: 3.0.1 - AI-native browser automation with natural language commands (v3+ required for Bun compatibility)
+- **Why**: Works seamlessly in Lambda, provides AI-powered element detection, eliminates brittle CSS selectors. v3+ uses CDP directly (not Playwright), compatible with Bun runtime.
 
 ### AI/LLM Framework
 - **Vercel AI SDK**: ^3.4.0 - OpenAI integration with streaming and structured outputs
@@ -106,7 +106,7 @@ INTERACTION_TIMEOUT=90000     # 90 seconds (default)
 
 ### Core Dependencies
 - `@browserbasehq/sdk@^1.0.0` - Browserbase session management
-- `@browserbasehq/stagehand@^1.0.0` - AI-powered browser automation
+- `@browserbasehq/stagehand@3.0.1` - AI-powered browser automation (v3+ required for Bun)
 - `ai@^3.4.0` - Vercel AI SDK for LLM integration
 - `@ai-sdk/openai@^0.0.66` - OpenAI provider for AI SDK
 - `zod@^3.22.4` - Schema validation and type inference
@@ -125,7 +125,7 @@ INTERACTION_TIMEOUT=90000     # 90 seconds (default)
 
 **Browserbase over Puppeteer/Playwright**: Managed infrastructure eliminates need to bundle Chromium (250MB+ savings in Lambda package), handles browser lifecycle, includes debugging tools
 
-**Stagehand over raw Playwright**: AI-native element detection using natural language ("click the start button") instead of brittle CSS selectors, adapts to UI changes automatically
+**Stagehand v3+ over raw Playwright**: AI-native element detection using natural language ("click the start button") instead of brittle CSS selectors, adapts to UI changes automatically. v3+ uses CDP directly (not Playwright), compatible with Bun runtime. v1/v2 incompatible with Bun (uses Playwright).
 
 **GPT-4 Vision**: Only model with sufficient accuracy for canvas game analysis, multimodal support for images + text prompts, structured output support via function calling
 

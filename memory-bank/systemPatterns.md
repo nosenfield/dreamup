@@ -1,6 +1,6 @@
 # System Patterns: DreamUp
 
-**Last Updated**: November 5, 2025
+**Last Updated**: November 9, 2025
 
 ## Architecture Overview
 
@@ -752,3 +752,180 @@ interface GameMetadata {
 - Pattern 6 (Input Schema Support) - Original design, now part of GameMetadata
 - `_docs/architecture.md` - Full metadata system documentation
 - `_game-examples/*/metadata.json` - Example metadata files
+
+---
+
+### Pattern 12: Action Group-Based Adaptive QA Loop
+
+**When to use**: Iterative game testing with strategy-based action grouping
+**Why**: Groups actions by strategy/reasoning, assesses success at group level, expands successful strategies across iterations
+**Context**: Implemented in Action Group Refactor (Nov 8-9, 2025)
+
+**Overview**:
+The Adaptive QA Loop uses an Action Group-based approach where actions are organized into groups that share the same logical reasoning/strategy. Success is measured at the group level (strategy level), not individual action level. Iterations expand successful strategies.
+
+**Iteration Structure**:
+- **Iteration 1**: 1-3 Action Groups, each with exactly 1 action (different strategies to try)
+- **Iteration 2**: 1 Action Group per successful group, each with 1-5 actions (build on successful strategy)
+- **Iteration 3+**: 1 Action Group per successful group, each with 1-10 actions (expand successful strategy)
+
+**Example**:
+```typescript
+// Iteration 1: Try different strategies
+const groups: ActionGroups = [
+  {
+    reasoning: 'Click the start button to begin the game',
+    confidence: 0.9,
+    actions: [
+      {
+        action: 'click',
+        target: { x: 400, y: 300 },
+        reasoning: 'Start button is at center of screen',
+        confidence: 0.9,
+        alternatives: [],
+      },
+    ],
+  },
+  {
+    reasoning: 'Press Enter key to start the game',
+    confidence: 0.7,
+    actions: [
+      {
+        action: 'keypress',
+        target: 'Enter',
+        reasoning: 'Enter key might start the game',
+        confidence: 0.7,
+        alternatives: [],
+      },
+    ],
+  },
+];
+
+// Iteration 2: Build on successful strategy from Iteration 1
+const successfulGroups: SuccessfulActionGroup[] = [
+  {
+    reasoning: 'Click the start button to begin the game',
+    actions: [/* executed actions */],
+    beforeScreenshot: '/tmp/before.png',
+    afterScreenshot: '/tmp/after.png',
+    confidence: 0.9,
+  },
+];
+
+// StateAnalyzer receives successful groups and generates related actions
+const newGroups = await stateAnalyzer.analyzeAndRecommendAction(
+  currentState,
+  2, // iteration 2
+  successfulGroups
+);
+
+// Returns 1 group per successful group, each with 1-5 actions
+```
+
+**Key Concepts**:
+- **ActionGroup**: Strategy with multiple related actions that share reasoning
+- **ActionGroups**: Array of Action Groups (1-3 for iteration 1, variable for iteration 2+)
+- **SuccessfulActionGroup**: Data passed to next iteration (reasoning, actions, screenshots, confidence)
+- **Group-level assessment**: State compared before-first-action vs after-last-action
+- **Confidence ordering**: Groups executed in confidence order (highest first) within each iteration
+- **Iteration expansion**: Successful strategies expand from 1 action → 1-5 actions → 1-10 actions
+
+**Execution Flow**:
+```typescript
+// Outer loop: Iterations (no max, continues until termination)
+while (true) {
+  // Request Action Groups for this iteration
+  const groups = await stateAnalyzer.analyzeAndRecommendAction(
+    currentState,
+    currentIteration,
+    successfulGroups.length > 0 ? successfulGroups : undefined
+  );
+
+  // Sort groups by confidence (descending - highest first)
+  const sortedGroups = [...groups].sort((a, b) => b.confidence - a.confidence);
+
+  // Inner loop: Execute groups in confidence order
+  for (const group of sortedGroups) {
+    // Execute all actions in group
+    const result = await executeActionGroup(page, group, currentState);
+    
+    // Assess state progression (before-first vs after-last)
+    if (result.success && result.stateProgressed) {
+      iterationSuccessfulGroups.push({
+        reasoning: group.reasoning,
+        actions: result.executedActions,
+        beforeScreenshot: result.beforeScreenshot,
+        afterScreenshot: result.afterScreenshot,
+        confidence: group.confidence,
+      });
+    }
+    
+    // Update current state for next group
+    currentState = result.afterState;
+  }
+
+  // If zero successful groups, terminate
+  if (iterationSuccessfulGroups.length === 0) {
+    completionReason = 'zero_successful_groups';
+    break;
+  }
+
+  // Prepare for next iteration
+  successfulGroups = iterationSuccessfulGroups;
+  currentIteration++;
+}
+```
+
+**Termination Conditions**:
+- `max_duration`: Maximum test duration reached
+- `budget_limit`: Estimated cost exceeds budget limit
+- `llm_complete`: LLM returns zero groups (no more strategies)
+- `zero_successful_groups`: No groups succeeded in an iteration
+- `error`: Unhandled error occurred
+
+**Benefits**:
+- **Strategy-based**: Actions grouped by reasoning, not just collected
+- **Group-level success**: Measures strategy effectiveness, not individual action success
+- **Iterative expansion**: Successful strategies expand across iterations (1 → 1-5 → 1-10 actions)
+- **Confidence ordering**: Higher confidence strategies tried first
+- **Fewer screenshots**: Group-level assessment reduces screenshot count vs action-level
+
+**Schema Validation**:
+```typescript
+// Iteration-specific validation
+export function validateActionGroups(
+  data: unknown,
+  iterationNumber: number
+): ValidationResult<ActionGroupsFromSchema> {
+  // Iteration 1: 1-3 groups, exactly 1 action per group
+  if (iterationNumber === 1) {
+    if (groups.length < 1 || groups.length > 3) {
+      return { success: false, error: /* ... */ };
+    }
+    if (group.actions.length !== 1) {
+      return { success: false, error: /* ... */ };
+    }
+  }
+  
+  // Iteration 2: 1-5 actions per group
+  if (iterationNumber === 2) {
+    if (group.actions.length < 1 || group.actions.length > 5) {
+      return { success: false, error: /* ... */ };
+    }
+  }
+  
+  // Iteration 3+: 1-10 actions per group
+  if (iterationNumber >= 3) {
+    if (group.actions.length < 1 || group.actions.length > 10) {
+      return { success: false, error: /* ... */ };
+    }
+  }
+}
+```
+
+**Related**:
+- Implementation: `src/core/adaptive-qa-loop.ts` - AdaptiveQALoop class
+- Implementation: `src/core/state-analyzer.ts` - StateAnalyzer.analyzeAndRecommendAction()
+- Types: `src/types/game-test.types.ts` - ActionGroup, ActionGroups, SuccessfulActionGroup
+- Schema: `src/vision/schema.ts` - actionGroupSchema, actionGroupsSchema, validateActionGroups()
+- Plan: `_docs/action-group-refactor-plan.md` - Full implementation plan

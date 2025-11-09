@@ -1,7 +1,7 @@
 # Active Context: DreamUp
 
-**Last Updated**: November 8, 2025
-**Session**: Prompt Logging Feature Implementation
+**Last Updated**: November 9, 2025
+**Session**: Action Group Refactor Test Coverage
 
 ---
 
@@ -75,6 +75,15 @@
 ## Recent Changes
 
 ### Completed This Session
+- ✅ Local Log and Screenshot Saving Feature (Nov 9, 2025)
+  - Created LogFileWriter class to capture logs starting from "=== BEGIN SCREENSHOT CAPTURE ==="
+  - Modified FileManager to save screenshots to ./logs/{timestamp}/screenshots/
+  - Updated Logger to write to log file writer when available
+  - Changed screenshot filenames from nanoid to timestamps (with counter for uniqueness)
+  - Updated main.ts (runQA and runAdaptiveQA) to initialize log file writer
+  - Logs saved to ./logs/{timestamp}/log.txt starting from screenshot capture phase
+  - Screenshots saved to ./logs/{timestamp}/screenshots/{timestamp}-{counter}.png
+  - Non-blocking file operations (won't fail tests if log writing fails)
 - ✅ Action Group Refactor Test Coverage (Nov 9, 2025)
   - Added 5 new StateAnalyzer tests for iteration-specific validation and successful groups context
   - Added 6 new AdaptiveQALoop tests for confidence ordering, successful group tracking, and iteration flow
@@ -152,6 +161,7 @@
 - `src/core/adaptive-qa-loop.ts` - Extracted loop logic ✅ (Phase 3)
   - `AdaptiveQALoop` class with `run()` method
   - `AdaptiveLoopResult` interface
+- `src/utils/log-file-writer.ts` - Log file writer for local log saving ✅ (Nov 9, 2025)
 
 ### New Files to Create
 - `src/utils/errors.ts` - Structured error types (Phase 5)
@@ -181,13 +191,14 @@
 
 ### If Starting New Session
 1. Read this file (activeContext.md)
-2. Read `_docs/refactor-plan.md` for implementation details
-3. Check current branch: `refactor/logging-and-separation`
+2. Read `_docs/action-group-refactor-plan.md` for Action Group details
+3. Check current branch: `action-groups` (Action Group refactor branch)
 
-### If Continuing Refactor
-1. Phase 1.1 ✅ Complete - Logger enhanced
-2. **Next**: Phase 2 (Start Button Detection - Code Separation)
-3. Follow step-by-step plan in `_docs/refactor-plan.md`
+### Next Steps (Priority Order)
+1. **Fix failing tests** (46 failures) - Update existing tests for ActionGroups structure
+2. **Update systemPatterns.md** - Document Action Group pattern
+3. **Verify acceptance criteria** - Mark completed items in action-group-refactor-plan.md
+4. **Continue refactor phases** - Phase 4 (Screenshot Timing Fix) or Phase 5 (Error Handling)
 
 ---
 
@@ -205,4 +216,13 @@
 
 ## Known Issues
 
-None - all tests passing (38 logger tests after Phase 1.1)
+### Test Failures (46 failing tests)
+- Some existing tests failing after Action Group refactor
+- Need to update existing tests to match new ActionGroups structure
+- Priority: High - fix before continuing with other work
+
+### Action Group Refactor Status
+- ✅ Implementation complete
+- ✅ Test coverage complete (15 new tests passing)
+- ⚠️ Some existing tests need updates (46 failures)
+- 📋 Need to update systemPatterns.md to document Action Group pattern

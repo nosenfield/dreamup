@@ -92,7 +92,11 @@
 
 ## Known Issues
 
-None - all tests passing, TypeScript compilation clean
+### Test Failures (46 failing tests)
+- Some existing tests failing after Action Group refactor
+- Need to update existing tests to match new ActionGroups structure
+- Priority: High - fix before continuing with other work
+- New tests for Action Group refactor: All 15 new tests passing ✅
 
 ---
 
@@ -125,11 +129,14 @@ None - all tests passing, TypeScript compilation clean
 
 ## Recent Achievements
 
-### This Week (Nov 4-8, 2025)
+### This Week (Nov 4-9, 2025)
 - ✅ Iteration 5 complete (all 6 tasks)
 - ✅ Adaptive Agent T1 complete
 - ✅ Refactor Phase 1.1 complete
 - ✅ Refactor Phase 2 complete (Start Detection Separation)
 - ✅ Refactor Phase 3 complete (Adaptive Loop Extraction)
+- ✅ Action Group Refactor complete (implementation + test coverage)
 - ✅ Canvas-Specific Screenshot Capture feature complete
 - ✅ Comprehensive refactor plan created
+- ✅ Prompt Logging feature complete
+- ✅ Local log and screenshot saving feature complete
