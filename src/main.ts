@@ -15,6 +15,7 @@ import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, Error
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
 import { Logger, TestPhase } from './utils/logger';
+import { LogFileWriter } from './utils/log-file-writer';
 import { categorizeError, QAError, ErrorCategory } from './utils/errors';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
@@ -43,15 +44,21 @@ import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema,
 export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>): Promise<GameTestResult> {
   const startTime = Date.now();
   const sessionId = nanoid();
+  
+  // Initialize log file writer for local log saving
+  const logFileWriter = new LogFileWriter(startTime);
+  await logFileWriter.initialize();
+  const localLogDir = logFileWriter.getLogDir();
+  
   const logger = new Logger({
     module: 'qa-agent',
     op: 'runQA',
     correlationId: sessionId,
-  });
+  }, undefined, logFileWriter);
 
   logger.info('Starting QA test', { gameUrl, sessionId });
 
-  const fileManager = new FileManager(sessionId);
+  const fileManager = new FileManager(sessionId, localLogDir);
   let browserManager: BrowserManager | null = null;
   let errorMonitor: ErrorMonitor | null = null;
   let gameType: GameType = GameType.UNKNOWN;
@@ -526,15 +533,21 @@ export async function runAdaptiveQA(
 ): Promise<GameTestResult> {
   const startTime = Date.now();
   const sessionId = nanoid();
+  
+  // Initialize log file writer for local log saving
+  const logFileWriter = new LogFileWriter(startTime);
+  await logFileWriter.initialize();
+  const localLogDir = logFileWriter.getLogDir();
+  
   const logger = new Logger({
     module: 'qa-agent',
     op: 'runAdaptiveQA',
     correlationId: sessionId,
-  });
+  }, undefined, logFileWriter);
 
   logger.info('Starting adaptive QA test', { gameUrl, sessionId });
 
-  const fileManager = new FileManager(sessionId);
+  const fileManager = new FileManager(sessionId, localLogDir);
   let browserManager: BrowserManager | null = null;
   let errorMonitor: ErrorMonitor | null = null;
   let gameType: GameType = GameType.UNKNOWN;

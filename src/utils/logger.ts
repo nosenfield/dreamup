@@ -157,6 +157,7 @@ export class Logger {
   private flags: FeatureFlags;
   private logLevel: LogLevel;
   private currentPhase?: TestPhase;
+  private logFileWriter?: { write(line: string): Promise<void> };
 
   /**
    * Parse log level from environment variable.
@@ -193,11 +194,13 @@ export class Logger {
    * 
    * @param context - Optional context object (module, op, correlationId, data)
    * @param flags - Optional feature flags (defaults to getFeatureFlags())
+   * @param logFileWriter - Optional log file writer for saving logs to file
    */
-  constructor(context?: LoggerContext, flags?: FeatureFlags) {
+  constructor(context?: LoggerContext, flags?: FeatureFlags, logFileWriter?: { write(line: string): Promise<void> }) {
     this.context = context || {};
     this.flags = flags || getFeatureFlags();
     this.logLevel = Logger.parseLogLevel(process.env.LOG_LEVEL, this.flags);
+    this.logFileWriter = logFileWriter;
   }
 
   /**
@@ -314,25 +317,44 @@ export class Logger {
    * 
    * Uses console.log to output structured JSON for CloudWatch compatibility,
    * or reformatted "msg | data" format if REFORMAT_LOGS is enabled.
+   * Also writes to log file writer if available.
    * 
    * @param entry - Log entry to output
    */
   private output(entry: LogEntry): void {
+    let logLine: string;
     if (this.shouldReformatLogs()) {
-      const reformatted = this.formatReformattedLog(entry);
-      console.log(reformatted);
+      logLine = this.formatReformattedLog(entry);
+      console.log(logLine);
     } else {
-      console.log(JSON.stringify(entry));
+      logLine = JSON.stringify(entry);
+      console.log(logLine);
+    }
+
+    // Also write to log file if available
+    if (this.logFileWriter) {
+      this.logFileWriter.write(logLine).catch(() => {
+        // Ignore errors - log file writing is non-critical
+      });
     }
   }
 
   /**
    * Output a plain string (for phase banners).
    * 
+   * Also writes to log file writer if available.
+   * 
    * @param message - Plain string message to output
    */
   private outputPlain(message: string): void {
     console.log(message);
+
+    // Also write to log file if available
+    if (this.logFileWriter) {
+      this.logFileWriter.write(message).catch(() => {
+        // Ignore errors - log file writing is non-critical
+      });
+    }
   }
 
   /**
