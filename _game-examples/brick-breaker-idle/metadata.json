@@ -4,7 +4,7 @@
   "description": "An idle brick breaker game where players click on bricks to destroy them and earn money, which can be spent on purchasing balls to automate brick breaking. The game features a grid of numbered bricks, a money counter, and upgrade buttons.",
   "expectedControls": "Mouse clicking on bricks to destroy them and on UI buttons to purchase upgrades",
   "inputSchema": {
-    "type": "mouse-only",
+    "type": "semantic",
     "content": "This is a mouse-only clicker/idle game. Players interact by clicking on bricks in the game grid to destroy them and earn money. Money can be spent by clicking on ball purchase buttons (yellow and pink circles at top-left). The UPGRADES button provides access to permanent upgrades. The game is entirely mouse-driven with no keyboard controls required."
   },
   "loadingIndicators": [
@@ -47,14 +47,6 @@
   "testingStrategy": {
     "waitBeforeInteraction": 2000,
     "interactionDuration": 45000,
-    "clickStrategy": "grid-based",
-    "clicksPerSecond": 3,
-    "gridBounds": {
-      "xStart": 0.15,
-      "yStart": 0.15,
-      "width": 0.7,
-      "height": 0.75
-    },
     "instructions": "Focus on clicking bricks in the central grid area to destroy them and earn money. The brick grid occupies the center portion of the screen. After earning enough money, click on the ball purchase buttons (yellow and pink circles at top-left) to buy balls. Clicking the UPGRADES button (top-right) may reveal additional upgrade options. Prioritize clicking on lower-numbered bricks as they are easier to destroy and provide immediate feedback."
   }
 }
