@@ -80,5 +80,3 @@
     "instructions": "This is a canvas-based game where all content is rendered on an HTML5 canvas element, NOT as DOM elements. Find the canvas element, then click on random coordinates within the center grid area where bricks are rendered (approximately 20-80% width, 15-90% height of canvas). Click frequency should be about 2 per second. Verify currency increases after clicks, verify brick health decreases, verify UI updates correctly, and check for console errors. Avoid clicking canvas coordinates outside the brick grid area, the top UI bar area where level/currency text is displayed, or the settings icon area in the top-right corner. When clicking canvas coordinates where bricks are rendered, you should see brick damage animation or number decreases visually on canvas. After multiple clicks, currency number should increase on canvas and bricks should disappear when health reaches 0."
   }
 }
-
-
