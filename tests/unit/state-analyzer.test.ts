@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { StateAnalyzer } from '../../src/core/state-analyzer';
 import { Logger } from '../../src/utils/logger';
-import type { GameState } from '../../src/types';
+import type { GameState, SuccessfulActionGroup } from '../../src/types';
 
 // Mock OpenAI SDK
 const mockGenerateObject = mock(() => ({
@@ -184,6 +184,317 @@ describe('StateAnalyzer', () => {
       await expect(
         analyzer.analyzeAndRecommendAction(state, 1, undefined)
       ).rejects.toThrow();
+    });
+
+    it('should return 1-3 groups with exactly 1 action each for iteration 1', async () => {
+      // Mock to return 2 groups for iteration 1
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [
+            {
+              reasoning: 'First strategy',
+              confidence: 0.9,
+              actions: [
+                {
+                  action: 'click' as const,
+                  target: { x: 100, y: 200 },
+                  reasoning: 'First action',
+                  confidence: 0.9,
+                  alternatives: [],
+                },
+              ],
+            },
+            {
+              reasoning: 'Second strategy',
+              confidence: 0.7,
+              actions: [
+                {
+                  action: 'keypress' as const,
+                  target: 'Enter',
+                  reasoning: 'Second action',
+                  confidence: 0.7,
+                  alternatives: [],
+                },
+              ],
+            },
+          ],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Find start button',
+      };
+
+      const testFile = Bun.file('/tmp/test-iter1.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-iter1.png',
+        },
+        1, // iteration 1
+        undefined
+      );
+
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result.length).toBeLessThanOrEqual(3);
+      result.forEach(group => {
+        expect(group.actions.length).toBe(1); // Exactly 1 action per group for iteration 1
+      });
+    });
+
+    it('should return groups with 1-5 actions for iteration 2', async () => {
+      // Mock to return 1 group with 3 actions for iteration 2
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [
+            {
+              reasoning: 'Build on successful strategy',
+              confidence: 0.85,
+              actions: [
+                {
+                  action: 'click' as const,
+                  target: { x: 100, y: 200 },
+                  reasoning: 'First action',
+                  confidence: 0.85,
+                  alternatives: [],
+                },
+                {
+                  action: 'click' as const,
+                  target: { x: 150, y: 250 },
+                  reasoning: 'Second action',
+                  confidence: 0.85,
+                  alternatives: [],
+                },
+                {
+                  action: 'click' as const,
+                  target: { x: 200, y: 300 },
+                  reasoning: 'Third action',
+                  confidence: 0.85,
+                  alternatives: [],
+                },
+              ],
+            },
+          ],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Continue playing',
+      };
+
+      const testFile = Bun.file('/tmp/test-iter2.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const successfulGroups: SuccessfulActionGroup[] = [
+        {
+          reasoning: 'Previous successful strategy',
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Previous action',
+              timestamp: Date.now(),
+              success: true,
+              stateProgressed: true,
+            },
+          ],
+          beforeScreenshot: '/tmp/before.png',
+          afterScreenshot: '/tmp/after.png',
+          confidence: 0.9,
+        },
+      ];
+
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-iter2.png',
+        },
+        2, // iteration 2
+        successfulGroups
+      );
+
+      expect(result.length).toBeGreaterThan(0);
+      result.forEach(group => {
+        expect(group.actions.length).toBeGreaterThanOrEqual(1);
+        expect(group.actions.length).toBeLessThanOrEqual(5); // 1-5 actions for iteration 2
+      });
+    });
+
+    it('should return groups with 1-10 actions for iteration 3+', async () => {
+      // Mock to return 1 group with 7 actions for iteration 3
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [
+            {
+              reasoning: 'Expand successful strategy',
+              confidence: 0.9,
+              actions: Array.from({ length: 7 }, (_, i) => ({
+                action: 'click' as const,
+                target: { x: 100 + i * 10, y: 200 + i * 10 },
+                reasoning: `Action ${i + 1}`,
+                confidence: 0.9,
+                alternatives: [],
+              })),
+            },
+          ],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Continue playing',
+      };
+
+      const testFile = Bun.file('/tmp/test-iter3.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const successfulGroups: SuccessfulActionGroup[] = [
+        {
+          reasoning: 'Previous successful strategy',
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Previous action',
+              timestamp: Date.now(),
+              success: true,
+              stateProgressed: true,
+            },
+          ],
+          beforeScreenshot: '/tmp/before.png',
+          afterScreenshot: '/tmp/after.png',
+          confidence: 0.9,
+        },
+      ];
+
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-iter3.png',
+        },
+        3, // iteration 3
+        successfulGroups
+      );
+
+      expect(result.length).toBeGreaterThan(0);
+      result.forEach(group => {
+        expect(group.actions.length).toBeGreaterThanOrEqual(1);
+        expect(group.actions.length).toBeLessThanOrEqual(10); // 1-10 actions for iteration 3+
+      });
+    });
+
+    it('should accept successful groups context for iteration 2+', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Continue playing',
+      };
+
+      const testFile = Bun.file('/tmp/test-successful-groups.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const successfulGroups: SuccessfulActionGroup[] = [
+        {
+          reasoning: 'Previous successful strategy',
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Previous action',
+              timestamp: Date.now(),
+              success: true,
+              stateProgressed: true,
+            },
+          ],
+          beforeScreenshot: '/tmp/before.png',
+          afterScreenshot: '/tmp/after.png',
+          confidence: 0.9,
+        },
+      ];
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-successful-groups.png',
+        },
+        2, // iteration 2
+        successfulGroups
+      );
+
+      // Verify that the prompt includes successful group context
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[1]?.prompt && typeof call[1].prompt === 'string'
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]?.prompt) {
+        const promptText = promptLogCall[1].prompt;
+        expect(promptText).toContain('Previous successful strategy');
+        expect(promptText).toContain('Successful Action Groups from Previous Iteration');
+      }
+    });
+
+    it('should handle zero groups returned (termination)', async () => {
+      // Mock to return zero groups
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Find start button',
+      };
+
+      const testFile = Bun.file('/tmp/test-zero-groups.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      // Zero groups for iteration 1 should throw a validation error
+      // (This is expected - zero groups is handled at the AdaptiveQALoop level as termination)
+      await expect(
+        analyzer.analyzeAndRecommendAction(
+          {
+            ...state,
+            screenshot: '/tmp/test-zero-groups.png',
+          },
+          1,
+          undefined
+        )
+      ).rejects.toThrow('Invalid ActionGroups');
     });
   });
 
