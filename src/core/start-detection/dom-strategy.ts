@@ -85,22 +85,42 @@ export class DOMStrategy extends BaseStartStrategy {
       const selector = this.selectors[i];
 
       try {
-        this.logger.trace(`Trying DOM selector [${i + 1}/${this.selectors.length}]`, { selector });
-
         const element = await pageAny.locator(selector).first();
-        if (element && (await element.isVisible({ timeout: 1000 }).catch(() => false))) {
+        const isVisible = element && (await element.isVisible({ timeout: 1000 }).catch(() => false));
+        
+        if (!isVisible) {
+          this.logger.debug(`DOM selector [${i + 1}/${this.selectors.length}] not visible`, { selector });
+          continue;
+        }
+
+        this.logger.info(`DOM selector [${i + 1}/${this.selectors.length}] found and visible, attempting click`, { selector });
+
+        // Click the element - if this succeeds, we're done
+        try {
           await withTimeout(
             element.click(),
             timeout,
             `DOM click timeout: ${selector}`
           );
 
-          // Get coordinates for logging (approximate from bounding box)
-          const box = await element.boundingBox().catch(() => null);
-          const coords = box ? { 
-            x: Math.round(box.x + box.width / 2), 
-            y: Math.round(box.y + box.height / 2) 
-          } : undefined;
+          // Click succeeded! Get coordinates for logging (approximate from bounding box)
+          // If this fails, we still return success since the click worked
+          let coords: { x: number; y: number } | undefined = undefined;
+          try {
+            const box = await element.boundingBox();
+            if (box) {
+              coords = { 
+                x: Math.round(box.x + box.width / 2), 
+                y: Math.round(box.y + box.height / 2) 
+              };
+            }
+          } catch (boxError) {
+            // boundingBox failed but click succeeded - log and continue
+            this.logger.debug('Could not get bounding box for clicked element', {
+              selector,
+              error: boxError instanceof Error ? boxError.message : String(boxError),
+            });
+          }
 
           this.logger.action('click', {
             strategy: 'dom',
@@ -109,8 +129,12 @@ export class DOMStrategy extends BaseStartStrategy {
             y: coords?.y,
           });
 
-          await this.postClickDelay(TIMEOUTS.POST_START_DELAY);
+          // Post-click delay - if this fails, we still return success since the click worked
+          await this.postClickDelay(TIMEOUTS.POST_START_DELAY).catch(() => {
+            // Delay failed but click succeeded - continue
+          });
 
+          // Return immediately after successful click - this exits the entire loop
           return {
             success: true,
             strategy: 'dom',
@@ -118,9 +142,16 @@ export class DOMStrategy extends BaseStartStrategy {
             duration: Date.now() - startTime,
             coordinates: coords,
           };
+        } catch (clickError) {
+          // Click failed - log and continue to next selector
+          this.logger.warn('DOM click failed', {
+            selector,
+            error: clickError instanceof Error ? clickError.message : String(clickError),
+          });
+          continue;
         }
       } catch (error) {
-        this.logger.trace('DOM selector failed', {
+        this.logger.debug('DOM selector lookup failed', {
           selector,
           error: error instanceof Error ? error.message : String(error),
         });

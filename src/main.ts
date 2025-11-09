@@ -60,6 +60,7 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
 
   try {
     // Validate environment variables
+    logger.beginPhase(TestPhase.INITIALIZATION, { gameUrl, sessionId });
     const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
     const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
 
@@ -79,11 +80,14 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     logger.info('Browser initialized successfully', {});
 
     // Navigate to game URL
+    logger.beginPhase(TestPhase.NAVIGATION, { gameUrl });
     logger.info('Navigating to game URL', { gameUrl });
     await browserManager.navigate(gameUrl);
     logger.info('Navigation completed', {});
+    logger.endPhase(TestPhase.NAVIGATION, {});
 
     // Initialize game detector and error monitor
+    logger.beginPhase(TestPhase.GAME_DETECTION, {});
     const gameDetector = new GameDetector({ logger });
     errorMonitor = new ErrorMonitor({ logger });
 
@@ -130,6 +134,7 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       });
       // Continue anyway - game may still be functional
     }
+    logger.endPhase(TestPhase.GAME_DETECTION, { gameType });
 
     // Initialize vision analyzer (optional - requires OPENAI_API_KEY)
     try {
@@ -155,6 +160,11 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       visionAnalyzer = null;
       stateAnalyzer = null;
     }
+    logger.endPhase(TestPhase.INITIALIZATION, {
+      gameType,
+      hasVisionAnalyzer: !!visionAnalyzer,
+      hasStateAnalyzer: !!stateAnalyzer,
+    });
 
     // Initialize screenshot capturer and game interactor
     const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
@@ -230,9 +240,17 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
 
     // Simulate gameplay inputs (use metadata if available, otherwise generic inputs)
     const interactionDuration = metadata?.testingStrategy?.interactionDuration ?? 30000;
+    const gameplayStartTime = Date.now();
+    logger.beginPhase(TestPhase.GAMEPLAY_SIMULATION, {
+      duration: interactionDuration,
+      hasMetadata: !!metadata,
+      gameType,
+    });
+    
     logger.info('Starting gameplay simulation', { 
       duration: interactionDuration,
       hasMetadata: !!metadata,
+      gameType,
     });
     
     if (metadata) {
@@ -241,25 +259,39 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await gameInteractor.simulateKeyboardInput(page, interactionDuration);
     }
     
-    logger.info('Gameplay simulation completed', {});
+    const gameplayActualDuration = Date.now() - gameplayStartTime;
+    logger.info('Gameplay simulation completed', {
+      expectedDuration: interactionDuration,
+      actualDuration: gameplayActualDuration,
+    });
+    logger.endPhase(TestPhase.GAMEPLAY_SIMULATION, {
+      expectedDuration: interactionDuration,
+      actualDuration: gameplayActualDuration,
+    });
 
     // Capture screenshot after interaction (using metadata-based timing if available)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'after_interaction' });
     logger.info('Capturing screenshot after interaction', { hasMetadata: !!metadata });
     const afterInteractionScreenshot = metadata
       ? await screenshotCapturer.captureAtOptimalTime(page, 'after_interaction', metadata)
       : await screenshotCapturer.capture(page, 'after_interaction');
-    logger.info('Screenshot after interaction captured', {
-      screenshotId: afterInteractionScreenshot.id,
-      screenshotPath: afterInteractionScreenshot.path,
+    logger.action('screenshot', {
+      stage: 'after_interaction',
+      path: afterInteractionScreenshot.path,
+      timing: 'after_gameplay',
     });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: afterInteractionScreenshot.id });
 
     // Capture final screenshot
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'final_state' });
     logger.info('Capturing final screenshot', {});
     const finalScreenshot = await screenshotCapturer.capture(page, 'final_state');
-    logger.info('Final screenshot captured', {
-      screenshotId: finalScreenshot.id,
-      screenshotPath: finalScreenshot.path,
+    logger.action('screenshot', {
+      stage: 'final_state',
+      path: finalScreenshot.path,
+      timing: 'test_completion',
     });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: finalScreenshot.id });
 
     // Retrieve console errors before stopping monitoring
     let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
@@ -284,9 +316,14 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     let visionAnalysisTokens: number | undefined;
 
     if (visionAnalyzer) {
+      logger.beginPhase(TestPhase.VISION_ANALYSIS, {
+        screenshotCount: 4,
+        hasMetadata: !!metadata,
+      });
       try {
         logger.info('Starting vision analysis', {
           screenshotCount: 4,
+          hasMetadata: !!metadata,
         });
 
         const visionResult = await visionAnalyzer.analyzeScreenshots([
@@ -305,6 +342,11 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
           issueCount: visionIssues.length,
           tokens: visionAnalysisTokens,
         });
+        logger.endPhase(TestPhase.VISION_ANALYSIS, {
+          playabilityScore,
+          issueCount: visionIssues.length,
+          tokens: visionAnalysisTokens,
+        });
       } catch (error) {
         const qaError = categorizeError(error, TestPhase.VISION_ANALYSIS);
         logger.warn('Vision analysis failed - using default score', {
@@ -313,8 +355,14 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
           recoverable: qaError.recoverable,
           context: qaError.context,
         });
+        logger.endPhase(TestPhase.VISION_ANALYSIS, {
+          success: false,
+          error: qaError.message,
+        });
         // Continue with default score
       }
+    } else {
+      logger.info('Vision analysis skipped - no vision analyzer available', {});
     }
 
     // Determine pass/fail status based on score
@@ -345,10 +393,16 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       },
     };
 
+    const totalDuration = Date.now() - startTime;
     logger.info('QA test completed successfully', {
       status: result.status,
       playabilityScore: result.playability_score,
       screenshotCount: result.screenshots.length,
+      issueCount: result.issues.length,
+      totalDuration,
+      gameType,
+      hasMetadata: !!metadata,
+      consoleErrorCount: consoleErrors.length,
     });
 
     return result;

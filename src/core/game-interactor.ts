@@ -171,6 +171,8 @@ export class GameInteractor {
   ): Promise<void> {
     const startTime = Date.now();
     let keyIndex = 0;
+    let lastProgressUpdate = startTime;
+    const progressUpdateInterval = 5000; // Update every 5 seconds
 
     while (Date.now() - startTime < duration) {
       // Get next key to press (cycle through available keys)
@@ -181,12 +183,34 @@ export class GameInteractor {
         // Use Stagehand's keyPress() method (not keyboard.press())
         // Stagehand Page exposes keyPress directly on the page object
         await page.keyPress(key, { delay: 0 });
+        
+        // Log each key press as an action
+        this.logger.action('keypress', {
+          key,
+          keyIndex,
+          elapsed: Date.now() - startTime,
+        });
       } catch (error) {
         this.logger.warn('Key press failed, continuing simulation', {
           key,
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with next key rather than failing entire simulation
+      }
+
+      // Periodic progress updates
+      const now = Date.now();
+      if (now - lastProgressUpdate >= progressUpdateInterval) {
+        const elapsed = now - startTime;
+        const progress = Math.round((elapsed / duration) * 100);
+        this.logger.info('Gameplay simulation progress', {
+          elapsed,
+          duration,
+          progress: `${progress}%`,
+          keysPressed: keyIndex,
+          remaining: duration - elapsed,
+        });
+        lastProgressUpdate = now;
       }
 
       // Wait before next key press
@@ -200,9 +224,10 @@ export class GameInteractor {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    this.logger.debug('Keyboard simulation loop completed', {
+    this.logger.info('Keyboard simulation loop completed', {
       keysPressed: keyIndex,
       duration: Date.now() - startTime,
+      expectedDuration: duration,
     });
   }
 
@@ -637,6 +662,8 @@ export class GameInteractor {
   ): Promise<void> {
     const startTime = Date.now();
     let keyIndex = 0;
+    let lastProgressUpdate = startTime;
+    const progressUpdateInterval = 5000; // Update every 5 seconds
 
     while (Date.now() - startTime < duration) {
       // Get next key to press (cycle through provided keys)
@@ -646,12 +673,34 @@ export class GameInteractor {
       try {
         // Use Stagehand's keyPress() method
         await page.keyPress(key, { delay: 0 });
+        
+        // Log each key press as an action
+        this.logger.action('keypress', {
+          key,
+          keyIndex,
+          elapsed: Date.now() - startTime,
+        });
       } catch (error) {
         this.logger.warn('Key press failed, continuing simulation', {
           key,
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with next key rather than failing entire simulation
+      }
+
+      // Periodic progress updates
+      const now = Date.now();
+      if (now - lastProgressUpdate >= progressUpdateInterval) {
+        const elapsed = now - startTime;
+        const progress = Math.round((elapsed / duration) * 100);
+        this.logger.info('Gameplay simulation progress', {
+          elapsed,
+          duration,
+          progress: `${progress}%`,
+          keysPressed: keyIndex,
+          remaining: duration - elapsed,
+        });
+        lastProgressUpdate = now;
       }
 
       // Wait before next key press
@@ -665,9 +714,10 @@ export class GameInteractor {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    this.logger.debug('Metadata-driven keyboard simulation loop completed', {
+    this.logger.info('Metadata-driven keyboard simulation loop completed', {
       keysPressed: keyIndex,
       duration: Date.now() - startTime,
+      expectedDuration: duration,
     });
   }
 
@@ -763,6 +813,8 @@ export class GameInteractor {
   ): Promise<void> {
     const startTime = Date.now();
     let clickCount = 0;
+    let lastProgressUpdate = startTime;
+    const progressUpdateInterval = 5000; // Update every 5 seconds
 
     while (Date.now() - startTime < duration) {
       // Generate random position within bounds
@@ -773,9 +825,11 @@ export class GameInteractor {
         await this.clickAtCoordinates(page, x, y);
         clickCount++;
 
-        this.logger.debug('Click performed', {
-          clickNumber: clickCount,
-          position: { x, y },
+        // Log each click as an action
+        this.logger.action('click', {
+          coordinates: `(${x}, ${y})`,
+          clickIndex: clickCount,
+          elapsed: Date.now() - startTime,
         });
       } catch (error) {
         this.logger.warn('Click failed, continuing simulation', {
@@ -783,6 +837,21 @@ export class GameInteractor {
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with next click rather than failing entire simulation
+      }
+
+      // Periodic progress updates
+      const now = Date.now();
+      if (now - lastProgressUpdate >= progressUpdateInterval) {
+        const elapsed = now - startTime;
+        const progress = Math.round((elapsed / duration) * 100);
+        this.logger.info('Gameplay simulation progress', {
+          elapsed,
+          duration,
+          progress: `${progress}%`,
+          clicksPerformed: clickCount,
+          remaining: duration - elapsed,
+        });
+        lastProgressUpdate = now;
       }
 
       // Wait before next click
@@ -796,9 +865,10 @@ export class GameInteractor {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    this.logger.debug('Mouse click simulation loop completed', {
+    this.logger.info('Mouse click simulation loop completed', {
       clicksPerformed: clickCount,
       duration: Date.now() - startTime,
+      expectedDuration: duration,
     });
   }
 }
