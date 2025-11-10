@@ -498,6 +498,171 @@ describe('StateAnalyzer', () => {
     });
   });
 
+  describe('buildStateAnalysisPrompt (via analyzeAndRecommendAction)', () => {
+    it('should include testingStrategy.instructions when present', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Play the game',
+        metadata: {
+          description: 'Test game',
+          inputSchema: {
+            type: 'semantic',
+            content: 'Click-based game',
+          },
+          testingStrategy: {
+            waitBeforeInteraction: 2000,
+            interactionDuration: 30000,
+            instructions: 'This is a canvas-based click game. Click on bricks to destroy them. Use coordinates between 0.2-0.8 width and 0.15-0.9 height.',
+          },
+        },
+      };
+
+      const testFile = Bun.file('/tmp/test-instructions.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-instructions.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify that debug was called (prompt logging)
+      expect(mockDebug).toHaveBeenCalled();
+      
+      // Check that the prompt includes instructions
+      const debugCalls = mockDebug.mock.calls;
+      const promptCall = debugCalls.find((call: any[]) => 
+        call[0] === 'Sending prompt to LLM'
+      );
+      
+      expect(promptCall).toBeDefined();
+      expect(promptCall?.[1]?.prompt).toBeDefined();
+      
+      if (promptCall && promptCall[1]?.prompt) {
+        const prompt = promptCall[1].prompt as string;
+        expect(prompt).toContain('Game Context');
+        expect(prompt).toContain('This is a canvas-based click game');
+        expect(prompt).toContain('Click on bricks to destroy them');
+      }
+    });
+
+    it('should fall back to expectedControls when instructions missing', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Play the game',
+        metadata: {
+          description: 'Test game',
+          inputSchema: {
+            type: 'semantic',
+            content: 'Click-based game',
+          },
+          expectedControls: 'Arrow keys for movement',
+          // No testingStrategy.instructions
+        },
+      };
+
+      const testFile = Bun.file('/tmp/test-fallback.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-fallback.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify that debug was called
+      expect(mockDebug).toHaveBeenCalled();
+      
+      // Check that the prompt includes expectedControls (fallback)
+      const debugCalls = mockDebug.mock.calls;
+      const promptCall = debugCalls.find((call: any[]) => 
+        call[0] === 'Sending prompt to LLM'
+      );
+      
+      expect(promptCall).toBeDefined();
+      expect(promptCall?.[1]?.prompt).toBeDefined();
+      
+      if (promptCall && promptCall[1]?.prompt) {
+        const prompt = promptCall[1].prompt as string;
+        expect(prompt).toContain('Expected Controls');
+        expect(prompt).toContain('Arrow keys for movement');
+      }
+    });
+
+    it('should prioritize instructions over expectedControls when both present', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Play the game',
+        metadata: {
+          description: 'Test game',
+          inputSchema: {
+            type: 'semantic',
+            content: 'Click-based game',
+          },
+          expectedControls: 'Arrow keys for movement',
+          testingStrategy: {
+            waitBeforeInteraction: 2000,
+            interactionDuration: 30000,
+            instructions: 'This is a canvas game. Click on bricks.',
+          },
+        },
+      };
+
+      const testFile = Bun.file('/tmp/test-priority.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-priority.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify that debug was called
+      expect(mockDebug).toHaveBeenCalled();
+      
+      // Check that the prompt includes instructions but NOT expectedControls
+      const debugCalls = mockDebug.mock.calls;
+      const promptCall = debugCalls.find((call: any[]) => 
+        call[0] === 'Sending prompt to LLM'
+      );
+      
+      expect(promptCall).toBeDefined();
+      expect(promptCall?.[1]?.prompt).toBeDefined();
+      
+      if (promptCall && promptCall[1]?.prompt) {
+        const prompt = promptCall[1].prompt as string;
+        expect(prompt).toContain('Game Context');
+        expect(prompt).toContain('This is a canvas game');
+        // Should NOT contain expectedControls when instructions are present
+        expect(prompt).not.toContain('Expected Controls');
+      }
+    });
+  });
+
   describe('sanitizeHTML', () => {
     it('should remove script tags', () => {
       const html = '<div>Test</div><script>alert("xss")</script><p>Content</p>';

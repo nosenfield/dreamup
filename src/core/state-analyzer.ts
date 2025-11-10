@@ -391,6 +391,11 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
     // Add goal context
     prompt += `\n\n**Current Goal:** ${state.goal}`;
 
+    // PRIORITY 1: Add game-specific context from testingStrategy.instructions (MOST IMPORTANT)
+    if (state.metadata?.testingStrategy?.instructions) {
+      prompt += `\n\n**🎮 Game Context (IMPORTANT - Follow these instructions carefully):**\n${state.metadata.testingStrategy.instructions}`;
+    }
+
     // Add previous actions context with success/failure feedback
     if (state.previousActions.length > 0) {
       // Get last 20 actions for feedback (prioritize recent actions)
@@ -471,9 +476,10 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
       }
     }
 
-    // Add metadata context if available
+    // PRIORITY 2: Add supplementary metadata context (if instructions not available or as additional context)
     if (state.metadata) {
-      if (state.metadata.expectedControls) {
+      // Only add expectedControls if instructions not available (to avoid duplication)
+      if (state.metadata.expectedControls && !state.metadata.testingStrategy?.instructions) {
         prompt += `\n\n**Expected Controls:** ${state.metadata.expectedControls}`;
       }
       if (state.metadata.genre) {

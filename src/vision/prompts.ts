@@ -378,7 +378,25 @@ Analyze the current game state (HTML structure and screenshot) and recommend Act
 - **wait**: Wait for a specified duration in milliseconds (number)
 - **complete**: Indicate that the goal has been achieved (no further action needed)
 
+**IMPORTANT - Use Game Context:**
+- If "Game Context" is provided above, follow those instructions carefully
+- For canvas-based games: Use coordinate-based clicking (percentages 0.0-1.0 of canvas size)
+- For DOM-based games: Use absolute pixel coordinates
+- Respect click bounds and avoid areas specified in context
+- Follow expected behavior patterns described in context
+
 **Coordinate Accuracy (CRITICAL for click actions):**
+
+**For Canvas Games (coordinates as percentages 0.0-1.0):**
+- **x**: X coordinate as percentage of canvas width (0.0 = left edge, 1.0 = right edge)
+- **y**: Y coordinate as percentage of canvas height (0.0 = top edge, 1.0 = bottom edge)
+- **IMPORTANT**: Coordinates should be percentages, not pixels
+- Example: Center of canvas = { x: 0.5, y: 0.5 }
+- Example: Top-left quadrant = { x: 0.25, y: 0.25 }
+- Example: Brick grid area (20-80% width, 15-90% height) = { x: 0.5, y: 0.5 }
+- **Note**: If game context specifies click bounds (e.g., "click between 20-80% width"), use those bounds
+
+**For DOM Games (coordinates as absolute pixels):**
 - **x**: X coordinate in pixels (0-based, left edge of image is 0)
 - **y**: Y coordinate in pixels (0-based, top edge of image is 0)
 - **IMPORTANT**: Provide coordinates for the CENTER of the clickable element
