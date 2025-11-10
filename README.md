@@ -57,12 +57,16 @@ BROWSERBASE_API_KEY=bb_live_your_actual_key_here
 BROWSERBASE_PROJECT_ID=your_project_id_here
 OPENAI_API_KEY=sk-your_actual_key_here
 
+# Adaptive QA Configuration
+ADAPTIVE_QA_BUDGET=0.50
+
 # Optional: Feature flags and timeouts
 DEBUG=false
 ENABLE_CACHING=false
 ENABLE_PROGRESS_UPDATES=false
 ENABLE_ERROR_RECOVERY=false
 ENABLE_SCREENSHOT_CLEANUP=false
+REFORMAT_LOGS=false
 MAX_TEST_DURATION=240000
 GAME_LOAD_TIMEOUT=60000
 INTERACTION_TIMEOUT=90000
@@ -269,12 +273,14 @@ All configuration can be overridden via environment variables:
 | `BROWSERBASE_API_KEY` | *required* | Browserbase API key |
 | `BROWSERBASE_PROJECT_ID` | *required* | Browserbase project ID |
 | `OPENAI_API_KEY` | *required* | OpenAI API key with GPT-4 Vision access |
+| `ADAPTIVE_QA_BUDGET` | `0.50` | Maximum budget in USD per adaptive QA test (controls LLM call costs) |
 | `MAX_TEST_DURATION` | `240000` | Maximum test duration in milliseconds (4 minutes) |
 | `GAME_LOAD_TIMEOUT` | `60000` | Game loading timeout in milliseconds (60 seconds) |
 | `INTERACTION_TIMEOUT` | `90000` | Interaction timeout in milliseconds (90 seconds) |
 | `SCREENSHOT_TIMEOUT` | `10000` | Screenshot capture timeout in milliseconds (10 seconds) |
 | `PAGE_NAVIGATION_TIMEOUT` | `30000` | Page navigation timeout in milliseconds (30 seconds) |
 | `POST_START_DELAY` | `2000` | Delay after clicking start button in milliseconds (2 seconds) |
+| `REFORMAT_LOGS` | `false` | Enable reformatted log output (msg \| data format) |
 
 ### Feature Flags
 

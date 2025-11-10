@@ -89,14 +89,14 @@ export const GAME_ANALYSIS_PROMPT = `You are analyzing a sequence of screenshots
 
 **Examples:**
 
-Example 1 - Working Game:
+Example 1 - Working Game (format only, analyze actual screenshots):
 {
   "status": "pass",
   "playability_score": 85,
   "issues": [
     {
       "severity": "minor",
-      "description": "Minor UI alignment issue in menu",
+      "description": "Describe actual issues found in screenshots, not this example",
       "timestamp": "2025-11-04T12:00:00Z"
     }
   ],
@@ -104,25 +104,22 @@ Example 1 - Working Game:
   "timestamp": "2025-11-04T12:00:00Z"
 }
 
-Example 2 - Broken Game:
+Example 2 - Broken Game (format only, analyze actual screenshots):
 {
   "status": "error",
   "playability_score": 0,
   "issues": [
     {
       "severity": "critical",
-      "description": "Game failed to load - blank canvas detected",
-      "timestamp": "2025-11-04T12:00:00Z"
-    },
-    {
-      "severity": "critical",
-      "description": "No response to user interactions - game appears frozen",
+      "description": "Describe actual issues found in screenshots, not this example",
       "timestamp": "2025-11-04T12:00:00Z"
     }
   ],
   "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png", "/path/to/screenshot4.png"],
   "timestamp": "2025-11-04T12:00:00Z"
 }
+
+**CRITICAL:** These examples show the OUTPUT FORMAT only. You must analyze the actual screenshots provided and describe the REAL issues you observe. Do not copy example descriptions - create your own based on what you see in the screenshots.
 
 **Important:** Return data that strictly matches the gameTestResultSchema structure. Ensure all required fields are present and types are correct.`;
 

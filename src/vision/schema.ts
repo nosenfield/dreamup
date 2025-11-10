@@ -372,9 +372,9 @@ export function validateActionGroup(
  * Validate an array of ActionGroup objects using the actionGroupsSchema.
  * 
  * Validates group count and action count based on iteration number:
- * - Iteration 1: 1-3 groups, exactly 1 action per group
- * - Iteration 2: Variable groups (1 per successful group), 1-5 actions per group
- * - Iteration 3+: Variable groups (1 per successful group), 1-10 actions per group
+ * - Iteration 1: 1-3 groups, 1-2 actions per group
+ * - Iteration 2: Variable groups (1 per successful group), 3-5 actions per group
+ * - Iteration 3+: Variable groups (1 per successful group), 6-10 actions per group
  * 
  * @param data - The data to validate (unknown type for safety)
  * @param iterationNumber - The iteration number (1, 2, 3+, etc.)
@@ -412,35 +412,35 @@ export function validateActionGroups(
     const group = groups[i];
     const actionCount = group.actions.length;
     
-    if (iterationNumber === 1 && actionCount !== 1) {
+    if (iterationNumber === 1 && (actionCount < 1 || actionCount > 2)) {
       return {
         success: false,
         error: new z.ZodError([{
           code: 'custom',
           path: ['groups', i, 'actions'],
-          message: `Iteration 1 groups must have exactly 1 action, got ${actionCount}`,
+          message: `Iteration 1 groups must have 1-2 actions, got ${actionCount}`,
         }]),
       };
     }
     
-    if (iterationNumber === 2 && (actionCount < 1 || actionCount > 5)) {
+    if (iterationNumber === 2 && (actionCount < 3 || actionCount > 5)) {
       return {
         success: false,
         error: new z.ZodError([{
           code: 'custom',
           path: ['groups', i, 'actions'],
-          message: `Iteration 2 groups must have 1-5 actions, got ${actionCount}`,
+          message: `Iteration 2 groups must have 3-5 actions, got ${actionCount}`,
         }]),
       };
     }
     
-    if (iterationNumber >= 3 && (actionCount < 1 || actionCount > 10)) {
+    if (iterationNumber >= 3 && (actionCount < 6 || actionCount > 10)) {
       return {
         success: false,
         error: new z.ZodError([{
           code: 'custom',
           path: ['groups', i, 'actions'],
-          message: `Iteration 3+ groups must have 1-10 actions, got ${actionCount}`,
+          message: `Iteration 3+ groups must have 6-10 actions, got ${actionCount}`,
         }]),
       };
     }

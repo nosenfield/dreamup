@@ -111,14 +111,24 @@ export function distributeScreenshotsOverTime(
 /**
  * Merge adaptive config with defaults.
  * 
+ * Reads budget from ADAPTIVE_QA_BUDGET environment variable if set.
+ * Falls back to default of 0.50 if not set.
+ * 
  * @param config - Partial adaptive config (may override defaults)
  * @returns Complete adaptive config with defaults applied
  */
 export function mergeAdaptiveConfig(
   config?: Partial<AdaptiveTestConfig>
 ): AdaptiveTestConfig {
+  // Read budget from environment variable if set
+  const envBudget = process.env.ADAPTIVE_QA_BUDGET;
+  const defaultBudget = envBudget ? parseFloat(envBudget) : 0.50;
+  
+  // Validate budget is a valid number
+  const maxBudget = isNaN(defaultBudget) || defaultBudget <= 0 ? 0.50 : defaultBudget;
+  
   const defaults: AdaptiveTestConfig = {
-    maxBudget: 0.50,
+    maxBudget,
     maxDuration: 240000,
     maxActions: 20, // Kept for backward compatibility, not used in Action Group refactor
     screenshotStrategy: 'fixed' as const,

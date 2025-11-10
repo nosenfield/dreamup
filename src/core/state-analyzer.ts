@@ -84,9 +84,9 @@ export class StateAnalyzer {
    * Uses GPT-4 Vision to analyze HTML structure and screenshot,
    * then recommends Action Groups (strategies with related actions) to try.
    * 
-   * - Iteration 1: Returns 1-3 Action Groups, each with 1 action
-   * - Iteration 2+: Returns 1 Action Group per successful group, each with 1-5 actions
-   * - Iteration 3+: Returns 1 Action Group per successful group, each with 1-10 actions
+   * - Iteration 1: Returns 1-3 Action Groups, each with 1-2 actions
+   * - Iteration 2+: Returns 1 Action Group per successful group, each with 3-5 actions
+   * - Iteration 3+: Returns 1 Action Group per successful group, each with 6-10 actions
    * 
    * Groups are ordered by confidence and executed sequentially.
    * Success is measured at the group level, not individual action level.
@@ -105,7 +105,7 @@ export class StateAnalyzer {
    *   1,
    *   undefined
    * );
-   * // Returns 1-3 groups, each with 1 action
+   * // Returns 1-3 groups, each with 1-2 actions
    * 
    * // Iteration 2+
    * const groups = await analyzer.analyzeAndRecommendAction(
@@ -113,7 +113,7 @@ export class StateAnalyzer {
    *   2,
    *   successfulGroups
    * );
-   * // Returns 1 group per successful group, each with 1-5 actions
+   * // Returns 1 group per successful group, each with 3-5 actions
    * ```
    */
   async analyzeAndRecommendAction(
@@ -347,20 +347,20 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
     if (iterationNumber === 1) {
       prompt += `\n\n**ITERATION 1 INSTRUCTIONS (CRITICAL - MUST FOLLOW):**`;
       prompt += `\n- **MUST return EXACTLY 1-3 Action Groups (no more, no less)**`;
-      prompt += `\n- Each group should have exactly 1 action`;
+      prompt += `\n- Each group should have 1-2 actions`;
       prompt += `\n- Each group represents a different strategy to try`;
       prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
       prompt += `\n- **IMPORTANT**: If you have more than 3 strategies, choose only the top 3 most confident ones`;
     } else if (iterationNumber === 2) {
       prompt += `\n\n**ITERATION 2 INSTRUCTIONS:**`;
       prompt += `\n- For each successful Action Group provided, return 1 Action Group`;
-      prompt += `\n- Each group should have 1-5 actions that build on the successful strategy`;
+      prompt += `\n- Each group should have 3-5 actions that build on the successful strategy`;
       prompt += `\n- Actions should be related and follow the same reasoning as the successful group`;
       prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
     } else {
       prompt += `\n\n**ITERATION ${iterationNumber} INSTRUCTIONS:**`;
       prompt += `\n- For each successful Action Group provided, return 1 Action Group`;
-      prompt += `\n- Each group should have 1-10 actions that expand the successful strategy`;
+      prompt += `\n- Each group should have 6-10 actions that expand the successful strategy`;
       prompt += `\n- Actions should be related and follow the same reasoning as the successful group`;
       prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
     }
@@ -384,7 +384,8 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
         });
         prompt += `\n- Before Screenshot: ${group.beforeScreenshot}`;
         prompt += `\n- After Screenshot: ${group.afterScreenshot}`;
-        prompt += `\n\n**Your Task:** Generate 1 Action Group with 1-${iterationNumber === 2 ? '5' : '10'} related actions that build on this successful strategy.`;
+        const actionRange = iterationNumber === 2 ? '3-5' : '6-10';
+        prompt += `\n\n**Your Task:** Generate 1 Action Group with ${actionRange} related actions that build on this successful strategy.`;
       });
     }
 
