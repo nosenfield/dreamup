@@ -68,9 +68,10 @@ export abstract class BaseStartStrategy {
    *
    * @param page - The Stagehand page object
    * @param timeout - Timeout in milliseconds for the operation
+   * @param preStartScreenshotPath - Optional path to pre-start screenshot to reuse (avoids redundant screenshots)
    * @returns Promise that resolves to StartButtonResult
    */
-  abstract execute(page: AnyPage, timeout: number): Promise<StartButtonResult>;
+  abstract execute(page: AnyPage, timeout: number, preStartScreenshotPath?: string): Promise<StartButtonResult>;
 
   /**
    * Wait after clicking start button to allow game to initialize.

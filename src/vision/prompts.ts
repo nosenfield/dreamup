@@ -367,10 +367,10 @@ Analyze the current game state (HTML structure and screenshot) and recommend Act
 
 **CRITICAL: Use Feedback from Previous Actions**
 - You will receive feedback about which previous actions were successful and which failed
-- **BUILD ON SUCCESSFUL PATTERNS**: If clicking at (400, 500) was successful, generate multiple related clicks around that area (e.g., (400, 510), (410, 500), (390, 500))
+- **BUILD ON SUCCESSFUL PATTERNS**: If a click action was successful, generate multiple related clicks around that area with varying distances and directions to explore the successful region
 - **AVOID FAILED ACTIONS**: Do not repeat actions that failed or didn't change game state
-- **GENERATE VARIATIONS**: When a pattern works, create multiple variations of that successful pattern
-- **LEARN FROM SUCCESS**: Use successful action patterns to guide your recommendations
+- **GENERATE VARIATIONS**: When a pattern works, create multiple variations of that successful pattern with different coordinates, distances, and approaches
+- **LEARN FROM SUCCESS**: Use successful action patterns to guide your recommendations and explore nearby areas systematically
 
 **Action Types:**
 - **click**: Click at specific pixel coordinates { x: number, y: number }
@@ -380,29 +380,20 @@ Analyze the current game state (HTML structure and screenshot) and recommend Act
 
 **IMPORTANT - Use Game Context:**
 - If "Game Context" is provided above, follow those instructions carefully
-- For canvas-based games: Use coordinate-based clicking (percentages 0.0-1.0 of canvas size)
-- For DOM-based games: Use absolute pixel coordinates
 - Respect click bounds and avoid areas specified in context
 - Follow expected behavior patterns described in context
 
 **Coordinate Accuracy (CRITICAL for click actions):**
 
-**For Canvas Games (coordinates as percentages 0.0-1.0):**
-- **x**: X coordinate as percentage of canvas width (0.0 = left edge, 1.0 = right edge)
-- **y**: Y coordinate as percentage of canvas height (0.0 = top edge, 1.0 = bottom edge)
-- **IMPORTANT**: Coordinates should be percentages, not pixels
-- Example: Center of canvas = { x: 0.5, y: 0.5 }
-- Example: Top-left quadrant = { x: 0.25, y: 0.25 }
-- Example: Brick grid area (20-80% width, 15-90% height) = { x: 0.5, y: 0.5 }
-- **Note**: If game context specifies click bounds (e.g., "click between 20-80% width"), use those bounds
-
-**For DOM Games (coordinates as absolute pixels):**
-- **x**: X coordinate in pixels (0-based, left edge of image is 0)
-- **y**: Y coordinate in pixels (0-based, top edge of image is 0)
+**For ALL Games (coordinates as absolute pixels):**
+- **x**: X coordinate in pixels (0-based, left edge of screenshot is 0)
+- **y**: Y coordinate in pixels (0-based, top edge of screenshot is 0)
 - **IMPORTANT**: Provide coordinates for the CENTER of the clickable element
 - **IMPORTANT**: Measure carefully from the top-left corner (0,0) of the screenshot
 - **IMPORTANT**: Consider the actual pixel position, not relative positioning
-- Example: For a button at 1/4 width and 1/4 height of a 640x480 image: x ≈ 160, y ≈ 120
+- **IMPORTANT**: Use specific pixel values (e.g., 400, 300) not percentages
+- Example: Center of 800x600 screenshot = { x: 400, y: 300 }
+- Example: Top-left quadrant of 800x600 screenshot = { x: 200, y: 150 }
 
 **Key Names (for keypress actions):**
 - Arrow keys: "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"
@@ -431,139 +422,18 @@ Return an object with a "groups" property containing an array of Action Groups. 
     - **confidence**: Number between 0 and 1 (certainty of recommendation)
     - **alternatives**: Empty array [] (not used in Action Groups)
 
-**Examples:**
-
-Example 1 - Iteration 1 (Finding Start Button):
-Goal: "Find and click the start/play button to begin the game"
+**Example Output Format:**
 {
   "groups": [
     {
-      "reasoning": "Click the start button to begin the game",
+      "reasoning": "Strategy description shared by all actions in this group",
       "confidence": 0.9,
       "actions": [
         {
           "action": "click",
-          "target": { "x": 320, "y": 240 },
-          "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
+          "target": { "x": <coordinate>, "y": <coordinate> },
+          "reasoning": "Clear explanation of why this action helps achieve the goal",
           "confidence": 0.95,
-          "alternatives": []
-        }
-      ]
-    },
-    {
-      "reasoning": "Press Enter key to start the game",
-      "confidence": 0.7,
-      "actions": [
-        {
-          "action": "keypress",
-          "target": "Enter",
-          "reasoning": "Enter key might start the game as an alternative to clicking",
-          "confidence": 0.7,
-          "alternatives": []
-        }
-      ]
-    }
-  ]
-}
-
-Example 2 - Iteration 2+ (Idle Game Progress):
-Goal: "Continue clicking the upgrade button multiple times to progress"
-Based on successful group: "Click the upgrade button" (clicked at 500, 400 successfully)
-{
-  "groups": [
-    {
-      "reasoning": "Continue clicking the upgrade button multiple times to progress",
-      "confidence": 0.85,
-      "actions": [
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "First upgrade click - building on successful pattern",
-          "confidence": 0.85,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Second upgrade click - continue the successful strategy",
-          "confidence": 0.85,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Third upgrade click - expand the successful pattern",
-          "confidence": 0.85,
-          "alternatives": []
-        }
-      ]
-    }
-  ]
-}
-
-Example 3 - Iteration 3+ (Expanded Strategy):
-Goal: "Expand the successful upgrade clicking strategy"
-Based on successful group: "Continue clicking the upgrade button" (5 clicks at 500, 400 successfully)
-{
-  "groups": [
-    {
-      "reasoning": "Expand the successful upgrade clicking strategy with more clicks",
-      "confidence": 0.9,
-      "actions": [
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 1 - continue successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 2 - continue successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 3 - continue successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 4 - continue successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 5 - continue successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 6 - expand successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 7 - expand successful pattern",
-          "confidence": 0.9,
-          "alternatives": []
-        },
-        {
-          "action": "click",
-          "target": { "x": 500, "y": 400 },
-          "reasoning": "Click 8 - expand successful pattern",
-          "confidence": 0.9,
           "alternatives": []
         }
       ]

@@ -396,6 +396,15 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
       prompt += `\n\n**🎮 Game Context (IMPORTANT - Follow these instructions carefully):**\n${state.metadata.testingStrategy.instructions}`;
     }
 
+    // PRIORITY 1.5: Explicitly tell LLM to use pixel coordinates for all games
+    prompt += `\n\n**🎯 COORDINATE SYSTEM (CRITICAL): Use ABSOLUTE PIXEL coordinates for ALL games:**`;
+    prompt += `\n- **x**: X coordinate in pixels (0-based, left edge of screenshot is 0)`;
+    prompt += `\n- **y**: Y coordinate in pixels (0-based, top edge of screenshot is 0)`;
+    prompt += `\n- **IMPORTANT**: Provide coordinates for the CENTER of the clickable element`;
+    prompt += `\n- **IMPORTANT**: Measure carefully from the top-left corner (0,0) of the screenshot`;
+    prompt += `\n- **IMPORTANT**: Use specific pixel values (e.g., 400, 300) not percentages`;
+    prompt += `\n- **Examples**: Center of 800x600 screenshot = { x: 400, y: 300 }`;
+
     // Add previous actions context with success/failure feedback
     if (state.previousActions.length > 0) {
       // Get last 20 actions for feedback (prioritize recent actions)
@@ -404,46 +413,6 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
       // Separate successful and failed actions
       const successfulActions = recentActions.filter(a => a.success && a.stateProgressed);
       const failedActions = recentActions.filter(a => !a.success || !a.stateProgressed);
-      
-      // Build patterns from successful actions
-      if (successfulActions.length > 0) {
-        prompt += `\n\n**✅ Successful Actions (Build on these patterns):**`;
-        
-        // Group successful actions by type and extract patterns
-        const clickActions = successfulActions.filter(a => a.action === 'click' && typeof a.target === 'object');
-        const keypressActions = successfulActions.filter(a => a.action === 'keypress');
-        
-        if (clickActions.length > 0) {
-          prompt += `\n\n**Successful Click Patterns:**`;
-          clickActions.slice(-10).forEach((action, index) => {
-            const target = action.target as { x: number; y: number };
-            prompt += `\n${index + 1}. Click at (${target.x}, ${target.y}) - ${action.reasoning}`;
-            prompt += `\n   ✅ This action successfully changed game state.`;
-          });
-          prompt += `\n\n**Strategy:** Generate multiple related click actions around these successful coordinates. For example, if clicking at (400, 500) was successful, try clicking at nearby coordinates like (400, 510), (410, 500), (390, 500), etc.`;
-        }
-        
-        if (keypressActions.length > 0) {
-          prompt += `\n\n**Successful Keypress Patterns:**`;
-          keypressActions.slice(-10).forEach((action, index) => {
-            prompt += `\n${index + 1}. Keypress "${action.target}" - ${action.reasoning}`;
-            prompt += `\n   ✅ This action successfully changed game state.`;
-          });
-          prompt += `\n\n**Strategy:** Continue using these successful keypress patterns.`;
-        }
-        
-        // Show other successful actions
-        const otherSuccessful = successfulActions.filter(a => 
-          !(a.action === 'click' && typeof a.target === 'object') && a.action !== 'keypress'
-        );
-        if (otherSuccessful.length > 0) {
-          prompt += `\n\n**Other Successful Actions:**`;
-          otherSuccessful.slice(-5).forEach((action, index) => {
-            prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
-            prompt += `\n   ✅ This action successfully changed game state.`;
-          });
-        }
-      }
       
       // Show failed actions to avoid repeating
       if (failedActions.length > 0) {
@@ -498,6 +467,7 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
 
     return prompt;
   }
+
 
   /**
    * Sanitize HTML content by removing scripts but preserving structure.

@@ -51,20 +51,28 @@ export class VisionStrategy extends BaseStartStrategy {
    *
    * @param page - The Stagehand page object
    * @param timeout - Timeout in milliseconds
+   * @param preStartScreenshotPath - Optional path to pre-start screenshot to reuse (avoids redundant screenshots)
    * @returns Promise that resolves to StartButtonResult
    */
-  async execute(page: AnyPage, timeout: number): Promise<StartButtonResult> {
+  async execute(page: AnyPage, timeout: number, preStartScreenshotPath?: string): Promise<StartButtonResult> {
     const startTime = Date.now();
 
-    this.logger.debug('Vision strategy starting', { timeout });
+    this.logger.debug('Vision strategy starting', { timeout, hasPreStartScreenshot: !!preStartScreenshotPath });
 
     try {
-      // Take screenshot for vision analysis (pre-start baseline)
-      const screenshot = await this.screenshotCapturer.capture(page, 'pre_start');
-      this.logger.trace('Screenshot captured for vision analysis', { path: screenshot.path });
+      // Reuse existing pre-start screenshot if provided, otherwise take a new one
+      let screenshotPath: string;
+      if (preStartScreenshotPath) {
+        screenshotPath = preStartScreenshotPath;
+        this.logger.trace('Reusing existing pre-start screenshot for vision analysis', { path: screenshotPath });
+      } else {
+        const screenshot = await this.screenshotCapturer.capture(page, 'pre_start');
+        screenshotPath = screenshot.path;
+        this.logger.trace('Screenshot captured for vision analysis', { path: screenshotPath });
+      }
 
       // Find clickable elements using vision
-      const elements = await this.visionAnalyzer.findClickableElements(screenshot.path);
+      const elements = await this.visionAnalyzer.findClickableElements(screenshotPath);
 
       if (elements.length === 0) {
         return {

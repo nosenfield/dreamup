@@ -167,8 +167,8 @@ export class AdaptiveQALoop {
 
       // Ask LLM: "What Action Groups should I try?"
       const goal = currentIteration === 1
-        ? 'Play the game'
-        : 'Continue playing and progress through the game';
+        ? 'Analyze the screenshot carefully in relation to the game metadata and play the game accordingly'
+        : 'Analyze the screenshot carefully in relation to the successful actions from previous iterations and continue playing to progress through the game';
 
       this.logger.info('Requesting Action Groups', {
         iteration: currentIteration,

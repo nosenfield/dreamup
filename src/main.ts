@@ -242,7 +242,7 @@ export async function runQA(
 
     // Try to find and click start button before interaction
     try {
-      const startButtonClicked = await gameInteractor.findAndClickStart(page);
+      const startButtonClicked = await gameInteractor.findAndClickStart(page, undefined, preStartScreenshot.path);
       if (startButtonClicked) {
         logger.info('Start button found and clicked', {});
       } else {
@@ -721,7 +721,7 @@ export async function runAdaptiveQA(
 
     // Try to find and click start button before interaction
     try {
-      const startButtonClicked = await gameInteractor.findAndClickStart(page);
+      const startButtonClicked = await gameInteractor.findAndClickStart(page, undefined, preStartScreenshot.path);
       if (startButtonClicked) {
         logger.info('Start button found and clicked', {});
       } else {

@@ -46,7 +46,7 @@ export class NaturalLanguageStrategy extends BaseStartStrategy {
    * @param timeout - Timeout in milliseconds
    * @returns Promise that resolves to StartButtonResult
    */
-  async execute(page: AnyPage, timeout: number): Promise<StartButtonResult> {
+  async execute(page: AnyPage, timeout: number, preStartScreenshotPath?: string): Promise<StartButtonResult> {
     const startTime = Date.now();
     const pageAny = page as any;
 

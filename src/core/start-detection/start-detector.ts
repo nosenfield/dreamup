@@ -111,9 +111,10 @@ export class StartDetector {
    * Logs phase banners and action details using the enhanced logger.
    *
    * @param page - The Stagehand page object
+   * @param preStartScreenshotPath - Optional path to pre-start screenshot to reuse (avoids redundant screenshots)
    * @returns Promise that resolves to StartButtonResult
    */
-  async findAndClickStart(page: AnyPage): Promise<StartButtonResult> {
+  async findAndClickStart(page: AnyPage, preStartScreenshotPath?: string): Promise<StartButtonResult> {
     this.logger.beginPhase(TestPhase.START_BUTTON_DETECTION, {
       strategiesAvailable: this.strategies.map(s => (s as any).name),
       timeout: this.timeout,
@@ -126,7 +127,7 @@ export class StartDetector {
       this.logger.info(`Trying strategy ${i + 1}/${this.strategies.length}: ${strategyName}`);
 
       try {
-        const result = await strategy.execute(page, this.timeout);
+        const result = await strategy.execute(page, this.timeout, preStartScreenshotPath);
 
         if (result.success) {
           this.logger.info(`Strategy succeeded: ${strategyName}`, {

@@ -231,118 +231,6 @@ export class GameInteractor {
     });
   }
 
-  /**
-   * Detect if this is a canvas-based game from metadata.
-   * Uses multi-signal approach for robustness.
-   *
-   * @param metadata - Optional game metadata
-   * @returns true if canvas-based game detected, false otherwise
-   */
-  private isCanvasGame(metadata?: GameMetadata): boolean {
-    if (!metadata) return false;
-
-    // Signal 1: Check instructions for canvas-based mention
-    const instructions = metadata.testingStrategy?.instructions || '';
-    const hasCanvasInstructions =
-      instructions.toLowerCase().includes('canvas-based') ||
-      instructions.toLowerCase().includes('html5 canvas') ||
-      instructions.toLowerCase().includes('rendered on canvas') ||
-      instructions.toLowerCase().includes('canvas game');
-
-    // Signal 2: Check if inputSchema content mentions canvas
-    const hasCanvasContent = 
-      metadata.inputSchema?.content?.toLowerCase().includes('canvas') ?? false;
-
-    // Signal 3: Check expectedControls for canvas mention
-    const hasCanvasControls =
-      metadata.expectedControls?.toLowerCase().includes('canvas') ?? false;
-
-    // Return true if ANY signal detected (OR logic)
-    return hasCanvasInstructions || hasCanvasContent || hasCanvasControls;
-  }
-
-  /**
-   * Find canvas element and get its bounding box.
-   * 
-   * @param page - The Stagehand page object
-   * @returns Promise that resolves to canvas bounding box or null if not found
-   */
-  private async findCanvasElement(page: AnyPage): Promise<{ x: number; y: number; width: number; height: number } | null> {
-    try {
-      const canvasInfo = await (page as any).evaluate(() => {
-        const canvas = document.querySelector('canvas');
-        if (!canvas) return null;
-        const rect = canvas.getBoundingClientRect();
-        return {
-          x: rect.x,
-          y: rect.y,
-          width: rect.width,
-          height: rect.height,
-        };
-      });
-
-      return canvasInfo;
-    } catch (error) {
-      this.logger.warn('Failed to find canvas element', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
-  }
-
-  /**
-   * Click at canvas-relative coordinates.
-   * Converts percentage coordinates (0.0-1.0) to absolute pixels.
-   *
-   * @param page - The Stagehand page object
-   * @param xPercent - X coordinate as percentage of canvas width (0.0-1.0)
-   * @param yPercent - Y coordinate as percentage of canvas height (0.0-1.0)
-   * @returns Promise that resolves to true if click succeeded, false otherwise
-   */
-  private async clickCanvasCoordinates(
-    page: AnyPage,
-    xPercent: number,
-    yPercent: number
-  ): Promise<boolean> {
-    try {
-      // Find canvas element
-      const canvasInfo = await this.findCanvasElement(page);
-
-      if (!canvasInfo) {
-        this.logger.warn('Canvas element not found for canvas-based game', {});
-        return false;
-      }
-
-      const box = canvasInfo;
-
-      // Convert percentage to absolute coordinates
-      const absoluteX = box.x + (box.width * xPercent);
-      const absoluteY = box.y + (box.height * yPercent);
-
-      // Round to integers
-      const roundedX = Math.round(absoluteX);
-      const roundedY = Math.round(absoluteY);
-
-      this.logger.info('Clicking canvas coordinates', {
-        canvasBox: { x: box.x, y: box.y, width: box.width, height: box.height },
-        percent: { x: xPercent, y: yPercent },
-        absolute: { x: roundedX, y: roundedY },
-      });
-
-      // Click at absolute coordinates using existing clickAtCoordinates method
-      await this.clickAtCoordinates(page, roundedX, roundedY);
-
-      // Wait for visual feedback (important for canvas games)
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      return true;
-    } catch (error) {
-      this.logger.warn('Failed to click canvas coordinates', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
 
   /**
    * Click at specific coordinates on the page.
@@ -434,7 +322,7 @@ export class GameInteractor {
    * }
    * ```
    */
-  async findAndClickStart(page: AnyPage, timeout?: number): Promise<boolean> {
+  async findAndClickStart(page: AnyPage, timeout?: number, preStartScreenshotPath?: string): Promise<boolean> {
     const detector = new StartDetector({
       logger: this.logger,
       timeout: timeout ?? this.interactionTimeout,
@@ -444,7 +332,7 @@ export class GameInteractor {
           metadata: this.metadata,
     });
 
-    const result = await detector.findAndClickStart(page);
+    const result = await detector.findAndClickStart(page, preStartScreenshotPath);
     return result.success;
   }
 
@@ -484,33 +372,17 @@ export class GameInteractor {
         if (typeof recommendation.target === 'object' && 'x' in recommendation.target && 'y' in recommendation.target) {
           const { x, y } = recommendation.target;
           
-          // Check if this is a canvas game and coordinates are percentages (0.0-1.0)
-          const isCanvas = this.isCanvasGame(this.metadata);
-          const isPercentage = (x >= 0 && x <= 1 && y >= 0 && y <= 1);
-          
-          if (isCanvas && isPercentage) {
-            // Canvas game with percentage coordinates - use canvas-aware clicking
-            this.logger.info('Executing canvas click recommendation', {
-              coordinates: { x, y },
-              reasoning: recommendation.reasoning,
-              confidence: recommendation.confidence,
-              coordinateType: 'percentage',
-            });
-            const success = await this.clickCanvasCoordinates(page, x, y);
-            return success;
-          } else {
-            // DOM game or absolute pixel coordinates - use regular clicking
-            const roundedX = Math.round(x);
-            const roundedY = Math.round(y);
-            this.logger.info('Executing click recommendation', {
-              coordinates: { x: roundedX, y: roundedY },
-              reasoning: recommendation.reasoning,
-              confidence: recommendation.confidence,
-              coordinateType: isCanvas ? 'pixel' : 'pixel',
-            });
-            await this.clickAtCoordinates(page, roundedX, roundedY);
-            return true;
-          }
+          // All games use absolute pixel coordinates
+          const roundedX = Math.round(x);
+          const roundedY = Math.round(y);
+          this.logger.info('Executing click recommendation', {
+            coordinates: { x: roundedX, y: roundedY },
+            reasoning: recommendation.reasoning,
+            confidence: recommendation.confidence,
+            coordinateType: 'pixel',
+          });
+          await this.clickAtCoordinates(page, roundedX, roundedY);
+          return true;
         } else {
           this.logger.warn('Invalid click recommendation target', {
             target: recommendation.target,

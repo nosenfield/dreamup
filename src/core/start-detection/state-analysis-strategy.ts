@@ -54,22 +54,33 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
    *
    * @param page - The Stagehand page object
    * @param timeout - Timeout in milliseconds
+   * @param preStartScreenshotPath - Optional path to pre-start screenshot to reuse (avoids redundant screenshots)
    * @returns Promise that resolves to StartButtonResult
    */
-  async execute(page: AnyPage, timeout: number): Promise<StartButtonResult> {
+  async execute(page: AnyPage, timeout: number, preStartScreenshotPath?: string): Promise<StartButtonResult> {
     const startTime = Date.now();
 
-    this.logger.debug('State analysis strategy starting', { timeout });
+    this.logger.debug('State analysis strategy starting', { timeout, hasPreStartScreenshot: !!preStartScreenshotPath });
 
     try {
-      // Capture HTML and screenshot for state analysis (pre-start baseline)
+      // Capture HTML for state analysis
       const pageAny = page as any;
       const html = await pageAny.evaluate(() => document.documentElement.outerHTML);
-      const screenshot = await this.screenshotCapturer.capture(page, 'pre_start');
+      
+      // Reuse existing pre-start screenshot if provided, otherwise take a new one
+      let screenshotPath: string;
+      if (preStartScreenshotPath) {
+        screenshotPath = preStartScreenshotPath;
+        this.logger.trace('Reusing existing pre-start screenshot for state analysis', { path: screenshotPath });
+      } else {
+        const screenshot = await this.screenshotCapturer.capture(page, 'pre_start');
+        screenshotPath = screenshot.path;
+        this.logger.trace('Screenshot captured for state analysis', { path: screenshotPath });
+      }
 
       this.logger.trace('State captured for LLM analysis', {
         htmlLength: html.length,
-        screenshotPath: screenshot.path,
+        screenshotPath,
       });
 
       // Get sanitized HTML
@@ -78,7 +89,7 @@ export class StateAnalysisStrategy extends BaseStartStrategy {
       // Ask LLM for recommendation
       const recommendation = await this.stateAnalyzer.analyzeAndRecommendAction({
         html: sanitizedHTML,
-        screenshot: screenshot.path,
+        screenshot: screenshotPath,
         previousActions: [],
         metadata: this.metadata,
         goal: 'Find and click the start/play button to begin the game',
