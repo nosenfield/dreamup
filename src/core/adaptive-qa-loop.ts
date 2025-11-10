@@ -5,7 +5,7 @@
  * loop of LLM-powered Action Group recommendations and game state analysis.
  * 
  * The loop uses an Action Group-based approach:
- * - Iteration 1: 1-3 Action Groups, each with 1-2 actions (different strategies)
+ * - Iteration 1: Exactly 3 Action Groups, each with exactly 3 actions (different strategies)
  * - Iteration 2+: 1 Action Group per successful group, each with 3-5 actions
  * - Iteration 3+: 1 Action Group per successful group, each with 6-10 actions
  * 

@@ -405,7 +405,7 @@ Analyze the current game state (HTML structure and screenshot) and recommend Act
 
 **Output Format (actionGroupsSchema - object with groups array):**
 Return an object with a "groups" property containing an array of Action Groups. Each group has:
-- **reasoning**: Strategy description shared by all actions in this group
+- **reasoning**: Strategy description shared by all actions in this group (keep concise but informative)
 - **confidence**: Your confidence in this strategy (0-1), used to order groups
 - **actions**: Array of actions in this group (1-10 depending on iteration)
   - Each action has:

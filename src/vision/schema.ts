@@ -299,7 +299,7 @@ export function validateActionRecommendations(
  */
 export const actionGroupSchema = z.object({
   /** Shared reasoning/strategy description for all actions in this group */
-  reasoning: z.string().min(10).max(500),
+  reasoning: z.string().min(10).max(1000),
   
   /** LLM confidence score (0-1) for this strategy */
   confidence: z.number().min(0).max(1),
@@ -372,7 +372,7 @@ export function validateActionGroup(
  * Validate an array of ActionGroup objects using the actionGroupsSchema.
  * 
  * Validates group count and action count based on iteration number:
- * - Iteration 1: 1-3 groups, 1-2 actions per group
+ * - Iteration 1: Exactly 3 groups, exactly 3 actions per group
  * - Iteration 2: Variable groups (1 per successful group), 3-5 actions per group
  * - Iteration 3+: Variable groups (1 per successful group), 6-10 actions per group
  * 
@@ -396,13 +396,13 @@ export function validateActionGroups(
   const groups = result.data.groups;
   
   // Validate group count based on iteration
-  if (iterationNumber === 1 && (groups.length < 1 || groups.length > 3)) {
+  if (iterationNumber === 1 && groups.length !== 3) {
     return {
       success: false,
       error: new z.ZodError([{
         code: 'custom',
         path: ['groups'],
-        message: `Iteration 1 must have 1-3 groups, got ${groups.length}`,
+        message: `Iteration 1 must have exactly 3 groups, got ${groups.length}`,
       }]),
     };
   }
@@ -412,13 +412,13 @@ export function validateActionGroups(
     const group = groups[i];
     const actionCount = group.actions.length;
     
-    if (iterationNumber === 1 && (actionCount < 1 || actionCount > 2)) {
+    if (iterationNumber === 1 && actionCount !== 3) {
       return {
         success: false,
         error: new z.ZodError([{
           code: 'custom',
           path: ['groups', i, 'actions'],
-          message: `Iteration 1 groups must have 1-2 actions, got ${actionCount}`,
+          message: `Iteration 1 groups must have exactly 3 actions, got ${actionCount}`,
         }]),
       };
     }

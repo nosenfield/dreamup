@@ -84,7 +84,7 @@ export class StateAnalyzer {
    * Uses GPT-4 Vision to analyze HTML structure and screenshot,
    * then recommends Action Groups (strategies with related actions) to try.
    * 
-   * - Iteration 1: Returns 1-3 Action Groups, each with 1-2 actions
+   * - Iteration 1: Returns exactly 3 Action Groups, each with exactly 3 actions
    * - Iteration 2+: Returns 1 Action Group per successful group, each with 3-5 actions
    * - Iteration 3+: Returns 1 Action Group per successful group, each with 6-10 actions
    * 
@@ -105,7 +105,7 @@ export class StateAnalyzer {
    *   1,
    *   undefined
    * );
-   * // Returns 1-3 groups, each with 1-2 actions
+   * // Returns exactly 3 groups, each with exactly 3 actions
    * 
    * // Iteration 2+
    * const groups = await analyzer.analyzeAndRecommendAction(
@@ -188,19 +188,36 @@ export class StateAnalyzer {
         const groups = result.object.groups || [];
         if (iterationNumber === 1 && groups.length > 3) {
           this.logger.warn('LLM returned more groups than allowed for Iteration 1', {
-            requested: '1-3 groups',
+            requested: 'exactly 3 groups',
             received: groups.length,
             action: 'Truncating to top 3 groups by confidence',
           });
           // Sort by confidence (descending) and take top 3
           const sortedGroups = [...groups].sort((a, b) => b.confidence - a.confidence);
           const truncatedGroups = sortedGroups.slice(0, 3);
-          // Re-validate the truncated groups
-          const truncatedValidation = validateActionGroups({ groups: truncatedGroups }, iterationNumber);
-          if (!truncatedValidation.success) {
-            throw new Error(`Invalid ActionGroups after truncation: ${truncatedValidation.error.message}`);
+          // Also ensure each group has exactly 3 actions
+          const fixedGroups = truncatedGroups.map(group => {
+            if (group.actions.length !== 3) {
+              this.logger.warn('Fixing action count in group', {
+                groupIndex: truncatedGroups.indexOf(group),
+                requested: 'exactly 3 actions',
+                received: group.actions.length,
+                action: group.actions.length > 3 ? 'Truncating to first 3 actions' : 'Cannot fix - validation will fail',
+              });
+              // If more than 3 actions, take first 3; if fewer, validation will fail
+              return {
+                ...group,
+                actions: group.actions.slice(0, 3),
+              };
+            }
+            return group;
+          });
+          // Re-validate the fixed groups
+          const fixedValidation = validateActionGroups({ groups: fixedGroups }, iterationNumber);
+          if (!fixedValidation.success) {
+            throw new Error(`Invalid ActionGroups after fixing: ${fixedValidation.error.message}`);
           }
-          return truncatedValidation.data;
+          return fixedValidation.data;
         }
         // For other validation errors, throw
         throw new Error(`Invalid ActionGroups: ${validation.error.message}`);
@@ -346,11 +363,11 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
     // Add iteration-specific instructions
     if (iterationNumber === 1) {
       prompt += `\n\n**ITERATION 1 INSTRUCTIONS (CRITICAL - MUST FOLLOW):**`;
-      prompt += `\n- **MUST return EXACTLY 1-3 Action Groups (no more, no less)**`;
-      prompt += `\n- Each group should have 1-2 actions`;
+      prompt += `\n- **MUST return EXACTLY 3 Action Groups (no more, no less)**`;
+      prompt += `\n- Each group must have exactly 3 actions`;
       prompt += `\n- Each group represents a different strategy to try`;
       prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
-      prompt += `\n- **IMPORTANT**: If you have more than 3 strategies, choose only the top 3 most confident ones`;
+      prompt += `\n- **IMPORTANT**: Choose the top 3 most confident strategies`;
     } else if (iterationNumber === 2) {
       prompt += `\n\n**ITERATION 2 INSTRUCTIONS:**`;
       prompt += `\n- For each successful Action Group provided, return 1 Action Group`;
