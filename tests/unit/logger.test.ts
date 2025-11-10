@@ -188,14 +188,18 @@ describe('Logger', () => {
     beforeEach(() => {
       // Reset environment before each test
       process.env = { ...originalEnv };
+      // Clear REFORMAT_LOGS to ensure JSON output
+      delete process.env.REFORMAT_LOGS;
     });
 
     it('should log when enableDetailedLogging is true', () => {
       const originalDebug = process.env.DEBUG;
       const originalLogLevel = process.env.LOG_LEVEL;
+      const originalReformatLogs = process.env.REFORMAT_LOGS;
       
-      // Clear LOG_LEVEL to ensure enableDetailedLogging flag is respected
+      // Clear LOG_LEVEL and REFORMAT_LOGS to ensure enableDetailedLogging flag is respected
       delete process.env.LOG_LEVEL;
+      delete process.env.REFORMAT_LOGS;
       process.env.DEBUG = 'true';
       const flags = getFeatureFlags();
       const logger = new Logger(undefined, flags);
@@ -217,6 +221,9 @@ describe('Logger', () => {
       }
       if (originalLogLevel !== undefined) {
         process.env.LOG_LEVEL = originalLogLevel;
+      }
+      if (originalReformatLogs !== undefined) {
+        process.env.REFORMAT_LOGS = originalReformatLogs;
       }
     });
 
@@ -271,9 +278,11 @@ describe('Logger', () => {
     it('should include optional data field when logging', () => {
       const originalDebug = process.env.DEBUG;
       const originalLogLevel = process.env.LOG_LEVEL;
+      const originalReformatLogs = process.env.REFORMAT_LOGS;
       
-      // Clear LOG_LEVEL to ensure enableDetailedLogging flag is respected
+      // Clear LOG_LEVEL and REFORMAT_LOGS to ensure enableDetailedLogging flag is respected
       delete process.env.LOG_LEVEL;
+      delete process.env.REFORMAT_LOGS;
       process.env.DEBUG = 'true';
       const flags = getFeatureFlags();
       const logger = new Logger(undefined, flags);
@@ -294,6 +303,9 @@ describe('Logger', () => {
       }
       if (originalLogLevel !== undefined) {
         process.env.LOG_LEVEL = originalLogLevel;
+      }
+      if (originalReformatLogs !== undefined) {
+        process.env.REFORMAT_LOGS = originalReformatLogs;
       }
     });
   });
@@ -646,10 +658,15 @@ describe('Logger', () => {
   describe('trace() method', () => {
     beforeEach(() => {
       process.env = { ...originalEnv };
+      // Clear REFORMAT_LOGS to ensure JSON output
+      delete process.env.REFORMAT_LOGS;
     });
 
     it('should log when LOG_LEVEL=trace', () => {
       const originalLogLevel = process.env.LOG_LEVEL;
+      const originalReformatLogs = process.env.REFORMAT_LOGS;
+      
+      delete process.env.REFORMAT_LOGS;
       process.env.LOG_LEVEL = 'trace';
       const logger = new Logger();
       
@@ -661,11 +678,14 @@ describe('Logger', () => {
       expect(logEntry.level).toBe('trace');
       expect(logEntry.msg).toBe('Trace message');
       
-      // Restore original value
+      // Restore original values
       if (originalLogLevel !== undefined) {
         process.env.LOG_LEVEL = originalLogLevel;
       } else {
         delete process.env.LOG_LEVEL;
+      }
+      if (originalReformatLogs !== undefined) {
+        process.env.REFORMAT_LOGS = originalReformatLogs;
       }
     });
 

@@ -117,9 +117,10 @@ export function distributeScreenshotsOverTime(
 export function mergeAdaptiveConfig(
   config?: Partial<AdaptiveTestConfig>
 ): AdaptiveTestConfig {
-  const defaults = {
+  const defaults: AdaptiveTestConfig = {
     maxBudget: 0.50,
     maxDuration: 240000,
+    maxActions: 20, // Kept for backward compatibility, not used in Action Group refactor
     screenshotStrategy: 'fixed' as const,
     llmCallStrategy: 'eager' as const,
   };

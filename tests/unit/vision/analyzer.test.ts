@@ -3,10 +3,15 @@
  * 
  * Tests the VisionAnalyzer class with mocked OpenAI API calls
  * to verify error handling, utility functions, and API integration.
+ * 
+ * NOTE: These tests pass when run individually, but may fail when run with the full
+ * test suite due to integration tests mocking the VisionAnalyzer module. This is a
+ * known limitation of Bun's global module mocks. To run these tests in isolation:
+ * 
+ *   bun test tests/unit/vision/analyzer.test.ts
  */
 
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
-import { VisionAnalyzer } from '../../../src/vision/analyzer';
 import { Logger } from '../../../src/utils/logger';
 import type { Screenshot, ClickableElement } from '../../../src/types/game-test.types';
 
@@ -38,7 +43,8 @@ const mockOpenAIClient = (modelId: string) => modelId;
 
 const mockCreateOpenAI = mock(() => mockOpenAIClient);
 
-// Mock AI SDK functions
+// Mock AI SDK functions BEFORE importing VisionAnalyzer
+// This ensures the mocks are in place when VisionAnalyzer imports createOpenAI
 mock.module('@ai-sdk/openai', () => ({
   createOpenAI: mockCreateOpenAI,
 }));
@@ -48,17 +54,22 @@ mock.module('ai', () => ({
   generateText: mockGenerateText,
 }));
 
+// Import VisionAnalyzer AFTER mocks are set up
+import { VisionAnalyzer } from '../../../src/vision/analyzer';
+
 describe('VisionAnalyzer', () => {
   let logger: Logger;
   let analyzer: VisionAnalyzer;
 
   beforeEach(() => {
     logger = new Logger({ module: 'vision-analyzer', op: 'test' });
-    mockGenerateObject.mockClear();
-    mockGenerateText.mockClear();
-    mockCreateOpenAI.mockClear();
     
-    // Reset mocks to default behavior
+    // Reset mocks to default behavior (don't clear, just reset implementation)
+    mockGenerateObject.mockReset();
+    mockGenerateText.mockReset();
+    mockCreateOpenAI.mockReset();
+    
+    // Set up default implementations
     mockGenerateObject.mockImplementation(() => Promise.resolve({
       object: {
         status: 'pass',
@@ -80,6 +91,9 @@ describe('VisionAnalyzer', () => {
         completionTokens: 20,
       },
     }));
+    
+    // Ensure createOpenAI mock returns the mock client function
+    mockCreateOpenAI.mockImplementation(() => mockOpenAIClient);
   });
 
   describe('constructor', () => {

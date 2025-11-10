@@ -191,6 +191,12 @@ describe('Feature Flags', () => {
       const originalDebug = process.env.DEBUG;
       const originalCaching = process.env.ENABLE_CACHING;
       const originalProgress = process.env.ENABLE_PROGRESS_UPDATES;
+      const originalErrorRecovery = process.env.ENABLE_ERROR_RECOVERY;
+      const originalScreenshotCleanup = process.env.ENABLE_SCREENSHOT_CLEANUP;
+      
+      // Clear all flags first to ensure clean state
+      delete process.env.ENABLE_ERROR_RECOVERY;
+      delete process.env.ENABLE_SCREENSHOT_CLEANUP;
       
       process.env.DEBUG = 'true';
       process.env.ENABLE_CACHING = 'true';
@@ -218,6 +224,12 @@ describe('Feature Flags', () => {
         process.env.ENABLE_PROGRESS_UPDATES = originalProgress;
       } else {
         delete process.env.ENABLE_PROGRESS_UPDATES;
+      }
+      if (originalErrorRecovery !== undefined) {
+        process.env.ENABLE_ERROR_RECOVERY = originalErrorRecovery;
+      }
+      if (originalScreenshotCleanup !== undefined) {
+        process.env.ENABLE_SCREENSHOT_CLEANUP = originalScreenshotCleanup;
       }
     });
   });
