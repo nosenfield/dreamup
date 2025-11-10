@@ -8,10 +8,10 @@
  * @module utils.file-manager
  */
 
-import { mkdir, writeFile, rm } from 'fs/promises';
-import { join } from 'path';
+import { mkdir, writeFile, rm, copyFile } from 'fs/promises';
+import { join, basename } from 'path';
 import { PATHS } from '../config/constants';
-import type { Screenshot, GameTestResult } from '../types/game-test.types';
+import type { Screenshot, GameTestResult, GameMetadata } from '../types/game-test.types';
 
 /**
  * File manager for handling screenshot and report file operations.
@@ -218,6 +218,75 @@ export class FileManager {
   getReportPath(): string {
     const filename = 'report.json';
     return join(PATHS.OUTPUT_DIR, PATHS.REPORTS_SUBDIR, this.sessionId, filename);
+  }
+
+  /**
+   * Copy a metadata file to the log directory.
+   * 
+   * Copies the metadata file from the source path to the log directory,
+   * preserving the original filename.
+   * 
+   * @param sourcePath - Path to the source metadata file
+   * @returns Promise that resolves to the destination file path
+   * @throws {Error} If file copy fails
+   * 
+   * @example
+   * ```typescript
+   * const destPath = await fileManager.copyMetadataFile('./_game-examples/pong/metadata.json');
+   * // Returns: './logs/{timestamp}/metadata.json'
+   * ```
+   */
+  async copyMetadataFile(sourcePath: string): Promise<string> {
+    if (!this.localLogDir) {
+      throw new Error('Local log directory not set - cannot copy metadata file');
+    }
+
+    try {
+      // Get the filename from the source path
+      const filename = basename(sourcePath);
+      const destPath = join(this.localLogDir, filename);
+
+      // Copy the file
+      await copyFile(sourcePath, destPath);
+
+      return destPath;
+    } catch (error) {
+      throw new Error(`Failed to copy metadata file: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Save metadata JSON to the log directory.
+   * 
+   * Saves the metadata object as a JSON file in the log directory.
+   * 
+   * @param metadata - GameMetadata object to save
+   * @param filename - Optional filename (defaults to 'metadata.json')
+   * @returns Promise that resolves to the destination file path
+   * @throws {Error} If file write fails
+   * 
+   * @example
+   * ```typescript
+   * const destPath = await fileManager.saveMetadataJson(metadata);
+   * // Returns: './logs/{timestamp}/metadata.json'
+   * ```
+   */
+  async saveMetadataJson(metadata: GameMetadata, filename: string = 'metadata.json'): Promise<string> {
+    if (!this.localLogDir) {
+      throw new Error('Local log directory not set - cannot save metadata');
+    }
+
+    try {
+      const destPath = join(this.localLogDir, filename);
+      const jsonContent = JSON.stringify(metadata, null, 2);
+
+      // Write file
+      await writeFile(destPath, jsonContent, 'utf-8');
+
+      return destPath;
+    } catch (error) {
+      throw new Error(`Failed to save metadata JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**

@@ -32,6 +32,7 @@ import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema,
  * 
  * @param gameUrl - The URL of the game to test
  * @param request - Optional GameTestRequest containing metadata or inputSchema (for backwards compat)
+ * @param metadataFilePath - Optional path to the metadata file (will be copied to log directory)
  * @returns Promise that resolves to GameTestResult
  * 
  * @example
@@ -41,7 +42,11 @@ import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema,
  * console.log(`Screenshots: ${result.screenshots.length}`);
  * ```
  */
-export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>): Promise<GameTestResult> {
+export async function runQA(
+  gameUrl: string,
+  request?: Partial<GameTestRequest>,
+  metadataFilePath?: string
+): Promise<GameTestResult> {
   const startTime = Date.now();
   const sessionId = nanoid();
   
@@ -186,6 +191,27 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         metadata = {
           inputSchema: request.inputSchema,
         };
+      }
+    }
+    
+    // Copy metadata file to log directory if provided, or save metadata as JSON if available
+    if (metadataFilePath) {
+      try {
+        await fileManager.copyMetadataFile(metadataFilePath);
+        logger.info('Metadata file copied to log directory', { sourcePath: metadataFilePath });
+      } catch (error) {
+        logger.warn('Failed to copy metadata file to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else if (metadata) {
+      try {
+        await fileManager.saveMetadataJson(metadata);
+        logger.info('Metadata saved to log directory', {});
+      } catch (error) {
+        logger.warn('Failed to save metadata to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
     
@@ -517,6 +543,7 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
  * 
  * @param gameUrl - The URL of the game to test
  * @param request - Optional GameTestRequest containing metadata and adaptiveConfig
+ * @param metadataFilePath - Optional path to the metadata file (will be copied to log directory)
  * @returns Promise that resolves to GameTestResult
  * 
  * @example
@@ -529,7 +556,8 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
  */
 export async function runAdaptiveQA(
   gameUrl: string,
-  request?: Partial<GameTestRequest>
+  request?: Partial<GameTestRequest>,
+  metadataFilePath?: string
 ): Promise<GameTestResult> {
   const startTime = Date.now();
   const sessionId = nanoid();
@@ -642,6 +670,27 @@ export async function runAdaptiveQA(
     if (request) {
       if (request.metadata) {
         metadata = request.metadata;
+      }
+    }
+
+    // Copy metadata file to log directory if provided, or save metadata as JSON if available
+    if (metadataFilePath) {
+      try {
+        await fileManager.copyMetadataFile(metadataFilePath);
+        logger.info('Metadata file copied to log directory', { sourcePath: metadataFilePath });
+      } catch (error) {
+        logger.warn('Failed to copy metadata file to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else if (metadata) {
+      try {
+        await fileManager.saveMetadataJson(metadata);
+        logger.info('Metadata saved to log directory', {});
+      } catch (error) {
+        logger.warn('Failed to save metadata to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -1164,6 +1213,7 @@ if (import.meta.main) {
 
   // Load metadata if provided
   let request: Partial<GameTestRequest> | undefined;
+  let metadataFilePath: string | undefined;
   if (metadataPath) {
     const metadataResult = await loadMetadataFromFile(metadataPath);
     if (!metadataResult.success) {
@@ -1173,6 +1223,8 @@ if (import.meta.main) {
     request = {
       metadata: metadataResult.data,
     };
+    // Resolve the absolute path for copying
+    metadataFilePath = resolve(process.cwd(), metadataPath);
   }
 
   // Check feature flag for adaptive mode
@@ -1186,7 +1238,7 @@ if (import.meta.main) {
   // Run QA test (adaptive or standard based on feature flag)
   const qaFunction = useAdaptiveMode ? runAdaptiveQA : runQA;
   
-  qaFunction(gameUrl, request)
+  qaFunction(gameUrl, request, metadataFilePath)
     .then((result) => {
       // Print result as formatted JSON
       console.log('\n📊 QA Test Result:');
