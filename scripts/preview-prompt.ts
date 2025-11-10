@@ -8,11 +8,16 @@
  * what metadata fields are being used.
  *
  * Usage:
- *   bun scripts/preview-prompt.ts [path-to-metadata.json] [iteration-number]
+ *   bun scripts/preview-prompt.ts <metadata-file> [iteration-number]
+ *
+ * Arguments:
+ *   metadata-file      (required) Path to metadata JSON file
+ *   iteration-number  (optional) Iteration number (default: 1)
  *
  * Examples:
- *   bun scripts/preview-prompt.ts _game-examples/brick-breaker-idle/metadata-cursor.json 1
- *   bun scripts/preview-prompt.ts _game-examples/pong/metadata.json 2
+ *   bun scripts/preview-prompt.ts _game-examples/brick-breaker-idle/metadata-cursor.json
+ *   bun scripts/preview-prompt.ts _game-examples/brick-breaker-idle/metadata-cursor.json 2
+ *   bun scripts/preview-prompt.ts _game-examples/pong/metadata.json 1
  */
 
 import { STATE_ANALYSIS_PROMPT } from '../src/vision/prompts';
@@ -139,7 +144,16 @@ function buildSamplePrompt(
 // Main function
 async function main() {
   const args = process.argv.slice(2);
-  const metadataPath = args[0] || '_game-examples/brick-breaker-idle/metadata-cursor.json';
+  
+  if (args.length === 0) {
+    console.error('❌ Error: Please provide a metadata file path');
+    console.error('Usage: bun scripts/preview-prompt.ts <metadata-file> [iteration-number]');
+    console.error('\nExample:');
+    console.error('  bun scripts/preview-prompt.ts _game-examples/brick-breaker-idle/metadata-cursor.json 1');
+    process.exit(1);
+  }
+  
+  const metadataPath = args[0];
   const iterationNumber = parseInt(args[1] || '1', 10);
 
   console.log('📋 Prompt Preview Script for Adaptive Agent\n');

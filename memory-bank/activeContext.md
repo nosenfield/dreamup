@@ -1,26 +1,23 @@
 # Active Context: DreamUp
 
 **Last Updated**: November 9, 2025
-**Session**: T2 Complete - Enhanced StateAnalyzer Prompts
+**Session**: T5 Complete - Update Example Metadata Files
 
 ---
 
 ## Current Focus
 
-### ✨ TASK: Fix Remaining Tests
+### ✨ TASK: T5 - Update Example Metadata Files
 
-**Goal**: Fix remaining failing tests after Action Group refactor.
+**Goal**: Update Pong and Snake metadata to follow the simplified metadata pattern with comprehensive `testingStrategy.instructions`.
 
 **Status**: ✅ COMPLETE (Nov 9, 2025)
-- Fixed 80 failing tests (from 92 to 12)
-- All AdaptiveQALoop tests passing (18/18)
-- All config tests passing (15/15)
-- All logger tests passing (41/41)
-- All adaptive-qa helper tests passing (16/16)
-- VisionAnalyzer tests: 17/17 passing when run individually, 12/17 failing in full suite
-  - Known limitation: Integration test mocks VisionAnalyzer module, which interferes with unit tests
-  - This is a Bun module mock limitation (global mocks persist across test files)
-  - Solution: Run VisionAnalyzer tests individually: `bun test tests/unit/vision/analyzer.test.ts`
+- Verified both `pong/metadata.json` and `snake/metadata.json` already have comprehensive `testingStrategy.instructions`
+- Both files validated successfully against the schema
+- Created `scripts/validate-metadata.ts` script for validating metadata files
+- Tested both files with preview script - instructions are being used correctly
+- Pong: 749 chars of instructions
+- Snake: 863 chars of instructions
 
 ---
 
@@ -69,6 +66,23 @@
 - Error handling pattern used throughout codebase (main.ts, start detection strategies)
 - All core error handling uses structured errors
 - Unit tests exist for error handling
+
+### ✅ T3: Canvas-Aware Clicking - COMPLETE (Nov 9, 2025)
+- Added canvas detection using multi-signal approach (instructions, inputSchema content, expectedControls)
+- Implemented canvas element finding and coordinate conversion (percentage → absolute pixels)
+- Updated `executeRecommendation()` to automatically route canvas clicks
+- Added comprehensive unit tests (6 tests covering all scenarios)
+- All 44 GameInteractor tests passing
+- ✅ T4: Prompt Preview Script - COMPLETE (Nov 9, 2025)
+- Created `scripts/preview-prompt.ts` script for debugging prompts
+- Script displays metadata summary, full prompt, token estimation, and metadata fields used
+- Shows prompt structure and cost estimation
+- Tested with brick-breaker-idle metadata (iterations 1 and 2)
+- ✅ T5: Update Example Metadata Files - COMPLETE (Nov 9, 2025)
+- Verified both `pong/metadata.json` and `snake/metadata.json` already have comprehensive `testingStrategy.instructions`
+- Both files validated successfully against the schema
+- Created `scripts/validate-metadata.ts` script for validating metadata files
+- Tested both files with preview script - instructions are being used correctly
 
 ---
 

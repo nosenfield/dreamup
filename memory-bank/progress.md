@@ -59,9 +59,9 @@
 
 - [x] **T1: Simplify Metadata Structure** (1 hour) - ✅ COMPLETE (Nov 7, 2025)
 - [x] **T2: Enhance StateAnalyzer Prompts** (2 hours) - ✅ COMPLETE (Nov 9, 2025)
-- [ ] **T3: Add Canvas-Aware Clicking** (1.5 hours) - PENDING
-- [ ] **T4: Create Prompt Preview Script** (0.5 hours) - PENDING
-- [ ] **T5: Update Example Metadata Files** (0.5 hours) - PENDING
+- [x] **T3: Add Canvas-Aware Clicking** (1.5 hours) - ✅ COMPLETE (Nov 9, 2025)
+- [x] **T4: Create Prompt Preview Script** (0.5 hours) - ✅ COMPLETE (Nov 9, 2025)
+- [x] **T5: Update Example Metadata Files** (0.5 hours) - ✅ COMPLETE (Nov 9, 2025)
 
 ---
 
