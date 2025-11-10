@@ -92,7 +92,7 @@ export class VisionAnalyzer {
    * @example
    * ```typescript
    * const result = await analyzer.analyzeScreenshots([
-   *   { id: '1', path: '/tmp/screenshot1.png', timestamp: Date.now(), stage: 'initial_load' },
+   *   { id: '1', path: '/tmp/screenshot1.png', timestamp: Date.now(), stage: 'pre_start' },
    *   { id: '2', path: '/tmp/screenshot2.png', timestamp: Date.now(), stage: 'after_interaction' },
    *   { id: '3', path: '/tmp/screenshot3.png', timestamp: Date.now(), stage: 'final_state' },
    * ], metadata);

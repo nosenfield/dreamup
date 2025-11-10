@@ -734,19 +734,40 @@ export async function runAdaptiveQA(
     let visionIssues: Issue[] = [];
     let visionAnalysisTokens: number | undefined;
 
-    if (visionAnalyzer && screenshots.length > 0) {
+    // Combine pre-start, post-start, and loop screenshots for vision analysis
+    const allScreenshots = [
+      preStartScreenshot.path,
+      postStartScreenshot.path,
+      ...screenshots,
+    ];
+
+    if (visionAnalyzer && allScreenshots.length > 0) {
       try {
         logger.info('Starting final vision analysis', {
-          screenshotCount: screenshots.length,
+          screenshotCount: allScreenshots.length,
         });
 
         // Convert screenshot paths to Screenshot objects for vision analyzer
-        const screenshotObjects = screenshots.map((path, index): Screenshot => ({
-          id: `screenshot-${index}`,
-          path,
-          timestamp: Date.now(),
-          stage: (index === 0 ? 'pre_start' : index === screenshots.length - 1 ? 'final_state' : 'after_interaction') as 'pre_start' | 'post_start' | 'after_interaction' | 'final_state',
-        }));
+        // Map stages: pre_start (0), post_start (1), after_interaction (middle), final_state (last)
+        const screenshotObjects = allScreenshots.map((path, index): Screenshot => {
+          let stage: 'pre_start' | 'post_start' | 'after_interaction' | 'final_state';
+          if (index === 0) {
+            stage = 'pre_start';
+          } else if (index === 1) {
+            stage = 'post_start';
+          } else if (index === allScreenshots.length - 1) {
+            stage = 'final_state';
+          } else {
+            stage = 'after_interaction';
+          }
+
+          return {
+            id: `screenshot-${index}`,
+            path,
+            timestamp: Date.now(),
+            stage,
+          };
+        });
 
         const visionResult = await visionAnalyzer.analyzeScreenshots(
           screenshotObjects,

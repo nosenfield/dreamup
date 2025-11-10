@@ -28,7 +28,7 @@ import type { Screenshot, GameTestResult } from '../types/game-test.types';
  * await fileManager.ensureOutputDirectory();
  * 
  * // Save screenshot
- * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'initial_load');
+ * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'pre_start');
  * 
  * // Save report
  * const reportPath = await fileManager.saveReport(gameTestResult);
@@ -97,7 +97,7 @@ export class FileManager {
    * 
    * @example
    * ```typescript
-   * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'initial_load');
+   * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'pre_start');
    * // Returns: { id: 'abc123', path: '/tmp/game-qa-output/screenshots/session-123/abc123.png', ... }
    * ```
    */

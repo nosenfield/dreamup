@@ -54,8 +54,8 @@ export interface CaptureOptions {
  * const fileManager = new FileManager(sessionId);
  * const capturer = new ScreenshotCapturer({ logger, fileManager });
  * 
- * const screenshot = await capturer.capture(page, 'initial_load');
- * // Returns: { id: 'abc123', path: '/tmp/.../abc123.png', timestamp: 1234567890, stage: 'initial_load' }
+ * const screenshot = await capturer.capture(page, 'pre_start');
+ * // Returns: { id: 'abc123', path: '/tmp/.../abc123.png', timestamp: 1234567890, stage: 'pre_start' }
  * ```
  */
 export class ScreenshotCapturer {
@@ -92,9 +92,9 @@ export class ScreenshotCapturer {
    * 
    * @example
    * ```typescript
-   * const screenshot = await capturer.capture(page, 'initial_load');
+   * const screenshot = await capturer.capture(page, 'pre_start');
    * // Or with options:
-   * const screenshot = await capturer.capture(page, 'initial_load', { gameType: GameType.CANVAS });
+   * const screenshot = await capturer.capture(page, 'pre_start', { gameType: GameType.CANVAS });
    * ```
    */
   async capture(
@@ -202,8 +202,8 @@ export class ScreenshotCapturer {
    * 
    * @example
    * ```typescript
-   * const screenshots = await capturer.captureAll(page, ['initial_load', 'after_interaction', 'final_state']);
-   * // Returns: [{ id: '...', stage: 'initial_load', ... }, ...]
+   * const screenshots = await capturer.captureAll(page, ['pre_start', 'post_start', 'after_interaction', 'final_state']);
+   * // Returns: [{ id: '...', stage: 'pre_start', ... }, ...]
    * ```
    */
   async captureAll(page: AnyPage, stages: Screenshot['stage'][]): Promise<Screenshot[]> {
@@ -237,7 +237,7 @@ export class ScreenshotCapturer {
   /**
    * Capture a screenshot at optimal time based on metadata indicators.
    * 
-   * For initial_load stage: Waits for loading indicators before capturing.
+   * For pre_start or post_start stage: Waits for loading indicators before capturing.
    * For after_interaction stage: Waits for success indicators after interaction.
    * Falls back to immediate capture if no metadata provided or indicators timeout.
    * 
@@ -253,7 +253,7 @@ export class ScreenshotCapturer {
    *   inputSchema: {...},
    *   loadingIndicators: [{ type: 'element', pattern: '#start-btn', ... }],
    * };
-   * const screenshot = await capturer.captureAtOptimalTime(page, 'initial_load', metadata);
+   * const screenshot = await capturer.captureAtOptimalTime(page, 'pre_start', metadata);
    * ```
    */
   async captureAtOptimalTime(
