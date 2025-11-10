@@ -52,6 +52,6 @@
     "waitBeforeInteraction": 2000,
     "interactionDuration": 30000,
     "criticalAxes": ["Move"],
-    "instructions": "Click start button, test directional movement with arrow keys and WASD, verify snake moves in response to input, verify score increases when food is collected, ensure game doesn't crash on wall collision"
+    "instructions": "This is a DOM-based Snake game. The game uses standard HTML elements or canvas for rendering. After loading, look for a Start button and click it to begin. Once started, use Arrow keys (ArrowUp, ArrowDown, ArrowLeft, ArrowRight) or WASD keys to change the snake's direction. The snake should move continuously in the current direction and turn when you press a directional key. Try all four directions to verify responsive controls. Look for food items on the screen - when the snake eats food, it should grow longer and the score should increase. Play for about 30 seconds, testing all four directions and trying to eat at least one food item. Success indicators: snake moves continuously, direction changes work, snake grows when eating food, score increments, no console errors. Avoid running into walls or the snake's own body as this typically ends the game."
   }
 }

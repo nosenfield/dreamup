@@ -11,14 +11,17 @@
 
 import { nanoid } from 'nanoid';
 import { resolve } from 'path';
-import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType, StateAnalyzer } from './core';
+import { BrowserManager, GameInteractor, ScreenshotCapturer, GameDetector, ErrorMonitor, GameType, StateAnalyzer, AdaptiveQALoop } from './core';
 import { VisionAnalyzer } from './vision';
 import { FileManager } from './utils/file-manager';
-import { Logger } from './utils/logger';
+import { Logger, TestPhase } from './utils/logger';
+import { LogFileWriter } from './utils/log-file-writer';
+import { categorizeError, QAError, ErrorCategory } from './utils/errors';
 import { TIMEOUTS } from './config/constants';
 import { getFeatureFlags } from './config/feature-flags';
 import { validateGameMetadata } from './schemas/metadata.schema';
-import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig } from './types/game-test.types';
+import { mergeAdaptiveConfig } from './utils/adaptive-qa';
+import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema, TestConfig, Action, Screenshot } from './types/game-test.types';
 
 /**
  * Run QA test on a game URL.
@@ -29,6 +32,7 @@ import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema,
  * 
  * @param gameUrl - The URL of the game to test
  * @param request - Optional GameTestRequest containing metadata or inputSchema (for backwards compat)
+ * @param metadataFilePath - Optional path to the metadata file (will be copied to log directory)
  * @returns Promise that resolves to GameTestResult
  * 
  * @example
@@ -38,18 +42,28 @@ import type { GameTestResult, Issue, GameTestRequest, GameMetadata, InputSchema,
  * console.log(`Screenshots: ${result.screenshots.length}`);
  * ```
  */
-export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>): Promise<GameTestResult> {
+export async function runQA(
+  gameUrl: string,
+  request?: Partial<GameTestRequest>,
+  metadataFilePath?: string
+): Promise<GameTestResult> {
   const startTime = Date.now();
   const sessionId = nanoid();
+  
+  // Initialize log file writer for local log saving
+  const logFileWriter = new LogFileWriter(startTime);
+  await logFileWriter.initialize();
+  const localLogDir = logFileWriter.getLogDir();
+  
   const logger = new Logger({
     module: 'qa-agent',
     op: 'runQA',
     correlationId: sessionId,
-  });
+  }, undefined, logFileWriter);
 
   logger.info('Starting QA test', { gameUrl, sessionId });
 
-  const fileManager = new FileManager(sessionId);
+  const fileManager = new FileManager(sessionId, localLogDir);
   let browserManager: BrowserManager | null = null;
   let errorMonitor: ErrorMonitor | null = null;
   let gameType: GameType = GameType.UNKNOWN;
@@ -58,6 +72,7 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
 
   try {
     // Validate environment variables
+    logger.beginPhase(TestPhase.INITIALIZATION, { gameUrl, sessionId });
     const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
     const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
 
@@ -77,11 +92,14 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     logger.info('Browser initialized successfully', {});
 
     // Navigate to game URL
+    logger.beginPhase(TestPhase.NAVIGATION, { gameUrl });
     logger.info('Navigating to game URL', { gameUrl });
     await browserManager.navigate(gameUrl);
     logger.info('Navigation completed', {});
+    logger.endPhase(TestPhase.NAVIGATION, {});
 
     // Initialize game detector and error monitor
+    logger.beginPhase(TestPhase.GAME_DETECTION, {});
     const gameDetector = new GameDetector({ logger });
     errorMonitor = new ErrorMonitor({ logger });
 
@@ -90,8 +108,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await errorMonitor.startMonitoring(page);
       logger.info('Error monitoring started', {});
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.INITIALIZATION);
       logger.warn('Failed to start error monitoring', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
     }
 
@@ -100,8 +122,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       gameType = await gameDetector.detectType(page);
       logger.info('Game type detected', { gameType });
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.GAME_DETECTION);
       logger.warn('Failed to detect game type', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       gameType = GameType.UNKNOWN;
     }
@@ -111,11 +137,16 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await gameDetector.waitForGameReady(page, TIMEOUTS.GAME_LOAD_TIMEOUT);
       logger.info('Game ready state confirmed', {});
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.GAME_DETECTION);
       logger.warn('Failed to confirm game ready state', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       // Continue anyway - game may still be functional
     }
+    logger.endPhase(TestPhase.GAME_DETECTION, { gameType });
 
     // Initialize vision analyzer (optional - requires OPENAI_API_KEY)
     try {
@@ -131,12 +162,21 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         logger.warn('OPENAI_API_KEY not found - vision and state analysis will be skipped', {});
       }
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.INITIALIZATION);
       logger.warn('Failed to initialize vision/state analyzers', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       visionAnalyzer = null;
       stateAnalyzer = null;
     }
+    logger.endPhase(TestPhase.INITIALIZATION, {
+      gameType,
+      hasVisionAnalyzer: !!visionAnalyzer,
+      hasStateAnalyzer: !!stateAnalyzer,
+    });
 
     // Initialize screenshot capturer and game interactor
     const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
@@ -151,6 +191,27 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         metadata = {
           inputSchema: request.inputSchema,
         };
+      }
+    }
+    
+    // Copy metadata file to log directory if provided, or save metadata as JSON if available
+    if (metadataFilePath) {
+      try {
+        await fileManager.copyMetadataFile(metadataFilePath);
+        logger.info('Metadata file copied to log directory', { sourcePath: metadataFilePath });
+      } catch (error) {
+        logger.warn('Failed to copy metadata file to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else if (metadata) {
+      try {
+        await fileManager.saveMetadataJson(metadata);
+        logger.info('Metadata saved to log directory', {});
+      } catch (error) {
+        logger.warn('Failed to save metadata to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
     
@@ -169,36 +230,60 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
     }
 
+    // Capture pre-start screenshot (TRUE baseline before any interaction)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'pre_start' });
+    const preStartScreenshot = await screenshotCapturer.capture(page, 'pre_start');
+    logger.action('screenshot', {
+      stage: 'pre_start',
+      path: preStartScreenshot.path,
+      timing: 'before_start_button',
+    });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: preStartScreenshot.id });
+
     // Try to find and click start button before interaction
     try {
-      const startButtonClicked = await gameInteractor.findAndClickStart(page);
+      const startButtonClicked = await gameInteractor.findAndClickStart(page, undefined, preStartScreenshot.path);
       if (startButtonClicked) {
         logger.info('Start button found and clicked', {});
       } else {
         logger.warn('Start button not found - continuing with test anyway', {});
       }
     } catch (error) {
+      const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
       logger.warn('Failed to find and click start button', {
-        error: error instanceof Error ? error.message : String(error),
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
       });
       // Continue anyway - start button may not be required
     }
 
-    // Capture initial screenshot (using metadata-based timing if available)
-    logger.info('Capturing initial screenshot', { hasMetadata: !!metadata });
-    const initialScreenshot = metadata
-      ? await screenshotCapturer.captureAtOptimalTime(page, 'initial_load', metadata)
-      : await screenshotCapturer.capture(page, 'initial_load');
-    logger.info('Initial screenshot captured', {
-      screenshotId: initialScreenshot.id,
-      screenshotPath: initialScreenshot.path,
+    // Capture post-start screenshot (after start button clicked)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'post_start' });
+    const postStartScreenshot = metadata
+      ? await screenshotCapturer.captureAtOptimalTime(page, 'post_start', metadata)
+      : await screenshotCapturer.capture(page, 'post_start');
+    logger.action('screenshot', {
+      stage: 'post_start',
+      path: postStartScreenshot.path,
+      timing: 'after_start_button',
     });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: postStartScreenshot.id });
 
     // Simulate gameplay inputs (use metadata if available, otherwise generic inputs)
     const interactionDuration = metadata?.testingStrategy?.interactionDuration ?? 30000;
+    const gameplayStartTime = Date.now();
+    logger.beginPhase(TestPhase.GAMEPLAY_SIMULATION, {
+      duration: interactionDuration,
+      hasMetadata: !!metadata,
+      gameType,
+    });
+    
     logger.info('Starting gameplay simulation', { 
       duration: interactionDuration,
       hasMetadata: !!metadata,
+      gameType,
     });
     
     if (metadata) {
@@ -207,25 +292,39 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       await gameInteractor.simulateKeyboardInput(page, interactionDuration);
     }
     
-    logger.info('Gameplay simulation completed', {});
+    const gameplayActualDuration = Date.now() - gameplayStartTime;
+    logger.info('Gameplay simulation completed', {
+      expectedDuration: interactionDuration,
+      actualDuration: gameplayActualDuration,
+    });
+    logger.endPhase(TestPhase.GAMEPLAY_SIMULATION, {
+      expectedDuration: interactionDuration,
+      actualDuration: gameplayActualDuration,
+    });
 
     // Capture screenshot after interaction (using metadata-based timing if available)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'after_interaction' });
     logger.info('Capturing screenshot after interaction', { hasMetadata: !!metadata });
     const afterInteractionScreenshot = metadata
       ? await screenshotCapturer.captureAtOptimalTime(page, 'after_interaction', metadata)
       : await screenshotCapturer.capture(page, 'after_interaction');
-    logger.info('Screenshot after interaction captured', {
-      screenshotId: afterInteractionScreenshot.id,
-      screenshotPath: afterInteractionScreenshot.path,
+    logger.action('screenshot', {
+      stage: 'after_interaction',
+      path: afterInteractionScreenshot.path,
+      timing: 'after_gameplay',
     });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: afterInteractionScreenshot.id });
 
     // Capture final screenshot
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'final_state' });
     logger.info('Capturing final screenshot', {});
     const finalScreenshot = await screenshotCapturer.capture(page, 'final_state');
-    logger.info('Final screenshot captured', {
-      screenshotId: finalScreenshot.id,
-      screenshotPath: finalScreenshot.path,
+    logger.action('screenshot', {
+      stage: 'final_state',
+      path: finalScreenshot.path,
+      timing: 'test_completion',
     });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: finalScreenshot.id });
 
     // Retrieve console errors before stopping monitoring
     let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
@@ -234,8 +333,12 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         consoleErrors = await errorMonitor.getErrors(page);
         logger.info('Console errors retrieved', { errorCount: consoleErrors.length });
       } catch (error) {
+        const qaError = categorizeError(error, TestPhase.VISION_ANALYSIS);
         logger.warn('Failed to retrieve console errors', {
-          error: error instanceof Error ? error.message : String(error),
+          category: qaError.category,
+          message: qaError.message,
+          recoverable: qaError.recoverable,
+          context: qaError.context,
         });
       }
     }
@@ -246,13 +349,19 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
     let visionAnalysisTokens: number | undefined;
 
     if (visionAnalyzer) {
+      logger.beginPhase(TestPhase.VISION_ANALYSIS, {
+        screenshotCount: 4,
+        hasMetadata: !!metadata,
+      });
       try {
         logger.info('Starting vision analysis', {
-          screenshotCount: 3,
+          screenshotCount: 4,
+          hasMetadata: !!metadata,
         });
 
         const visionResult = await visionAnalyzer.analyzeScreenshots([
-          initialScreenshot,
+          preStartScreenshot,
+          postStartScreenshot,
           afterInteractionScreenshot,
           finalScreenshot,
         ], metadata);
@@ -266,12 +375,27 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
           issueCount: visionIssues.length,
           tokens: visionAnalysisTokens,
         });
+        logger.endPhase(TestPhase.VISION_ANALYSIS, {
+          playabilityScore,
+          issueCount: visionIssues.length,
+          tokens: visionAnalysisTokens,
+        });
       } catch (error) {
+        const qaError = categorizeError(error, TestPhase.VISION_ANALYSIS);
         logger.warn('Vision analysis failed - using default score', {
-          error: error instanceof Error ? error.message : String(error),
+          category: qaError.category,
+          message: qaError.message,
+          recoverable: qaError.recoverable,
+          context: qaError.context,
+        });
+        logger.endPhase(TestPhase.VISION_ANALYSIS, {
+          success: false,
+          error: qaError.message,
         });
         // Continue with default score
       }
+    } else {
+      logger.info('Vision analysis skipped - no vision analyzer available', {});
     }
 
     // Determine pass/fail status based on score
@@ -286,7 +410,8 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       playability_score: playabilityScore,
       issues: visionIssues,
       screenshots: [
-        initialScreenshot.path,
+        preStartScreenshot.path,
+        postStartScreenshot.path,
         afterInteractionScreenshot.path,
         finalScreenshot.path,
       ],
@@ -301,17 +426,28 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
       },
     };
 
+    const totalDuration = Date.now() - startTime;
     logger.info('QA test completed successfully', {
       status: result.status,
       playabilityScore: result.playability_score,
       screenshotCount: result.screenshots.length,
+      issueCount: result.issues.length,
+      totalDuration,
+      gameType,
+      hasMetadata: !!metadata,
+      consoleErrorCount: consoleErrors.length,
     });
 
     return result;
 
   } catch (error) {
+    const qaError = categorizeError(error, TestPhase.INITIALIZATION);
     logger.error('QA test failed', {
-      error: error instanceof Error ? error.message : String(error),
+      category: qaError.category,
+      message: qaError.message,
+      phase: qaError.phase,
+      recoverable: qaError.recoverable,
+      context: qaError.context,
       errorType: error instanceof Error ? error.constructor.name : typeof error,
     });
 
@@ -389,6 +525,432 @@ export async function runQA(gameUrl: string, request?: Partial<GameTestRequest>)
         logger.info('Cleaning up browser session', {});
         await browserManager.cleanup();
         logger.info('Browser cleanup completed', {});
+      } catch (cleanupError) {
+        logger.warn('Error during browser cleanup', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Run adaptive QA test on a game URL using iterative action loop.
+ * 
+ * This function implements Phase 3 of the migration plan: full adaptive gameplay
+ * with state progression awareness. It uses LLM to recommend actions iteratively,
+ * tracks state progression, and respects budget limits.
+ * 
+ * @param gameUrl - The URL of the game to test
+ * @param request - Optional GameTestRequest containing metadata and adaptiveConfig
+ * @param metadataFilePath - Optional path to the metadata file (will be copied to log directory)
+ * @returns Promise that resolves to GameTestResult
+ * 
+ * @example
+ * ```typescript
+ * const result = await runAdaptiveQA('https://example.com/game', {
+ *   metadata: { ... },
+ *   adaptiveConfig: { maxBudget: 0.50, maxActions: 20 }
+ * });
+ * ```
+ */
+export async function runAdaptiveQA(
+  gameUrl: string,
+  request?: Partial<GameTestRequest>,
+  metadataFilePath?: string
+): Promise<GameTestResult> {
+  const startTime = Date.now();
+  const sessionId = nanoid();
+  
+  // Initialize log file writer for local log saving
+  const logFileWriter = new LogFileWriter(startTime);
+  await logFileWriter.initialize();
+  const localLogDir = logFileWriter.getLogDir();
+  
+  const logger = new Logger({
+    module: 'qa-agent',
+    op: 'runAdaptiveQA',
+    correlationId: sessionId,
+  }, undefined, logFileWriter);
+
+  logger.info('Starting adaptive QA test', { gameUrl, sessionId });
+
+  const fileManager = new FileManager(sessionId, localLogDir);
+  let browserManager: BrowserManager | null = null;
+  let errorMonitor: ErrorMonitor | null = null;
+  let gameType: GameType = GameType.UNKNOWN;
+  let visionAnalyzer: VisionAnalyzer | null = null;
+  let stateAnalyzer: StateAnalyzer | null = null;
+
+  try {
+    // Validate environment variables
+    const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
+    const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+
+    if (!browserbaseApiKey || !browserbaseProjectId) {
+      throw new Error('Missing required environment variables: BROWSERBASE_API_KEY and/or BROWSERBASE_PROJECT_ID');
+    }
+
+    if (!openaiApiKey) {
+      throw new Error('OPENAI_API_KEY required for adaptive QA mode');
+    }
+
+    // Merge adaptive config with defaults
+    const adaptiveConfig = mergeAdaptiveConfig(request?.adaptiveConfig);
+    logger.info('Adaptive config', {
+      maxBudget: adaptiveConfig.maxBudget,
+      maxDuration: adaptiveConfig.maxDuration,
+      maxActions: adaptiveConfig.maxActions,
+      screenshotStrategy: adaptiveConfig.screenshotStrategy,
+      llmCallStrategy: adaptiveConfig.llmCallStrategy,
+    });
+
+    // Initialize browser
+    logger.info('Initializing browser manager', {});
+    browserManager = new BrowserManager({
+      apiKey: browserbaseApiKey,
+      projectId: browserbaseProjectId,
+      logger,
+    });
+
+    const page = await browserManager.initialize();
+    logger.info('Browser initialized successfully', {});
+
+    // Navigate to game URL
+    logger.info('Navigating to game URL', { gameUrl });
+    await browserManager.navigate(gameUrl);
+    logger.info('Navigation completed', {});
+
+    // Initialize game detector and error monitor
+    const gameDetector = new GameDetector({ logger });
+    errorMonitor = new ErrorMonitor({ logger });
+
+    // Start error monitoring
+    try {
+      await errorMonitor.startMonitoring(page);
+      logger.info('Error monitoring started', {});
+    } catch (error) {
+      logger.warn('Failed to start error monitoring', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Detect game type
+    try {
+      gameType = await gameDetector.detectType(page);
+      logger.info('Game type detected', { gameType });
+    } catch (error) {
+      logger.warn('Failed to detect game type', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      gameType = GameType.UNKNOWN;
+    }
+
+    // Wait for game to be ready
+    try {
+      await gameDetector.waitForGameReady(page, TIMEOUTS.GAME_LOAD_TIMEOUT);
+      logger.info('Game ready state confirmed', {});
+    } catch (error) {
+      logger.warn('Failed to confirm game ready state', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Initialize vision and state analyzers (required for adaptive mode)
+    visionAnalyzer = new VisionAnalyzer({ logger, apiKey: openaiApiKey });
+    stateAnalyzer = new StateAnalyzer({ logger, apiKey: openaiApiKey });
+    logger.info('Vision and state analyzers initialized', {});
+
+    // Initialize screenshot capturer and game interactor
+    const screenshotCapturer = new ScreenshotCapturer({ logger, fileManager });
+
+    // Extract metadata from request
+    let metadata: GameMetadata | undefined = undefined;
+    if (request) {
+      if (request.metadata) {
+        metadata = request.metadata;
+      }
+    }
+
+    // Copy metadata file to log directory if provided, or save metadata as JSON if available
+    if (metadataFilePath) {
+      try {
+        await fileManager.copyMetadataFile(metadataFilePath);
+        logger.info('Metadata file copied to log directory', { sourcePath: metadataFilePath });
+      } catch (error) {
+        logger.warn('Failed to copy metadata file to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else if (metadata) {
+      try {
+        await fileManager.saveMetadataJson(metadata);
+        logger.info('Metadata saved to log directory', {});
+      } catch (error) {
+        logger.warn('Failed to save metadata to log directory', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    const gameInteractor = new GameInteractor({
+      logger,
+      visionAnalyzer,
+      screenshotCapturer,
+      stateAnalyzer,
+      metadata,
+    });
+
+    // Wait before interaction if specified
+    const waitBeforeInteraction = metadata?.testingStrategy?.waitBeforeInteraction ?? 0;
+    if (waitBeforeInteraction > 0) {
+      logger.info('Waiting before interaction', { waitMs: waitBeforeInteraction });
+      await new Promise(resolve => setTimeout(resolve, waitBeforeInteraction));
+    }
+
+    // Capture pre-start screenshot (TRUE baseline before any interaction)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'pre_start' });
+    const preStartScreenshot = await screenshotCapturer.capture(page, 'pre_start');
+    logger.action('screenshot', {
+      stage: 'pre_start',
+      path: preStartScreenshot.path,
+      timing: 'before_start_button',
+    });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: preStartScreenshot.id });
+
+    // Try to find and click start button before interaction
+    try {
+      const startButtonClicked = await gameInteractor.findAndClickStart(page, undefined, preStartScreenshot.path);
+      if (startButtonClicked) {
+        logger.info('Start button found and clicked', {});
+      } else {
+        logger.warn('Start button not found - continuing with test anyway', {});
+      }
+    } catch (error) {
+      const qaError = categorizeError(error, TestPhase.START_BUTTON_DETECTION);
+      logger.warn('Failed to find and click start button', {
+        category: qaError.category,
+        message: qaError.message,
+        recoverable: qaError.recoverable,
+        context: qaError.context,
+      });
+      // Continue anyway - start button may not be required
+    }
+
+    // Capture post-start screenshot (after start button clicked)
+    logger.beginPhase(TestPhase.SCREENSHOT_CAPTURE, { stage: 'post_start' });
+    const postStartScreenshot = metadata
+      ? await screenshotCapturer.captureAtOptimalTime(page, 'post_start', metadata)
+      : await screenshotCapturer.capture(page, 'post_start');
+    logger.action('screenshot', {
+      stage: 'post_start',
+      path: postStartScreenshot.path,
+      timing: 'after_start_button',
+    });
+    logger.endPhase(TestPhase.SCREENSHOT_CAPTURE, { screenshotId: postStartScreenshot.id });
+
+    // Run adaptive QA loop
+    const adaptiveLoop = new AdaptiveQALoop(
+      logger,
+      stateAnalyzer,
+      gameInteractor,
+      adaptiveConfig,
+      metadata
+    );
+
+    const loopResult = await adaptiveLoop.run(page);
+
+    const screenshots = loopResult.screenshots;
+    const actionHistory = loopResult.actionHistory;
+    const stateCheckCount = loopResult.stateCheckCount;
+
+    // Retrieve console errors
+    let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
+    if (errorMonitor) {
+      try {
+        consoleErrors = await errorMonitor.getErrors(page);
+        logger.info('Console errors retrieved', { errorCount: consoleErrors.length });
+      } catch (error) {
+        logger.warn('Failed to retrieve console errors', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Final vision analysis
+    let playabilityScore = 50;
+    let visionIssues: Issue[] = [];
+    let visionAnalysisTokens: number | undefined;
+
+    // Combine pre-start, post-start, and loop screenshots for vision analysis
+    const allScreenshots = [
+      preStartScreenshot.path,
+      postStartScreenshot.path,
+      ...screenshots,
+    ];
+
+    if (visionAnalyzer && allScreenshots.length > 0) {
+      try {
+        logger.info('Starting final vision analysis', {
+          screenshotCount: allScreenshots.length,
+        });
+
+        // Convert screenshot paths to Screenshot objects for vision analyzer
+        // Map stages: pre_start (0), post_start (1), after_interaction (middle), final_state (last)
+        const screenshotObjects = allScreenshots.map((path, index): Screenshot => {
+          let stage: 'pre_start' | 'post_start' | 'after_interaction' | 'final_state';
+          if (index === 0) {
+            stage = 'pre_start';
+          } else if (index === 1) {
+            stage = 'post_start';
+          } else if (index === allScreenshots.length - 1) {
+            stage = 'final_state';
+          } else {
+            stage = 'after_interaction';
+          }
+
+          return {
+            id: `screenshot-${index}`,
+            path,
+            timestamp: Date.now(),
+            stage,
+          };
+        });
+
+        const visionResult = await visionAnalyzer.analyzeScreenshots(
+          screenshotObjects,
+          metadata
+        );
+
+        playabilityScore = visionResult.playability_score;
+        visionIssues = visionResult.issues;
+        visionAnalysisTokens = visionResult.metadata?.visionAnalysisTokens;
+
+        logger.info('Final vision analysis completed', {
+          playabilityScore,
+          issueCount: visionIssues.length,
+          tokens: visionAnalysisTokens,
+        });
+      } catch (error) {
+        logger.warn('Final vision analysis failed - using default score', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Use final cost from adaptive loop
+    const finalCost = loopResult.estimatedCost;
+
+    // Determine pass/fail status
+    const status: 'pass' | 'fail' = playabilityScore >= 50 ? 'pass' : 'fail';
+
+    // Calculate test duration
+    const duration = Date.now() - startTime;
+
+    // Create result
+    const result: GameTestResult = {
+      status,
+      playability_score: playabilityScore,
+      issues: visionIssues,
+      screenshots,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration,
+        gameType,
+        consoleErrors,
+        actionHistory,
+        adaptiveConfig,
+        estimatedCost: finalCost,
+        ...(visionAnalysisTokens !== undefined && { visionAnalysisTokens }),
+      },
+    };
+
+    logger.info('Adaptive QA test completed successfully', {
+      status: result.status,
+      playabilityScore: result.playability_score,
+      actionsPerformed: actionHistory.length,
+      screenshotsCaptured: screenshots.length,
+      estimatedCost: finalCost,
+    });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Adaptive QA test failed', {
+      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
+
+    const errorIssue: Issue = {
+      severity: 'critical',
+      description: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    };
+
+    let consoleErrors: Array<{ message: string; timestamp: number; level: 'error' | 'warning' }> = [];
+    if (errorMonitor) {
+      try {
+        const page = browserManager?.getPage();
+        if (page) {
+          consoleErrors = await errorMonitor.getErrors(page);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    const errorResult: GameTestResult = {
+      status: 'error',
+      playability_score: 0,
+      issues: [errorIssue],
+      screenshots: [],
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sessionId,
+        gameUrl,
+        duration,
+        gameType: GameType.UNKNOWN,
+        consoleErrors,
+      },
+    };
+
+    return errorResult;
+
+  } finally {
+    // Stop error monitoring
+    if (errorMonitor && browserManager) {
+      try {
+        const page = browserManager.getPage();
+        if (page) {
+          await errorMonitor.stopMonitoring(page);
+        }
+      } catch (error) {
+        logger.warn('Failed to stop error monitoring', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Cleanup files if enabled
+    const flags = getFeatureFlags();
+    if (flags.enableScreenshotCleanup) {
+      try {
+        await fileManager.cleanup(flags.enableScreenshotCleanup);
+      } catch (cleanupError) {
+        logger.warn('Error during file cleanup', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
+
+    // Always cleanup browser
+    if (browserManager) {
+      try {
+        await browserManager.cleanup();
       } catch (cleanupError) {
         logger.warn('Error during browser cleanup', {
           error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
@@ -651,6 +1213,7 @@ if (import.meta.main) {
 
   // Load metadata if provided
   let request: Partial<GameTestRequest> | undefined;
+  let metadataFilePath: string | undefined;
   if (metadataPath) {
     const metadataResult = await loadMetadataFromFile(metadataPath);
     if (!metadataResult.success) {
@@ -660,10 +1223,22 @@ if (import.meta.main) {
     request = {
       metadata: metadataResult.data,
     };
+    // Resolve the absolute path for copying
+    metadataFilePath = resolve(process.cwd(), metadataPath);
   }
 
-  // Run QA test
-  runQA(gameUrl, request)
+  // Check feature flag for adaptive mode
+  const flags = getFeatureFlags();
+  const useAdaptiveMode = flags.enableAdaptiveQA;
+
+  if (useAdaptiveMode) {
+    console.log('🚀 Running in Adaptive QA mode (iterative action loop)');
+  }
+
+  // Run QA test (adaptive or standard based on feature flag)
+  const qaFunction = useAdaptiveMode ? runAdaptiveQA : runQA;
+  
+  qaFunction(gameUrl, request, metadataFilePath)
     .then((result) => {
       // Print result as formatted JSON
       console.log('\n📊 QA Test Result:');

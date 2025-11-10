@@ -1,0 +1,48 @@
+{
+  "metadataVersion": "1.0.0",
+  "genre": "idle clicker",
+  "description": "An idle brick breaker game where players click on bricks to destroy them and earn money, which can be spent on purchasing balls to automate brick breaking. The game features a grid of numbered bricks, a money counter, and upgrade buttons.",
+  "expectedControls": "Mouse clicking on bricks to destroy them and on UI buttons to purchase upgrades",
+  "inputSchema": {
+    "type": "semantic",
+    "content": "This is a mouse-only clicker/idle game. Players interact by clicking on bricks in the game grid to destroy them and earn money. Money can be spent by clicking on ball purchase buttons ($ at top-left). The UPGRADES button provides access to permanent upgrades. The game is entirely mouse-driven with no keyboard controls required."
+  },
+  "loadingIndicators": [
+    {
+      "type": "element",
+      "pattern": "canvas",
+      "description": "Game canvas element should be visible and rendered",
+      "selector": "canvas"
+    },
+    {
+      "type": "text",
+      "pattern": "LEVEL",
+      "description": "Level indicator should be visible in the UI"
+    },
+    {
+      "type": "text",
+      "pattern": "BALLS",
+      "description": "Ball counter should be visible in the UI"
+    }
+  ],
+  "successIndicators": [
+    {
+      "type": "score_change",
+      "description": "Money counter (top-right) should increase when bricks are clicked",
+      "selector": "text containing '$'"
+    },
+    {
+      "type": "animation",
+      "description": "Bricks should visually change or disappear when clicked"
+    },
+    {
+      "type": "element_visible",
+      "description": "Ball counter should show '0/50 BALLS' initially and update when balls are purchased"
+    }
+  ],
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 45000,
+    "instructions": "Provide *PRECISE COORDINATES* for clicks. Focus on clicking numbered bricks to destroy them and earn money. After earning money ($ top right) click on the corresponding ball purchase button ($ top-left) to buy a ball. Clicking the UPGRADES button (top-right) may reveal additional upgrade options. Prioritize clicking in the center of low-numbered bricks as they are easier to destroy and provide immediate feedback."
+  }
+}

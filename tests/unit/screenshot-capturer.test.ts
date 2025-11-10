@@ -10,6 +10,8 @@ import { TIMEOUTS } from '../../src/config/constants';
 import { TimeoutError } from '../../src/utils/timeout';
 import type { AnyPage } from '@browserbasehq/stagehand';
 import type { Screenshot } from '../../src/types/game-test.types';
+import { GameType } from '../../src/core/game-detector';
+import type { GameMetadata } from '../../src/types/game-test.types';
 
 // Mock page object
 const createMockPage = () => ({
@@ -307,6 +309,153 @@ describe('ScreenshotCapturer', () => {
       );
 
       expect(screenshot).toBeDefined();
+    });
+  });
+
+  describe('canvas screenshot capture', () => {
+    it('should use canvas.toDataURL() for canvas games when gameType is CANVAS', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock page.evaluate to simulate canvas element
+      const evaluateMock = mock(() => {
+        // Simulate canvas.toDataURL() returning base64 PNG
+        const base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        return Promise.resolve(base64Data);
+      });
+      (page as any).evaluate = evaluateMock;
+
+      const screenshot = await capturer.capture(page, 'initial_load', {
+        gameType: GameType.CANVAS,
+      });
+
+      // Verify page.evaluate was called (for canvas.toDataURL())
+      expect(evaluateMock).toHaveBeenCalled();
+      // Verify page.screenshot was NOT called
+      expect(mockPage.screenshot).not.toHaveBeenCalled();
+
+      // Verify screenshot object structure
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
+      expect(screenshot).toHaveProperty('stage');
+      expect(screenshot.stage).toBe('initial_load');
+    });
+
+    it('should use page.screenshot() for non-canvas games', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      const screenshot = await capturer.capture(page, 'initial_load', {
+        gameType: GameType.DOM,
+      });
+
+      // Verify page.screenshot was called
+      expect(mockPage.screenshot).toHaveBeenCalledTimes(1);
+      // Verify screenshot object structure
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
+      expect(screenshot.stage).toBe('initial_load');
+    });
+
+    it('should use page.screenshot() when gameType is not provided', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      const screenshot = await capturer.capture(page, 'initial_load');
+
+      // Verify page.screenshot was called (default behavior)
+      expect(mockPage.screenshot).toHaveBeenCalledTimes(1);
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
+    });
+
+    it('should detect canvas game from page.evaluate() when gameType not provided', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      let callCount = 0;
+      const evaluateMock = mock(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First call: check for canvas element
+          return Promise.resolve({ hasCanvas: true, canvasCount: 1 });
+        } else {
+          // Second call: get canvas.toDataURL()
+          const base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+          return Promise.resolve(base64Data);
+        }
+      });
+      (page as any).evaluate = evaluateMock;
+
+      const screenshot = await capturer.capture(page, 'initial_load');
+
+      // Verify page.evaluate was called (for canvas detection and capture)
+      expect(evaluateMock).toHaveBeenCalled();
+      // Verify page.screenshot was NOT called
+      expect(mockPage.screenshot).not.toHaveBeenCalled();
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
+    });
+
+    it('should fallback to page.screenshot() if canvas capture fails', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock page.evaluate to throw error (canvas capture fails)
+      const evaluateMock = mock(() => {
+        throw new Error('Canvas capture failed');
+      });
+      (page as any).evaluate = evaluateMock;
+
+      const screenshot = await capturer.capture(page, 'initial_load', {
+        gameType: GameType.CANVAS,
+      });
+
+      // Verify page.screenshot was called as fallback
+      expect(mockPage.screenshot).toHaveBeenCalledTimes(1);
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
+    });
+
+    it('should fallback to page.screenshot() if canvas element not found', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock page.evaluate to return null (no canvas)
+      const evaluateMock = mock(() => {
+        return Promise.resolve(null);
+      });
+      (page as any).evaluate = evaluateMock;
+
+      const screenshot = await capturer.capture(page, 'initial_load', {
+        gameType: GameType.CANVAS,
+      });
+
+      // Verify page.screenshot was called as fallback
+      expect(mockPage.screenshot).toHaveBeenCalledTimes(1);
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
+    });
+
+    it('should handle multiple canvas elements by using first canvas', async () => {
+      const capturer = new ScreenshotCapturer({ logger, fileManager });
+      const page = mockPage as unknown as AnyPage;
+
+      const evaluateMock = mock(() => {
+        // Simulate canvas.toDataURL() returning base64 PNG
+        const base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        return Promise.resolve(base64Data);
+      });
+      (page as any).evaluate = evaluateMock;
+
+      const screenshot = await capturer.capture(page, 'initial_load', {
+        gameType: GameType.CANVAS,
+      });
+
+      expect(evaluateMock).toHaveBeenCalled();
+      expect(mockPage.screenshot).not.toHaveBeenCalled();
+      expect(screenshot).toHaveProperty('id');
+      expect(screenshot).toHaveProperty('path');
     });
   });
 });

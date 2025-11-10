@@ -8,7 +8,6 @@ You are helping the user create a git commit with proper staging and commit mess
 2. **Always list files explicitly** - Show the user what will be committed
 3. **Use a single `git add` command** - List all files in one command, not multiple individual commands
 4. **Create meaningful commit messages** - Follow conventional commit format
-5. **Include Claude Code attribution** - Add the footer to all commits
 
 ## Workflow
 
@@ -114,7 +113,6 @@ EOF
 After committing:
 1. Show the commit hash and message
 2. Run `git log --oneline -1` to verify
-3. Ask if user wants to push to remote
 
 ## Safety Checks
 
@@ -140,8 +138,3 @@ Use commit type: `docs: Update Memory Bank - <what changed>`
 
 ### Case 4: Large refactoring (10+ files)
 Break into multiple commits if possible, or ask user if they want one commit.
-
-## Example Session
-
-```
-User: /commit

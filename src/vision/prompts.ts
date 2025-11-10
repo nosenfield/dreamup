@@ -45,9 +45,10 @@ export const PROMPT_VERSION = '1.1.0';
 export const GAME_ANALYSIS_PROMPT = `You are analyzing a sequence of screenshots from a browser game test to determine playability and identify issues.
 
 **Screenshot Sequence:**
-- Screenshot 1: Initial game load (taken immediately after navigation)
-- Screenshot 2: After user interaction (taken after keyboard/mouse inputs were sent)
-- Screenshot 3: Final game state (taken at the end of the test)
+- Screenshot 1: Pre-start (taken before any interaction, true baseline)
+- Screenshot 2: Post-start (taken after start button was clicked)
+- Screenshot 3: After user interaction (taken after keyboard/mouse inputs were sent)
+- Screenshot 4: Final game state (taken at the end of the test)
 
 **Evaluation Criteria:**
 
@@ -59,14 +60,14 @@ export const GAME_ANALYSIS_PROMPT = `You are analyzing a sequence of screenshots
 
 2. **Control Responsiveness** (Major):
    - Determine if the game responded to user interactions
-   - Compare Screenshot 1 vs Screenshot 2: Did visual changes occur?
+   - Compare Screenshot 2 (post-start) vs Screenshot 3 (after interaction): Did visual changes occur?
    - Check for game state changes (character movement, UI updates, animations)
    - Examples of failures: Frozen screen, no response to input, static image
 
 3. **Crash Detection** (Critical):
    - Identify if the game crashed or froze during the test
    - Look for error messages, crash indicators, or frozen states
-   - Compare Screenshot 3: Is the game still running or did it stop?
+   - Compare Screenshot 4 (final state): Is the game still running or did it stop?
    - Examples: "Game crashed", frozen screen, JavaScript error overlay
 
 4. **Overall Playability Score** (0-100):
@@ -88,40 +89,37 @@ export const GAME_ANALYSIS_PROMPT = `You are analyzing a sequence of screenshots
 
 **Examples:**
 
-Example 1 - Working Game:
+Example 1 - Working Game (format only, analyze actual screenshots):
 {
   "status": "pass",
   "playability_score": 85,
   "issues": [
     {
       "severity": "minor",
-      "description": "Minor UI alignment issue in menu",
+      "description": "Describe actual issues found in screenshots, not this example",
       "timestamp": "2025-11-04T12:00:00Z"
     }
   ],
-  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png"],
+  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png", "/path/to/screenshot4.png"],
   "timestamp": "2025-11-04T12:00:00Z"
 }
 
-Example 2 - Broken Game:
+Example 2 - Broken Game (format only, analyze actual screenshots):
 {
   "status": "error",
   "playability_score": 0,
   "issues": [
     {
       "severity": "critical",
-      "description": "Game failed to load - blank canvas detected",
-      "timestamp": "2025-11-04T12:00:00Z"
-    },
-    {
-      "severity": "critical",
-      "description": "No response to user interactions - game appears frozen",
+      "description": "Describe actual issues found in screenshots, not this example",
       "timestamp": "2025-11-04T12:00:00Z"
     }
   ],
-  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png"],
+  "screenshots": ["/path/to/screenshot1.png", "/path/to/screenshot2.png", "/path/to/screenshot3.png", "/path/to/screenshot4.png"],
   "timestamp": "2025-11-04T12:00:00Z"
 }
+
+**CRITICAL:** These examples show the OUTPUT FORMAT only. You must analyze the actual screenshots provided and describe the REAL issues you observe. Do not copy example descriptions - create your own based on what you see in the screenshots.
 
 **Important:** Return data that strictly matches the gameTestResultSchema structure. Ensure all required fields are present and types are correct.`;
 
@@ -340,8 +338,8 @@ Example 3 - No Crash:
 /**
  * Prompt for state analysis and action recommendation.
  * 
- * This prompt is used with the actionRecommendationSchema to analyze
- * current game state and recommend the next action to take.
+ * This prompt is used with the actionGroupsSchema to analyze
+ * current game state and recommend Action Groups (strategies with related actions).
  * Used when heuristic approaches fail and LLM analysis is needed.
  * 
  * @example
@@ -352,14 +350,24 @@ Example 3 - No Crash:
  *     { type: 'text', text: STATE_ANALYSIS_PROMPT },
  *     { type: 'image', image: screenshot },
  *   ]}],
- *   schema: actionRecommendationSchema,
+ *   schema: actionGroupsSchema,
  * });
  * ```
  */
-export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend the next action to achieve a specific goal.
+export const STATE_ANALYSIS_PROMPT = `You are analyzing a game state to recommend Action Groups (strategies with related actions) to achieve a specific goal.
+
+**Action Groups Concept:**
+Actions should be organized into Action Groups. Each Action Group represents a strategy with multiple related actions that share the same logical reasoning. Success is measured at the group level (strategy level), not individual action level.
 
 **Your Task:**
-Analyze the current game state (HTML structure and screenshot) and recommend the best action to take next. The goal is provided in the context below.
+Analyze the current game state (HTML structure and screenshot) and recommend Action Groups. Each group contains related actions that follow the same strategy/reasoning. Groups are executed in confidence order (highest confidence first).
+
+**CRITICAL: Use Feedback from Previous Actions**
+- You will receive feedback about which previous actions were successful and which failed
+- **BUILD ON SUCCESSFUL PATTERNS**: If a click action was successful, generate multiple related clicks around that area with varying distances and directions to explore the successful region
+- **AVOID FAILED ACTIONS**: Do not repeat actions that failed or didn't change game state
+- **GENERATE VARIATIONS**: When a pattern works, create multiple variations of that successful pattern with different coordinates, distances, and approaches
+- **LEARN FROM SUCCESS**: Use successful action patterns to guide your recommendations and explore nearby areas systematically
 
 **Action Types:**
 - **click**: Click at specific pixel coordinates { x: number, y: number }
@@ -367,13 +375,22 @@ Analyze the current game state (HTML structure and screenshot) and recommend the
 - **wait**: Wait for a specified duration in milliseconds (number)
 - **complete**: Indicate that the goal has been achieved (no further action needed)
 
+**IMPORTANT - Use Game Context:**
+- If "Game Context" is provided above, follow those instructions carefully
+- Respect click bounds and avoid areas specified in context
+- Follow expected behavior patterns described in context
+
 **Coordinate Accuracy (CRITICAL for click actions):**
-- **x**: X coordinate in pixels (0-based, left edge of image is 0)
-- **y**: Y coordinate in pixels (0-based, top edge of image is 0)
+
+**For ALL Games (coordinates as absolute pixels):**
+- **x**: X coordinate in pixels (0-based, left edge of screenshot is 0)
+- **y**: Y coordinate in pixels (0-based, top edge of screenshot is 0)
 - **IMPORTANT**: Provide coordinates for the CENTER of the clickable element
 - **IMPORTANT**: Measure carefully from the top-left corner (0,0) of the screenshot
 - **IMPORTANT**: Consider the actual pixel position, not relative positioning
-- Example: For a button at 1/4 width and 1/4 height of a 640x480 image: x ≈ 160, y ≈ 120
+- **IMPORTANT**: Use specific pixel values (e.g., 400, 300) not percentages
+- Example: Center of 800x600 screenshot = { x: 400, y: 300 }
+- Example: Top-left quadrant of 800x600 screenshot = { x: 200, y: 150 }
 
 **Key Names (for keypress actions):**
 - Arrow keys: "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"
@@ -386,87 +403,53 @@ Analyze the current game state (HTML structure and screenshot) and recommend the
 - 0.5-0.69: Somewhat confident, reasonable action
 - Below 0.5: Uncertain, consider alternatives
 
-**Alternative Actions:**
-Provide 1-3 alternative actions if your primary recommendation might fail. This helps recover from failures.
+**Output Format (actionGroupsSchema - object with groups array):**
+Return an object with a "groups" property containing an array of Action Groups. Each group has:
+- **reasoning**: Strategy description shared by all actions in this group (keep concise but informative)
+- **confidence**: Your confidence in this strategy (0-1), used to order groups
+- **actions**: Array of actions in this group (1-10 depending on iteration)
+  - Each action has:
+    - **action**: One of 'click', 'keypress', 'wait', or 'complete'
+    - **target**: 
+      - For 'click': { x: number, y: number } coordinates
+      - For 'keypress': string key name
+      - For 'wait': number duration in milliseconds
+      - For 'complete': not used (can be empty string)
+    - **reasoning**: Clear explanation of why this action helps achieve the goal
+    - **confidence**: Number between 0 and 1 (certainty of recommendation)
+    - **alternatives**: Empty array [] (not used in Action Groups)
 
-**Output Format (actionRecommendationSchema):**
-- **action**: One of 'click', 'keypress', 'wait', or 'complete'
-- **target**: 
-  - For 'click': { x: number, y: number } coordinates
-  - For 'keypress': string key name
-  - For 'wait': number duration in milliseconds
-  - For 'complete': not used (can be empty string)
-- **reasoning**: Clear explanation of why this action helps achieve the goal
-- **confidence**: Number between 0 and 1 (certainty of recommendation)
-- **alternatives**: Array of 1-3 alternative actions (same structure)
-
-**Examples:**
-
-Example 1 - Finding Start Button:
-Goal: "Find and click the start/play button to begin the game"
+**Example Output Format:**
 {
-  "action": "click",
-  "target": { "x": 320, "y": 240 },
-  "reasoning": "There is a clearly visible 'Start Game' button in the center of the screen. Clicking it will begin the game.",
-  "confidence": 0.95,
-  "alternatives": [
+  "groups": [
     {
-      "action": "click",
-      "target": { "x": 300, "y": 250 },
-      "reasoning": "Alternative: Click slightly below the main button if there's a secondary start option"
+      "reasoning": "Strategy description shared by all actions in this group",
+      "confidence": 0.9,
+      "actions": [
+        {
+          "action": "click",
+          "target": { "x": <coordinate>, "y": <coordinate> },
+          "reasoning": "Clear explanation of why this action helps achieve the goal",
+          "confidence": 0.95,
+          "alternatives": []
+        }
+      ]
     }
   ]
-}
-
-Example 2 - Waiting for Load:
-Goal: "Wait for game to finish loading"
-{
-  "action": "wait",
-  "target": 2000,
-  "reasoning": "The game is still showing a loading indicator. Wait 2 seconds for it to complete loading.",
-  "confidence": 0.90,
-  "alternatives": [
-    {
-      "action": "wait",
-      "target": 3000,
-      "reasoning": "Alternative: Wait longer if loading is slow"
-    }
-  ]
-}
-
-Example 3 - Keypress Action:
-Goal: "Start the game by pressing a key"
-{
-  "action": "keypress",
-  "target": "Space",
-  "reasoning": "The game shows 'Press Space to Start' text. Pressing Space will begin the game.",
-  "confidence": 0.92,
-  "alternatives": [
-    {
-      "action": "keypress",
-      "target": "Enter",
-      "reasoning": "Alternative: Try Enter key if Space doesn't work"
-    }
-  ]
-}
-
-Example 4 - Goal Complete:
-Goal: "Find and click the start button"
-{
-  "action": "complete",
-  "target": "",
-  "reasoning": "The game has already started. The main menu is gone and gameplay has begun. Goal achieved.",
-  "confidence": 0.98,
-  "alternatives": []
 }
 
 **Important:**
 - Analyze both the HTML structure (if provided) and the screenshot
-- Consider previous actions (if provided) to avoid repeating failed attempts
-- Provide clear reasoning for your recommendation
-- Include alternatives for robustness
+- **PRIORITIZE SUCCESSFUL PATTERNS**: If you see successful click patterns, generate multiple related clicks around those coordinates
+- **AVOID FAILED ACTIONS**: Do not repeat actions that failed or didn't change game state
+- **BUILD CONFIDENCE**: Actions similar to successful ones should have higher confidence scores
+- **GENERATE VARIATIONS**: When a pattern works, create multiple variations of that successful pattern
+- **GROUP RELATED ACTIONS**: Actions that share the same reasoning/strategy should be in the same group
+- **ORDER GROUPS BY CONFIDENCE**: Groups with higher confidence will be executed first
+- All actions in a group will be executed before assessing success
+- Success is measured at the group level (strategy level), not individual action level
 - Ensure coordinates are accurate (center of clickable element)
 - Use correct key names for keypress actions
-- Return data that strictly matches the actionRecommendationSchema structure`;
+- Return data that strictly matches the actionGroupsSchema structure (object with "groups" array)`;
 
 

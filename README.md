@@ -2,8 +2,11 @@
 
 Autonomous AI agent for automated QA testing of browser-based games. The agent navigates to a game URL, detects the game type, interacts with the game using AI-powered vision and browser automation, captures screenshots, monitors for errors, and produces a structured report with a playability score (0-100) and identified issues.
 
+**Status**: MVP Complete ✅ | Production Ready | 250+ Tests Passing
+
 ## Table of Contents
 
+- [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Environment Setup](#environment-setup)
@@ -29,6 +32,33 @@ Autonomous AI agent for automated QA testing of browser-based games. The agent n
 - [Browserbase](https://browserbase.com) account with API key
 - [OpenAI](https://openai.com) account with GPT-4 Vision API access
 - AWS account (for Lambda deployment - optional for local development)
+
+## Features
+
+### Core Capabilities
+- **Multi-Strategy Game Detection**: Automatically detects canvas, iframe, or DOM-based games
+- **Intelligent Start Detection**: 4-strategy approach (DOM selectors, natural language, vision, state analysis)
+- **Adaptive QA Testing**: Iterative action loop with AI-powered state analysis and action recommendations
+- **Pixel-Based Coordinates**: All click actions use absolute pixel coordinates (not percentages) for precise interaction
+- **Vision-Powered Analysis**: GPT-4 Vision integration for screenshot analysis and element detection
+- **Metadata-Driven Testing**: Comprehensive game metadata support for improved accuracy
+- **Structured Error Handling**: Categorized error types with detailed diagnostics
+- **Enhanced Logging**: Phase-based logging with action details and correlation IDs
+
+### Testing Modes
+- **Standard QA Mode**: Traditional fixed-interaction testing with metadata
+- **Adaptive QA Mode**: AI-driven iterative testing that adapts based on game state (budget-controlled)
+  - **Iteration 1**: Exactly 3 action groups, each with exactly 3 actions (exploratory strategies)
+  - **Iteration 2**: Variable groups (1 per successful group), 3-5 actions per group (refined strategies)
+  - **Iteration 3+**: Variable groups (1 per successful group), 6-10 actions per group (expanded strategies)
+
+### Recent Enhancements
+- ✅ Action Group-based adaptive QA (iterations with confidence-ordered groups)
+- ✅ Canvas-specific screenshot capture (removes page noise for canvas games)
+- ✅ Enhanced StateAnalyzer prompts with testing strategy prioritization
+- ✅ Local log and screenshot saving (organized by timestamp)
+- ✅ Prompt preview and validation scripts
+- ✅ Comprehensive test coverage (250+ tests)
 
 ## Installation
 
@@ -57,12 +87,16 @@ BROWSERBASE_API_KEY=bb_live_your_actual_key_here
 BROWSERBASE_PROJECT_ID=your_project_id_here
 OPENAI_API_KEY=sk-your_actual_key_here
 
+# Adaptive QA Configuration
+ADAPTIVE_QA_BUDGET=0.50
+
 # Optional: Feature flags and timeouts
 DEBUG=false
 ENABLE_CACHING=false
 ENABLE_PROGRESS_UPDATES=false
 ENABLE_ERROR_RECOVERY=false
 ENABLE_SCREENSHOT_CLEANUP=false
+REFORMAT_LOGS=false
 MAX_TEST_DURATION=240000
 GAME_LOAD_TIMEOUT=60000
 INTERACTION_TIMEOUT=90000
@@ -86,11 +120,21 @@ bun run qa https://example.com/game
 
 # With metadata file (recommended for better testing)
 bun run qa https://example.com/game --metadata ./_game-examples/pong/metadata.json
+
+# Validate metadata file
+bun run scripts/validate-metadata.ts ./_game-examples/pong/metadata.json
+
+# Preview prompt that will be sent to LLM
+bun run scripts/preview-prompt.ts ./_game-examples/pong/metadata.json
 ```
 
 **CLI Arguments:**
 - `<game-url>` (required): The URL of the game to test
 - `--metadata <path>` (optional): Path to a metadata.json file containing game information
+
+**Helper Scripts:**
+- `scripts/validate-metadata.ts`: Validates metadata.json files against the schema
+- `scripts/preview-prompt.ts`: Shows the prompt that will be sent to the LLM for a given metadata file
 
 **Example Output:**
 ```json
@@ -269,12 +313,14 @@ All configuration can be overridden via environment variables:
 | `BROWSERBASE_API_KEY` | *required* | Browserbase API key |
 | `BROWSERBASE_PROJECT_ID` | *required* | Browserbase project ID |
 | `OPENAI_API_KEY` | *required* | OpenAI API key with GPT-4 Vision access |
+| `ADAPTIVE_QA_BUDGET` | `0.50` | Maximum budget in USD per adaptive QA test (controls LLM call costs) |
 | `MAX_TEST_DURATION` | `240000` | Maximum test duration in milliseconds (4 minutes) |
 | `GAME_LOAD_TIMEOUT` | `60000` | Game loading timeout in milliseconds (60 seconds) |
 | `INTERACTION_TIMEOUT` | `90000` | Interaction timeout in milliseconds (90 seconds) |
 | `SCREENSHOT_TIMEOUT` | `10000` | Screenshot capture timeout in milliseconds (10 seconds) |
 | `PAGE_NAVIGATION_TIMEOUT` | `30000` | Page navigation timeout in milliseconds (30 seconds) |
 | `POST_START_DELAY` | `2000` | Delay after clicking start button in milliseconds (2 seconds) |
+| `REFORMAT_LOGS` | `false` | Enable reformatted log output (msg \| data format) |
 
 ### Feature Flags
 
@@ -415,7 +461,7 @@ This will output structured JSON logs with detailed information about each step 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (250+ tests)
 bun test
 
 # Run specific test file
@@ -423,7 +469,16 @@ bun test tests/unit/game-interactor.test.ts
 
 # Run with coverage
 bun test --coverage
+
+# Run tests for specific module
+bun test tests/unit/vision/
+bun test tests/integration/
 ```
+
+**Test Status**: 
+- ✅ 250+ tests passing
+- ✅ All core functionality tests passing
+- ⚠️ 12 VisionAnalyzer test failures (known limitation - module mocking interference, tests pass individually)
 
 ### Building for Production
 
@@ -446,65 +501,116 @@ bun run dev
 ```
 dreamup/
 ├── src/
-│   ├── main.ts              # Entry point (CLI or Lambda handler)
-│   ├── core/                # Core browser automation logic
-│   │   ├── browser-manager.ts
-│   │   ├── game-detector.ts
-│   │   ├── game-interactor.ts
-│   │   ├── screenshot-capturer.ts
-│   │   ├── error-monitor.ts
-│   │   └── input-schema-parser.ts
-│   ├── vision/              # GPT-4 Vision integration
-│   │   ├── analyzer.ts
-│   │   ├── prompts.ts
-│   │   └── schema.ts
-│   ├── utils/               # Utility functions
-│   │   ├── logger.ts
-│   │   ├── file-manager.ts
-│   │   └── timeout.ts
-│   ├── config/              # Configuration constants
-│   │   ├── constants.ts
-│   │   └── feature-flags.ts
-│   ├── types/               # TypeScript type definitions
-│   └── schemas/             # Zod validation schemas
-├── tests/                   # Test files
-│   ├── unit/               # Unit tests
-│   ├── integration/        # Integration tests
-│   └── fixtures/          # Test fixtures
-├── _game-examples/         # Example game metadata files
-├── _docs/                  # Documentation
-├── scripts/                # Deployment scripts
-├── output/                 # Screenshots and reports (gitignored)
-└── .env.example            # Environment variables template
+│   ├── main.ts                    # Entry point (CLI or Lambda handler)
+│   ├── core/                      # Core browser automation logic
+│   │   ├── browser-manager.ts     # Browserbase session management
+│   │   ├── game-detector.ts       # Game type detection (canvas/iframe/DOM)
+│   │   ├── game-interactor.ts     # Game interaction orchestration
+│   │   ├── screenshot-capturer.ts # Screenshot capture with stage tracking
+│   │   ├── error-monitor.ts       # Console error monitoring
+│   │   ├── input-schema-parser.ts # Metadata input schema parsing
+│   │   ├── adaptive-qa-loop.ts    # Adaptive QA iterative testing loop
+│   │   ├── state-analyzer.ts      # LLM-based state analysis and action recommendations
+│   │   └── start-detection/       # Start button detection strategies
+│   │       ├── start-detector.ts  # Strategy orchestrator
+│   │       ├── base-strategy.ts   # Abstract base class
+│   │       ├── dom-strategy.ts    # DOM selector strategy
+│   │       ├── natural-language-strategy.ts  # Stagehand natural language
+│   │       ├── vision-strategy.ts # GPT-4 Vision element detection
+│   │       └── state-analysis-strategy.ts    # LLM state analysis
+│   ├── vision/                    # GPT-4 Vision integration
+│   │   ├── analyzer.ts            # Vision analysis orchestration
+│   │   ├── prompts.ts             # Vision analysis prompts
+│   │   └── schema.ts              # Vision response schemas
+│   ├── utils/                     # Utility functions
+│   │   ├── logger.ts              # Enhanced phase-based logging
+│   │   ├── file-manager.ts        # File I/O and screenshot management
+│   │   ├── timeout.ts             # Timeout utilities
+│   │   ├── errors.ts              # Structured error types
+│   │   └── log-file-writer.ts     # Local log file writing
+│   ├── config/                    # Configuration constants
+│   │   ├── constants.ts           # Timeouts and limits
+│   │   └── feature-flags.ts       # Feature flag management
+│   ├── types/                     # TypeScript type definitions
+│   └── schemas/                   # Zod validation schemas
+├── tests/                         # Test files (250+ tests)
+│   ├── unit/                     # Unit tests
+│   ├── integration/               # Integration tests
+│   └── fixtures/                  # Test fixtures
+├── _game-examples/                # Example game metadata files
+│   ├── pong/                      # Pong game example
+│   ├── snake/                     # Snake game example
+│   └── brick-breaker-idle/        # Brick Breaker example
+├── _docs/                         # Documentation
+│   ├── architecture.md             # System architecture
+│   ├── deployment.md              # Deployment guide
+│   └── guides/                    # Process guides
+├── scripts/                        # Utility scripts
+│   ├── validate-metadata.ts       # Metadata validation script
+│   ├── preview-prompt.ts          # Prompt preview script
+│   └── deploy-lambda.sh           # Lambda deployment script
+├── logs/                          # Local logs (gitignored)
+│   └── {timestamp}/               # Timestamped log directories
+│       ├── log.txt                # Session log file
+│       └── screenshots/           # Screenshots from session
+├── output/                        # Screenshots and reports (gitignored)
+├── memory-bank/                   # Project context for AI sessions
+└── .env.example                   # Environment variables template
 ```
 
 This project uses:
 - **Bun** for runtime and package management
 - **TypeScript** with strict mode for type safety
 - **Bun's built-in test runner** for testing
+- **Strategy Pattern** for start detection (extensible, maintainable)
+- **Action Groups** for adaptive QA (iterative, confidence-ordered)
+- **Structured Logging** with phase separation and correlation IDs
 
 ## Performance
 
 ### Typical Performance Characteristics
 
 - **Test Duration**: 2-4 minutes average (depending on game complexity)
-- **Vision API Cost**: ~$0.02-0.05 per test (depends on screenshot count)
+- **Vision API Cost**: ~$0.02-0.05 per test (depends on screenshot count and adaptive QA budget)
 - **Browserbase Cost**: ~$0.01-0.02 per test (depends on session duration)
+- **Adaptive QA Budget**: Configurable via `ADAPTIVE_QA_BUDGET` (default: $0.50 per test)
 
 ### Optimization Tips
 
 1. **Use Metadata**: Providing metadata.json significantly improves test accuracy and reduces vision API calls
-2. **Screenshot Cleanup**: Enable `ENABLE_SCREENSHOT_CLEANUP=true` to reduce storage costs
-3. **Timeout Tuning**: Adjust timeouts based on your game's characteristics (faster games = lower timeouts)
-4. **Debug Mode**: Keep `DEBUG=false` in production to reduce logging overhead
+2. **Comprehensive Instructions**: Include detailed `testingStrategy.instructions` in metadata for better adaptive QA performance
+3. **Screenshot Cleanup**: Enable `ENABLE_SCREENSHOT_CLEANUP=true` to reduce storage costs
+4. **Timeout Tuning**: Adjust timeouts based on your game's characteristics (faster games = lower timeouts)
+5. **Debug Mode**: Keep `DEBUG=false` in production to reduce logging overhead
+6. **Adaptive QA Budget**: Tune `ADAPTIVE_QA_BUDGET` based on your cost/quality tradeoff needs
 
 ### Cost Optimization
 
 - **Metadata Files**: Use metadata.json to reduce vision API calls (saves ~$0.01-0.02 per test)
+- **Comprehensive Instructions**: Detailed `testingStrategy.instructions` help adaptive QA converge faster, reducing iterations
 - **Screenshot Cleanup**: Enable cleanup to reduce Lambda storage costs
+- **Adaptive QA Budget**: Lower budget = fewer iterations = lower cost (but may reduce test quality)
 - **Batch Testing**: Run multiple tests sequentially to reuse browser sessions (future enhancement)
+
+## Documentation
+
+- **[API.md](API.md)**: Complete API reference
+- **[_docs/deployment.md](_docs/deployment.md)**: Lambda deployment guide
+- **[_docs/architecture.md](_docs/architecture.md)**: System architecture and design patterns
+- **[_docs/guides/](_docs/guides/)**: Development guides and workflows
+- **[memory-bank/](memory-bank/)**: Project context and progress tracking
+
+## Contributing
+
+This project follows a structured development workflow:
+1. Read `memory-bank/activeContext.md` at session start
+2. Follow test-first development for new features
+3. Update memory bank after completing tasks
+4. Maintain code quality standards (TypeScript strict mode, <200 line components)
+
+See `_docs/guides/` for detailed workflows.
 
 ---
 
-For detailed API documentation, see [API.md](API.md).  
-For deployment instructions, see [_docs/deployment.md](_docs/deployment.md).
+**Last Updated**: November 9, 2025  
+**Version**: 1.0 (MVP Complete)

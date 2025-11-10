@@ -25,3 +25,8 @@ export type { InputSchemaParserConfig, ParsedInputSchema } from './input-schema-
 export { StateAnalyzer } from './state-analyzer';
 export type { StateAnalyzerConfig } from './state-analyzer';
 
+export * from './start-detection';
+
+export { AdaptiveQALoop } from './adaptive-qa-loop';
+export type { AdaptiveLoopResult } from './adaptive-qa-loop';
+

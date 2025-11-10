@@ -65,6 +65,7 @@ export class BrowserManager {
   private stagehand: Stagehand | null = null;
   private page: AnyPage | null = null;
   private isInitialized: boolean = false;
+  private sessionId: string | null = null;
 
   /**
    * Create a new BrowserManager instance.
@@ -136,9 +137,44 @@ export class BrowserManager {
       }
       this.isInitialized = true;
 
+      // Extract session ID from Stagehand (if available)
+      // Stagehand may expose session info through its internal state
+      try {
+        const stagehandAny = this.stagehand as any;
+        // Try various possible locations for session ID
+        if (stagehandAny.sessionId) {
+          this.sessionId = stagehandAny.sessionId;
+        } else if (stagehandAny._sessionId) {
+          this.sessionId = stagehandAny._sessionId;
+        } else if (stagehandAny.session?.id) {
+          this.sessionId = stagehandAny.session.id;
+        } else if (stagehandAny._session?.id) {
+          this.sessionId = stagehandAny._session.id;
+        } else if (stagehandAny.browserbaseSessionId) {
+          this.sessionId = stagehandAny.browserbaseSessionId;
+        } else if (stagehandAny._browserbaseSessionId) {
+          this.sessionId = stagehandAny._browserbaseSessionId;
+        }
+        
+        // If still no session ID, try to get it from Browserbase API
+        // by listing recent sessions and finding the most recent one
+        if (!this.sessionId) {
+          this.sessionId = await this.getSessionIdFromBrowserbase();
+        }
+      } catch (error) {
+        // Session ID extraction is optional, don't fail if it doesn't work
+        this.logger.debug('Could not extract session ID from Stagehand', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       this.logger.info('Browser session initialized successfully', {
         pageUrl: typeof this.page.url === 'function' ? this.page.url() : 'about:blank',
+        sessionId: this.sessionId,
       });
+
+      // Try to open debugger URL automatically
+      await this.openDebuggerUrl();
 
       return this.page;
     } catch (error) {
@@ -271,6 +307,224 @@ export class BrowserManager {
    */
   isBrowserInitialized(): boolean {
     return this.isInitialized;
+  }
+
+  /**
+   * Get session ID from Browserbase API.
+   * 
+   * Attempts to get the session ID by listing recent sessions from Browserbase
+   * and finding the most recent one for this project.
+   * 
+   * @returns Promise that resolves to session ID or null if not available
+   */
+  private async getSessionIdFromBrowserbase(): Promise<string | null> {
+    try {
+      // List recent sessions from Browserbase API
+      const response = await fetch(
+        `https://api.browserbase.com/v1/sessions?projectId=${this.projectId}&limit=1`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-bb-api-key': this.apiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        this.logger.debug('Failed to get session ID from Browserbase', {
+          statusCode: response.status,
+          statusText: response.statusText,
+        });
+        return null;
+      }
+
+      const data = await response.json();
+      
+      // Get the most recent session
+      if (data.sessions && data.sessions.length > 0) {
+        const session = data.sessions[0];
+        if (session.id && session.status === 'RUNNING') {
+          this.logger.debug('Session ID retrieved from Browserbase API', {
+            sessionId: session.id,
+          });
+          return session.id;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.debug('Failed to retrieve session ID from Browserbase', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Get debugger URL from Browserbase session.
+   * 
+   * Retrieves the debugger URL from the Browserbase API for the current session.
+   * This allows opening the browser debugger to inspect the session.
+   * 
+   * @returns Promise that resolves to debugger URL or null if not available
+   */
+  async getDebuggerUrl(): Promise<string | null> {
+    if (!this.sessionId) {
+      this.logger.debug('No session ID available for debugger URL', {});
+      return null;
+    }
+
+    try {
+      // Call Browserbase API to get debug info
+      const response = await fetch(
+        `https://api.browserbase.com/v1/sessions/${this.sessionId}/debug`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-bb-api-key': this.apiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        this.logger.warn('Failed to get debugger URL from Browserbase', {
+          statusCode: response.status,
+          statusText: response.statusText,
+        });
+        return null;
+      }
+
+      const debugInfo = await response.json();
+      
+      // Prefer debuggerFullscreenUrl, fallback to debuggerUrl
+      const debuggerUrl = debugInfo.debuggerFullscreenUrl || debugInfo.debuggerUrl;
+      
+      if (debuggerUrl) {
+        this.logger.info('Debugger URL retrieved', {
+          debuggerUrl,
+          hasFullscreen: !!debugInfo.debuggerFullscreenUrl,
+        });
+        return debuggerUrl;
+      }
+
+      this.logger.warn('Debugger URL not found in Browserbase response', {
+        debugInfo: Object.keys(debugInfo),
+      });
+      return null;
+    } catch (error) {
+      this.logger.warn('Failed to retrieve debugger URL', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Open debugger URL in browser.
+   * 
+   * Attempts to open the Browserbase debugger URL in Cursor IDE's browser tab if available,
+   * otherwise falls back to the default system browser.
+   * This is a best-effort operation - failures are logged but don't throw errors.
+   * 
+   * @param url - Optional debugger URL (if not provided, will fetch it)
+   */
+  async openDebuggerUrl(url?: string): Promise<void> {
+    try {
+      const debuggerUrl = url || await this.getDebuggerUrl();
+      
+      if (!debuggerUrl) {
+        this.logger.debug('No debugger URL available to open', {});
+        return;
+      }
+
+      // Check if we should use Cursor IDE browser (via environment variable)
+      const useCursorBrowser = process.env.USE_CURSOR_BROWSER === 'true' || 
+                               process.env.CURSOR_BROWSER === 'true';
+
+      if (useCursorBrowser) {
+        // Try to use Cursor IDE browser via MCP
+        // Note: This requires the MCP browser server to be available
+        // If not available, we'll fall back to system browser
+        try {
+          // Check if we're in a Cursor environment by checking for CURSOR_* env vars
+          const cursorEnv = process.env.CURSOR_SESSION_ID || process.env.CURSOR_WORKSPACE;
+          
+          if (cursorEnv) {
+            this.logger.info('Attempting to open debugger URL in Cursor IDE browser', {
+              debuggerUrl,
+            });
+            
+            // Log the URL for Cursor to pick up, or use a Cursor-specific mechanism
+            // Since MCP tools aren't directly callable from user code, we'll log it
+            // and suggest the user can manually open it, or we can try a Cursor command
+            this.logger.info('Debugger URL for Cursor IDE browser', {
+              debuggerUrl,
+              note: 'Open this URL in Cursor IDE browser tab',
+            });
+            
+            // Try to use cursor command if available (Cursor CLI)
+            try {
+              const cursorCommand = Bun.spawn(['cursor', '--open-url', debuggerUrl], {
+                stdio: ['ignore', 'ignore', 'ignore'],
+              });
+              // Don't wait for it
+              this.logger.info('Debugger URL opened via Cursor CLI', {
+                debuggerUrl,
+              });
+              return;
+            } catch {
+              // Cursor CLI not available, fall through to system browser
+              this.logger.debug('Cursor CLI not available, falling back to system browser');
+            }
+          }
+        } catch (error) {
+          this.logger.debug('Failed to use Cursor browser, falling back to system browser', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // Fall back to system default browser
+      const platform = process.platform;
+
+      let command: string;
+      let args: string[];
+
+      if (platform === 'darwin') {
+        // macOS
+        command = 'open';
+        args = [debuggerUrl];
+      } else if (platform === 'win32') {
+        // Windows
+        command = 'cmd';
+        args = ['/c', 'start', debuggerUrl];
+      } else {
+        // Linux and others
+        command = 'xdg-open';
+        args = [debuggerUrl];
+      }
+
+      // Use Bun's spawn API to open URL in default browser
+      // Spawn the process and don't wait for it to complete
+      Bun.spawn([command, ...args], {
+        stdio: ['ignore', 'ignore', 'ignore'],
+      });
+      
+      // Note: The process will run in the background and open the browser
+      // We don't need to wait for it or track it
+      
+      this.logger.info('Debugger URL opened in system browser', {
+        debuggerUrl,
+        platform,
+      });
+    } catch (error) {
+      // Log error but don't throw - opening debugger is optional
+      this.logger.warn('Failed to open debugger URL', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 

@@ -8,11 +8,10 @@
  * @module utils.file-manager
  */
 
-import { nanoid } from 'nanoid';
-import { mkdir, writeFile, rm } from 'fs/promises';
-import { join } from 'path';
+import { mkdir, writeFile, rm, copyFile } from 'fs/promises';
+import { join, basename } from 'path';
 import { PATHS } from '../config/constants';
-import type { Screenshot, GameTestResult } from '../types/game-test.types';
+import type { Screenshot, GameTestResult, GameMetadata } from '../types/game-test.types';
 
 /**
  * File manager for handling screenshot and report file operations.
@@ -29,7 +28,7 @@ import type { Screenshot, GameTestResult } from '../types/game-test.types';
  * await fileManager.ensureOutputDirectory();
  * 
  * // Save screenshot
- * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'initial_load');
+ * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'pre_start');
  * 
  * // Save report
  * const reportPath = await fileManager.saveReport(gameTestResult);
@@ -37,15 +36,19 @@ import type { Screenshot, GameTestResult } from '../types/game-test.types';
  */
 export class FileManager {
   private sessionId: string;
+  private localLogDir?: string;
+  private screenshotCounter: number = 0;
 
   /**
    * Create a new FileManager instance.
    * 
    * @param sessionId - Optional session ID for organizing files. If not provided,
-   *   a unique ID will be generated using nanoid.
+   *   a unique ID will be generated using timestamp.
+   * @param localLogDir - Optional local log directory path (e.g., './logs/{timestamp}')
    */
-  constructor(sessionId?: string) {
-    this.sessionId = sessionId || nanoid();
+  constructor(sessionId?: string, localLogDir?: string) {
+    this.sessionId = sessionId || Date.now().toString();
+    this.localLogDir = localLogDir;
   }
 
   /**
@@ -94,7 +97,7 @@ export class FileManager {
    * 
    * @example
    * ```typescript
-   * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'initial_load');
+   * const screenshot = await fileManager.saveScreenshot(pngBuffer, 'pre_start');
    * // Returns: { id: 'abc123', path: '/tmp/game-qa-output/screenshots/session-123/abc123.png', ... }
    * ```
    */
@@ -103,7 +106,11 @@ export class FileManager {
     stage: Screenshot['stage'],
     id?: string
   ): Promise<Screenshot> {
-    const screenshotId = id || nanoid();
+    // Use timestamp for filename, or provided id if given
+    const timestamp = Date.now();
+    // Ensure uniqueness by adding counter if id not provided
+    // This handles cases where multiple screenshots are saved in the same millisecond
+    const screenshotId = id || `${timestamp}-${this.screenshotCounter++}`;
     const filename = `${screenshotId}.png`;
     const path = join(PATHS.OUTPUT_DIR, PATHS.SCREENSHOTS_SUBDIR, this.sessionId, filename);
 
@@ -111,13 +118,26 @@ export class FileManager {
       // Ensure directory exists
       await this.ensureOutputDirectory();
 
-      // Write file
+      // Write file to /tmp (primary location)
       await writeFile(path, buffer);
+
+      // Also save to local logs directory if provided
+      if (this.localLogDir) {
+        try {
+          const localScreenshotsDir = join(this.localLogDir, 'screenshots');
+          await mkdir(localScreenshotsDir, { recursive: true });
+          const localPath = join(localScreenshotsDir, filename);
+          await writeFile(localPath, buffer);
+        } catch (localError) {
+          // Don't fail if local save fails - log directory might not be available
+          // This is a non-critical operation
+        }
+      }
 
       return {
         id: screenshotId,
         path,
-        timestamp: Date.now(),
+        timestamp,
         stage,
       };
     } catch (error) {
@@ -198,6 +218,75 @@ export class FileManager {
   getReportPath(): string {
     const filename = 'report.json';
     return join(PATHS.OUTPUT_DIR, PATHS.REPORTS_SUBDIR, this.sessionId, filename);
+  }
+
+  /**
+   * Copy a metadata file to the log directory.
+   * 
+   * Copies the metadata file from the source path to the log directory,
+   * preserving the original filename.
+   * 
+   * @param sourcePath - Path to the source metadata file
+   * @returns Promise that resolves to the destination file path
+   * @throws {Error} If file copy fails
+   * 
+   * @example
+   * ```typescript
+   * const destPath = await fileManager.copyMetadataFile('./_game-examples/pong/metadata.json');
+   * // Returns: './logs/{timestamp}/metadata.json'
+   * ```
+   */
+  async copyMetadataFile(sourcePath: string): Promise<string> {
+    if (!this.localLogDir) {
+      throw new Error('Local log directory not set - cannot copy metadata file');
+    }
+
+    try {
+      // Get the filename from the source path
+      const filename = basename(sourcePath);
+      const destPath = join(this.localLogDir, filename);
+
+      // Copy the file
+      await copyFile(sourcePath, destPath);
+
+      return destPath;
+    } catch (error) {
+      throw new Error(`Failed to copy metadata file: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Save metadata JSON to the log directory.
+   * 
+   * Saves the metadata object as a JSON file in the log directory.
+   * 
+   * @param metadata - GameMetadata object to save
+   * @param filename - Optional filename (defaults to 'metadata.json')
+   * @returns Promise that resolves to the destination file path
+   * @throws {Error} If file write fails
+   * 
+   * @example
+   * ```typescript
+   * const destPath = await fileManager.saveMetadataJson(metadata);
+   * // Returns: './logs/{timestamp}/metadata.json'
+   * ```
+   */
+  async saveMetadataJson(metadata: GameMetadata, filename: string = 'metadata.json'): Promise<string> {
+    if (!this.localLogDir) {
+      throw new Error('Local log directory not set - cannot save metadata');
+    }
+
+    try {
+      const destPath = join(this.localLogDir, filename);
+      const jsonContent = JSON.stringify(metadata, null, 2);
+
+      // Write file
+      await writeFile(destPath, jsonContent, 'utf-8');
+
+      return destPath;
+    } catch (error) {
+      throw new Error(`Failed to save metadata JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**

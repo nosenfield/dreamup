@@ -5,16 +5,26 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { StateAnalyzer } from '../../src/core/state-analyzer';
 import { Logger } from '../../src/utils/logger';
-import type { GameState } from '../../src/types';
+import type { GameState, SuccessfulActionGroup } from '../../src/types';
 
 // Mock OpenAI SDK
 const mockGenerateObject = mock(() => ({
   object: {
-    action: 'click' as const,
-    target: { x: 100, y: 200 },
-    reasoning: 'Test reasoning',
-    confidence: 0.9,
-    alternatives: [],
+    groups: [
+      {
+        reasoning: 'Test reasoning for group',
+        confidence: 0.9,
+        actions: [
+          {
+            action: 'click' as const,
+            target: { x: 100, y: 200 },
+            reasoning: 'Test reasoning',
+            confidence: 0.9,
+            alternatives: [],
+          },
+        ],
+      },
+    ],
   },
   usage: {
     promptTokens: 100,
@@ -77,7 +87,7 @@ describe('StateAnalyzer', () => {
   });
 
   describe('analyzeAndRecommendAction', () => {
-    it('should analyze state and return ActionRecommendation', async () => {
+    it('should analyze state and return array of ActionGroups', async () => {
       const state: GameState = {
         html: '<div>Test HTML</div>',
         screenshot: '/tmp/test.png',
@@ -95,17 +105,72 @@ describe('StateAnalyzer', () => {
       const testFile = Bun.file('/tmp/test-screenshot.png');
       await Bun.write(testFile, Buffer.from('fake-png-data'));
 
-      const result = await analyzer.analyzeAndRecommendAction({
-        ...state,
-        screenshot: '/tmp/test-screenshot.png',
-      });
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-screenshot.png',
+        },
+        1, // iterationNumber
+        undefined // successfulGroups
+      );
 
       expect(result).toBeDefined();
-      expect(result.action).toBe('click');
-      expect(result.confidence).toBeGreaterThanOrEqual(0);
-      expect(result.confidence).toBeLessThanOrEqual(1);
-      expect(result.reasoning).toBeDefined();
-      expect(result.alternatives).toBeInstanceOf(Array);
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result.length).toBeLessThanOrEqual(3); // Iteration 1: 1-3 groups
+      expect(result[0].reasoning).toBeDefined();
+      expect(result[0].confidence).toBeGreaterThanOrEqual(0);
+      expect(result[0].confidence).toBeLessThanOrEqual(1);
+      expect(result[0].actions).toBeInstanceOf(Array);
+      expect(result[0].actions.length).toBeGreaterThanOrEqual(1);
+      expect(result[0].actions.length).toBeLessThanOrEqual(1); // Iteration 1: exactly 1 action per group
+      if (result[0].actions.length > 0) {
+        expect(result[0].actions[0].action).toBeDefined();
+        expect(result[0].actions[0].confidence).toBeGreaterThanOrEqual(0);
+        expect(result[0].actions[0].confidence).toBeLessThanOrEqual(1);
+        expect(result[0].actions[0].reasoning).toBeDefined();
+        expect(result[0].actions[0].alternatives).toBeInstanceOf(Array);
+      }
+    });
+
+    it('should log prompt before sending to LLM', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Find start button',
+      };
+
+      // Create a temporary file for testing
+      const testFile = Bun.file('/tmp/test-screenshot-prompt.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-screenshot-prompt.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify debug was called with prompt logging
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[0]?.includes('prompt') || call[1]?.prompt || call[1]?.promptText
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]) {
+        expect(promptLogCall[1]).toHaveProperty('prompt');
+        expect(typeof promptLogCall[1].prompt).toBe('string');
+        expect(promptLogCall[1].prompt.length).toBeGreaterThan(0);
+        expect(promptLogCall[1]).toHaveProperty('promptLength');
+        expect(promptLogCall[1]).toHaveProperty('estimatedTokens');
+      }
     });
 
     it('should handle missing screenshot file gracefully', async () => {
@@ -117,8 +182,484 @@ describe('StateAnalyzer', () => {
       };
 
       await expect(
-        analyzer.analyzeAndRecommendAction(state)
+        analyzer.analyzeAndRecommendAction(state, 1, undefined)
       ).rejects.toThrow();
+    });
+
+    it('should return 1-3 groups with exactly 1 action each for iteration 1', async () => {
+      // Mock to return 2 groups for iteration 1
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [
+            {
+              reasoning: 'First strategy',
+              confidence: 0.9,
+              actions: [
+                {
+                  action: 'click' as const,
+                  target: { x: 100, y: 200 },
+                  reasoning: 'First action',
+                  confidence: 0.9,
+                  alternatives: [],
+                },
+              ],
+            },
+            {
+              reasoning: 'Second strategy',
+              confidence: 0.7,
+              actions: [
+                {
+                  action: 'keypress' as const,
+                  target: 'Enter',
+                  reasoning: 'Second action',
+                  confidence: 0.7,
+                  alternatives: [],
+                },
+              ],
+            },
+          ],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Find start button',
+      };
+
+      const testFile = Bun.file('/tmp/test-iter1.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-iter1.png',
+        },
+        1, // iteration 1
+        undefined
+      );
+
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result.length).toBeLessThanOrEqual(3);
+      result.forEach(group => {
+        expect(group.actions.length).toBe(1); // Exactly 1 action per group for iteration 1
+      });
+    });
+
+    it('should return groups with 1-5 actions for iteration 2', async () => {
+      // Mock to return 1 group with 3 actions for iteration 2
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [
+            {
+              reasoning: 'Build on successful strategy',
+              confidence: 0.85,
+              actions: [
+                {
+                  action: 'click' as const,
+                  target: { x: 100, y: 200 },
+                  reasoning: 'First action',
+                  confidence: 0.85,
+                  alternatives: [],
+                },
+                {
+                  action: 'click' as const,
+                  target: { x: 150, y: 250 },
+                  reasoning: 'Second action',
+                  confidence: 0.85,
+                  alternatives: [],
+                },
+                {
+                  action: 'click' as const,
+                  target: { x: 200, y: 300 },
+                  reasoning: 'Third action',
+                  confidence: 0.85,
+                  alternatives: [],
+                },
+              ],
+            },
+          ],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Continue playing',
+      };
+
+      const testFile = Bun.file('/tmp/test-iter2.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const successfulGroups: SuccessfulActionGroup[] = [
+        {
+          reasoning: 'Previous successful strategy',
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Previous action',
+              timestamp: Date.now(),
+              success: true,
+              stateProgressed: true,
+            },
+          ],
+          beforeScreenshot: '/tmp/before.png',
+          afterScreenshot: '/tmp/after.png',
+          confidence: 0.9,
+        },
+      ];
+
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-iter2.png',
+        },
+        2, // iteration 2
+        successfulGroups
+      );
+
+      expect(result.length).toBeGreaterThan(0);
+      result.forEach(group => {
+        expect(group.actions.length).toBeGreaterThanOrEqual(1);
+        expect(group.actions.length).toBeLessThanOrEqual(5); // 1-5 actions for iteration 2
+      });
+    });
+
+    it('should return groups with 1-10 actions for iteration 3+', async () => {
+      // Mock to return 1 group with 7 actions for iteration 3
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [
+            {
+              reasoning: 'Expand successful strategy',
+              confidence: 0.9,
+              actions: Array.from({ length: 7 }, (_, i) => ({
+                action: 'click' as const,
+                target: { x: 100 + i * 10, y: 200 + i * 10 },
+                reasoning: `Action ${i + 1}`,
+                confidence: 0.9,
+                alternatives: [],
+              })),
+            },
+          ],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Continue playing',
+      };
+
+      const testFile = Bun.file('/tmp/test-iter3.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const successfulGroups: SuccessfulActionGroup[] = [
+        {
+          reasoning: 'Previous successful strategy',
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Previous action',
+              timestamp: Date.now(),
+              success: true,
+              stateProgressed: true,
+            },
+          ],
+          beforeScreenshot: '/tmp/before.png',
+          afterScreenshot: '/tmp/after.png',
+          confidence: 0.9,
+        },
+      ];
+
+      const result = await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-iter3.png',
+        },
+        3, // iteration 3
+        successfulGroups
+      );
+
+      expect(result.length).toBeGreaterThan(0);
+      result.forEach(group => {
+        expect(group.actions.length).toBeGreaterThanOrEqual(1);
+        expect(group.actions.length).toBeLessThanOrEqual(10); // 1-10 actions for iteration 3+
+      });
+    });
+
+    it('should accept successful groups context for iteration 2+', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Continue playing',
+      };
+
+      const testFile = Bun.file('/tmp/test-successful-groups.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      const successfulGroups: SuccessfulActionGroup[] = [
+        {
+          reasoning: 'Previous successful strategy',
+          actions: [
+            {
+              action: 'click',
+              target: { x: 100, y: 200 },
+              reasoning: 'Previous action',
+              timestamp: Date.now(),
+              success: true,
+              stateProgressed: true,
+            },
+          ],
+          beforeScreenshot: '/tmp/before.png',
+          afterScreenshot: '/tmp/after.png',
+          confidence: 0.9,
+        },
+      ];
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-successful-groups.png',
+        },
+        2, // iteration 2
+        successfulGroups
+      );
+
+      // Verify that the prompt includes successful group context
+      const debugCalls = mockDebug.mock.calls;
+      const promptLogCall = debugCalls.find((call: any[]) => 
+        call[1]?.prompt && typeof call[1].prompt === 'string'
+      );
+      
+      expect(promptLogCall).toBeDefined();
+      if (promptLogCall && promptLogCall[1]?.prompt) {
+        const promptText = promptLogCall[1].prompt;
+        expect(promptText).toContain('Previous successful strategy');
+        expect(promptText).toContain('Successful Action Groups from Previous Iteration');
+      }
+    });
+
+    it('should handle zero groups returned (termination)', async () => {
+      // Mock to return zero groups
+      mockGenerateObject.mockReturnValueOnce({
+        object: {
+          groups: [],
+        },
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+        },
+      });
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Find start button',
+      };
+
+      const testFile = Bun.file('/tmp/test-zero-groups.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      // Zero groups for iteration 1 should throw a validation error
+      // (This is expected - zero groups is handled at the AdaptiveQALoop level as termination)
+      await expect(
+        analyzer.analyzeAndRecommendAction(
+          {
+            ...state,
+            screenshot: '/tmp/test-zero-groups.png',
+          },
+          1,
+          undefined
+        )
+      ).rejects.toThrow('Invalid ActionGroups');
+    });
+  });
+
+  describe('buildStateAnalysisPrompt (via analyzeAndRecommendAction)', () => {
+    it('should include testingStrategy.instructions when present', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Play the game',
+        metadata: {
+          description: 'Test game',
+          inputSchema: {
+            type: 'semantic',
+            content: 'Click-based game',
+          },
+          testingStrategy: {
+            waitBeforeInteraction: 2000,
+            interactionDuration: 30000,
+            instructions: 'This is a canvas-based click game. Click on bricks to destroy them. Use coordinates between 0.2-0.8 width and 0.15-0.9 height.',
+          },
+        },
+      };
+
+      const testFile = Bun.file('/tmp/test-instructions.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-instructions.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify that debug was called (prompt logging)
+      expect(mockDebug).toHaveBeenCalled();
+      
+      // Check that the prompt includes instructions
+      const debugCalls = mockDebug.mock.calls;
+      const promptCall = debugCalls.find((call: any[]) => 
+        call[0] === 'Sending prompt to LLM'
+      );
+      
+      expect(promptCall).toBeDefined();
+      expect(promptCall?.[1]?.prompt).toBeDefined();
+      
+      if (promptCall && promptCall[1]?.prompt) {
+        const prompt = promptCall[1].prompt as string;
+        expect(prompt).toContain('Game Context');
+        expect(prompt).toContain('This is a canvas-based click game');
+        expect(prompt).toContain('Click on bricks to destroy them');
+      }
+    });
+
+    it('should fall back to expectedControls when instructions missing', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Play the game',
+        metadata: {
+          description: 'Test game',
+          inputSchema: {
+            type: 'semantic',
+            content: 'Click-based game',
+          },
+          expectedControls: 'Arrow keys for movement',
+          // No testingStrategy.instructions
+        },
+      };
+
+      const testFile = Bun.file('/tmp/test-fallback.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-fallback.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify that debug was called
+      expect(mockDebug).toHaveBeenCalled();
+      
+      // Check that the prompt includes expectedControls (fallback)
+      const debugCalls = mockDebug.mock.calls;
+      const promptCall = debugCalls.find((call: any[]) => 
+        call[0] === 'Sending prompt to LLM'
+      );
+      
+      expect(promptCall).toBeDefined();
+      expect(promptCall?.[1]?.prompt).toBeDefined();
+      
+      if (promptCall && promptCall[1]?.prompt) {
+        const prompt = promptCall[1].prompt as string;
+        expect(prompt).toContain('Expected Controls');
+        expect(prompt).toContain('Arrow keys for movement');
+      }
+    });
+
+    it('should prioritize instructions over expectedControls when both present', async () => {
+      const mockDebug = mock(() => {});
+      logger.debug = mockDebug;
+
+      const state: GameState = {
+        html: '<div>Test HTML</div>',
+        screenshot: '/tmp/test.png',
+        previousActions: [],
+        goal: 'Play the game',
+        metadata: {
+          description: 'Test game',
+          inputSchema: {
+            type: 'semantic',
+            content: 'Click-based game',
+          },
+          expectedControls: 'Arrow keys for movement',
+          testingStrategy: {
+            waitBeforeInteraction: 2000,
+            interactionDuration: 30000,
+            instructions: 'This is a canvas game. Click on bricks.',
+          },
+        },
+      };
+
+      const testFile = Bun.file('/tmp/test-priority.png');
+      await Bun.write(testFile, Buffer.from('fake-png-data'));
+
+      await analyzer.analyzeAndRecommendAction(
+        {
+          ...state,
+          screenshot: '/tmp/test-priority.png',
+        },
+        1,
+        undefined
+      );
+
+      // Verify that debug was called
+      expect(mockDebug).toHaveBeenCalled();
+      
+      // Check that the prompt includes instructions but NOT expectedControls
+      const debugCalls = mockDebug.mock.calls;
+      const promptCall = debugCalls.find((call: any[]) => 
+        call[0] === 'Sending prompt to LLM'
+      );
+      
+      expect(promptCall).toBeDefined();
+      expect(promptCall?.[1]?.prompt).toBeDefined();
+      
+      if (promptCall && promptCall[1]?.prompt) {
+        const prompt = promptCall[1].prompt as string;
+        expect(prompt).toContain('Game Context');
+        expect(prompt).toContain('This is a canvas game');
+        // Should NOT contain expectedControls when instructions are present
+        expect(prompt).not.toContain('Expected Controls');
+      }
     });
   });
 

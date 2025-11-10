@@ -54,6 +54,6 @@
     "interactionDuration": 30000,
     "criticalActions": ["Pause"],
     "criticalAxes": ["RightPaddleVertical"],
-    "instructions": "Click start button, wait for ball to serve, test paddle movement with arrow keys, verify score changes when ball crosses paddle, test pause functionality with Escape key"
+    "instructions": "This is a DOM-based Pong game. The game uses standard HTML elements for rendering. After the game loads, look for a Start button (usually with id='start-btn' or similar) and click it to begin. Once the game starts, use the Arrow keys (ArrowUp and ArrowDown) to control the right paddle. The paddle should move smoothly in response to key presses. The ball should bounce off paddles and walls. Verify the score increments when the ball passes a paddle. Press Escape to pause the game if needed. Play for about 30 seconds to verify all mechanics work correctly. Success indicators: paddle responds to arrow keys, ball bounces correctly, score updates, no console errors. The game is considered working if the ball bounces and paddles respond to input."
   }
 }

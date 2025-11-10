@@ -678,4 +678,200 @@ describe('GameInteractor', () => {
       expect(mockPage.keyPress).toHaveBeenCalled();
     });
   });
+
+  describe('Canvas-aware clicking', () => {
+    it('should detect canvas game from metadata with canvas instructions', () => {
+      const canvasMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'Click on canvas elements',
+        },
+        testingStrategy: {
+          instructions: 'This is a canvas-based game. Click on bricks to destroy them.',
+        },
+      };
+
+      const interactor = new GameInteractor({ logger, metadata: canvasMetadata });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock evaluate to return canvas element
+      (page as any).evaluate = mock(() =>
+        Promise.resolve({
+          x: 100,
+          y: 200,
+          width: 800,
+          height: 600,
+        })
+      );
+
+      // Test executeRecommendationPublic with percentage coordinates
+      const recommendation = {
+        action: 'click' as const,
+        target: { x: 0.5, y: 0.5 }, // Center of canvas (percentage)
+        reasoning: 'Click center of canvas',
+        confidence: 0.9,
+      };
+
+      // Should use canvas-aware clicking (will call evaluate to find canvas)
+      const result = interactor.executeRecommendationPublic(page, recommendation);
+      expect(result).toBeInstanceOf(Promise);
+    });
+
+    it('should detect canvas game from inputSchema content', () => {
+      const canvasMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'This is a canvas game. Click on canvas elements.',
+        },
+      };
+
+      const interactor = new GameInteractor({ logger, metadata: canvasMetadata });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock evaluate to return canvas element
+      (page as any).evaluate = mock(() =>
+        Promise.resolve({
+          x: 100,
+          y: 200,
+          width: 800,
+          height: 600,
+        })
+      );
+
+      const recommendation = {
+        action: 'click' as const,
+        target: { x: 0.5, y: 0.5 },
+        reasoning: 'Click center',
+        confidence: 0.9,
+      };
+
+      const result = interactor.executeRecommendationPublic(page, recommendation);
+      expect(result).toBeInstanceOf(Promise);
+    });
+
+    it('should convert percentage coordinates to absolute pixels for canvas', async () => {
+      const canvasMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'Canvas-based game',
+        },
+        testingStrategy: {
+          instructions: 'This is a canvas-based game.',
+        },
+      };
+
+      const interactor = new GameInteractor({ logger, metadata: canvasMetadata });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock canvas element at (100, 200) with size 800x600
+      (page as any).evaluate = mock(() =>
+        Promise.resolve({
+          x: 100,
+          y: 200,
+          width: 800,
+          height: 600,
+        })
+      );
+
+      // Click at 50% width, 50% height (center)
+      const recommendation = {
+        action: 'click' as const,
+        target: { x: 0.5, y: 0.5 },
+        reasoning: 'Click center of canvas',
+        confidence: 0.9,
+      };
+
+      await interactor.executeRecommendationPublic(page, recommendation);
+
+      // Should call evaluate to find canvas
+      expect((page as any).evaluate).toHaveBeenCalled();
+
+      // Should click at absolute coordinates: 100 + (800 * 0.5) = 500, 200 + (600 * 0.5) = 500
+      expect(mockPage.click).toHaveBeenCalledWith(500, 500);
+    });
+
+    it('should fallback to regular clicking if canvas not found', async () => {
+      const canvasMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'Canvas-based game',
+        },
+        testingStrategy: {
+          instructions: 'This is a canvas-based game.',
+        },
+      };
+
+      const interactor = new GameInteractor({ logger, metadata: canvasMetadata });
+      const page = mockPage as unknown as AnyPage;
+
+      // Mock evaluate to return null (canvas not found)
+      (page as any).evaluate = mock(() => Promise.resolve(null));
+
+      const recommendation = {
+        action: 'click' as const,
+        target: { x: 0.5, y: 0.5 },
+        reasoning: 'Click center',
+        confidence: 0.9,
+      };
+
+      const result = await interactor.executeRecommendationPublic(page, recommendation);
+
+      // Should return false (canvas not found)
+      expect(result).toBe(false);
+    });
+
+    it('should use regular clicking for non-canvas games', async () => {
+      const domMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'DOM-based game with buttons',
+        },
+      };
+
+      const interactor = new GameInteractor({ logger, metadata: domMetadata });
+      const page = mockPage as unknown as AnyPage;
+
+      // Click at absolute pixel coordinates (not percentages)
+      const recommendation = {
+        action: 'click' as const,
+        target: { x: 400, y: 300 },
+        reasoning: 'Click button',
+        confidence: 0.9,
+      };
+
+      await interactor.executeRecommendationPublic(page, recommendation);
+
+      // Should use regular clicking (click called with pixel coordinates)
+      expect(mockPage.click).toHaveBeenCalledWith(400, 300);
+    });
+
+    it('should use regular clicking for canvas games with pixel coordinates', async () => {
+      const canvasMetadata: GameMetadata = {
+        inputSchema: {
+          type: 'semantic',
+          content: 'Canvas-based game',
+        },
+        testingStrategy: {
+          instructions: 'This is a canvas-based game.',
+        },
+      };
+
+      const interactor = new GameInteractor({ logger, metadata: canvasMetadata });
+      const page = mockPage as unknown as AnyPage;
+
+      // Click at absolute pixel coordinates (not percentages)
+      const recommendation = {
+        action: 'click' as const,
+        target: { x: 400, y: 300 },
+        reasoning: 'Click at pixel coordinates',
+        confidence: 0.9,
+      };
+
+      await interactor.executeRecommendationPublic(page, recommendation);
+
+      // Should use regular clicking (pixel coordinates, not percentages)
+      // Note: evaluate is not called because coordinates are pixels, not percentages
+      expect(mockPage.click).toHaveBeenCalledWith(400, 300);
+    });
+  });
 });

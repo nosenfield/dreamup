@@ -12,8 +12,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { generateObject, generateText } from 'ai';
 import { Logger } from '../utils/logger';
 import { STATE_ANALYSIS_PROMPT } from '../vision/prompts';
-import { actionRecommendationSchema } from '../vision/schema';
-import type { GameState, ActionRecommendation } from '../types';
+import { actionGroupsSchema, validateActionGroups } from '../vision/schema';
+import type { GameState, ActionGroups, SuccessfulActionGroup } from '../types';
 
 /**
  * Configuration for StateAnalyzer.
@@ -79,31 +79,53 @@ export class StateAnalyzer {
   }
 
   /**
-   * Analyze current game state and recommend next action.
+   * Analyze current game state and recommend Action Groups.
    * 
    * Uses GPT-4 Vision to analyze HTML structure and screenshot,
-   * then recommends the best action to achieve the specified goal.
+   * then recommends Action Groups (strategies with related actions) to try.
+   * 
+   * - Iteration 1: Returns exactly 3 Action Groups, each with exactly 3 actions
+   * - Iteration 2+: Returns 1 Action Group per successful group, each with 3-5 actions
+   * - Iteration 3+: Returns 1 Action Group per successful group, each with 6-10 actions
+   * 
+   * Groups are ordered by confidence and executed sequentially.
+   * Success is measured at the group level, not individual action level.
    * 
    * @param state - Current game state (HTML + screenshot + history + goal)
-   * @returns Promise that resolves to ActionRecommendation
+   * @param iterationNumber - The iteration number (1, 2, 3+, etc.)
+   * @param successfulGroups - Optional array of successful Action Groups from previous iteration
+   * @returns Promise that resolves to array of ActionGroups
    * @throws {Error} If screenshot file cannot be read or API call fails
    * 
    * @example
    * ```typescript
-   * const recommendation = await analyzer.analyzeAndRecommendAction({
-   *   html: '<div>...</div>',
-   *   screenshot: '/path/to/screenshot.png',
-   *   previousActions: [],
-   *   goal: 'Find and click the start button'
-   * });
+   * // Iteration 1
+   * const groups = await analyzer.analyzeAndRecommendAction(
+   *   { html: '...', screenshot: '/path/to/screenshot.png', previousActions: [], goal: 'Start game' },
+   *   1,
+   *   undefined
+   * );
+   * // Returns exactly 3 groups, each with exactly 3 actions
+   * 
+   * // Iteration 2+
+   * const groups = await analyzer.analyzeAndRecommendAction(
+   *   { html: '...', screenshot: '/path/to/screenshot.png', previousActions: [], goal: 'Progress game' },
+   *   2,
+   *   successfulGroups
+   * );
+   * // Returns 1 group per successful group, each with 3-5 actions
    * ```
    */
   async analyzeAndRecommendAction(
-    state: GameState
-  ): Promise<ActionRecommendation> {
+    state: GameState,
+    iterationNumber: number,
+    successfulGroups?: SuccessfulActionGroup[]
+  ): Promise<ActionGroups> {
     this.logger.info('Starting state analysis', {
       goal: state.goal,
+      iterationNumber,
       previousActionsCount: state.previousActions.length,
+      successfulGroupsCount: successfulGroups?.length ?? 0,
       hasMetadata: !!state.metadata,
     });
 
@@ -123,7 +145,21 @@ export class StateAnalyzer {
       });
 
       // Build prompt with state context
-      const prompt = this.buildStateAnalysisPrompt(state);
+      const prompt = this.buildStateAnalysisPrompt(state, iterationNumber, successfulGroups);
+
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt,
+        promptLength: prompt.length,
+        estimatedTokens: Math.ceil(prompt.length / 4),
+        promptType: 'state_analysis',
+        model: 'gpt-4-turbo',
+        iterationNumber,
+        goal: state.goal,
+        hasMetadata: !!state.metadata,
+        hasPreviousActions: state.previousActions.length > 0,
+        hasHTML: !!state.html,
+      });
 
       // Build multi-modal prompt content
       const content = [
@@ -141,17 +177,65 @@ export class StateAnalyzer {
       const result = await generateObject({
         model: this.openai('gpt-4-turbo'),
         messages: [{ role: 'user' as const, content }],
-        schema: actionRecommendationSchema,
+        schema: actionGroupsSchema,
         temperature: 0.3,
       });
 
+      // Validate with iteration-specific rules
+      const validation = validateActionGroups(result.object, iterationNumber);
+      if (!validation.success) {
+        // If validation fails due to too many groups, truncate to allowed count
+        const groups = result.object.groups || [];
+        if (iterationNumber === 1 && groups.length > 3) {
+          this.logger.warn('LLM returned more groups than allowed for Iteration 1', {
+            requested: 'exactly 3 groups',
+            received: groups.length,
+            action: 'Truncating to top 3 groups by confidence',
+          });
+          // Sort by confidence (descending) and take top 3
+          const sortedGroups = [...groups].sort((a, b) => b.confidence - a.confidence);
+          const truncatedGroups = sortedGroups.slice(0, 3);
+          // Also ensure each group has exactly 3 actions
+          const fixedGroups = truncatedGroups.map(group => {
+            if (group.actions.length !== 3) {
+              this.logger.warn('Fixing action count in group', {
+                groupIndex: truncatedGroups.indexOf(group),
+                requested: 'exactly 3 actions',
+                received: group.actions.length,
+                action: group.actions.length > 3 ? 'Truncating to first 3 actions' : 'Cannot fix - validation will fail',
+              });
+              // If more than 3 actions, take first 3; if fewer, validation will fail
+              return {
+                ...group,
+                actions: group.actions.slice(0, 3),
+              };
+            }
+            return group;
+          });
+          // Re-validate the fixed groups
+          const fixedValidation = validateActionGroups({ groups: fixedGroups }, iterationNumber);
+          if (!fixedValidation.success) {
+            throw new Error(`Invalid ActionGroups after fixing: ${fixedValidation.error.message}`);
+          }
+          return fixedValidation.data;
+        }
+        // For other validation errors, throw
+        throw new Error(`Invalid ActionGroups: ${validation.error.message}`);
+      }
+
+      const groups = validation.data;
+
       this.logger.info('State analysis completed', {
-        action: result.object.action,
-        confidence: result.object.confidence,
-        reasoning: result.object.reasoning,
+        iterationNumber,
+        groupCount: groups.length,
+        groups: groups.map(g => ({
+          reasoning: g.reasoning,
+          confidence: g.confidence,
+          actionCount: g.actions.length,
+        })),
       });
 
-      return result.object;
+      return groups;
     } catch (error) {
       this.logger.error('State analysis failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -265,26 +349,124 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
    * Build state analysis prompt with context.
    * 
    * @param state - Game state with HTML, screenshot, history, and goal
+   * @param iterationNumber - The iteration number (1, 2, 3+, etc.)
+   * @param successfulGroups - Optional array of successful Action Groups from previous iteration
    * @returns Prompt string with state context
    */
-  private buildStateAnalysisPrompt(state: GameState): string {
+  private buildStateAnalysisPrompt(
+    state: GameState,
+    iterationNumber: number,
+    successfulGroups?: SuccessfulActionGroup[]
+  ): string {
     let prompt = STATE_ANALYSIS_PROMPT;
+    
+    // Add iteration-specific instructions
+    if (iterationNumber === 1) {
+      prompt += `\n\n**ITERATION 1 INSTRUCTIONS (CRITICAL - MUST FOLLOW):**`;
+      prompt += `\n- **MUST return EXACTLY 3 Action Groups (no more, no less)**`;
+      prompt += `\n- Each group must have exactly 3 actions`;
+      prompt += `\n- Each group represents a different strategy to try`;
+      prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
+      prompt += `\n- **IMPORTANT**: Choose the top 3 most confident strategies`;
+    } else if (iterationNumber === 2) {
+      prompt += `\n\n**ITERATION 2 INSTRUCTIONS:**`;
+      prompt += `\n- For each successful Action Group provided, return 1 Action Group`;
+      prompt += `\n- Each group should have 3-5 actions that build on the successful strategy`;
+      prompt += `\n- Actions should be related and follow the same reasoning as the successful group`;
+      prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
+    } else {
+      prompt += `\n\n**ITERATION ${iterationNumber} INSTRUCTIONS:**`;
+      prompt += `\n- For each successful Action Group provided, return 1 Action Group`;
+      prompt += `\n- Each group should have 6-10 actions that expand the successful strategy`;
+      prompt += `\n- Actions should be related and follow the same reasoning as the successful group`;
+      prompt += `\n- Order groups by your confidence in the strategy (highest confidence first)`;
+    }
+    
+    // Add successful Action Groups context for iterations 2+
+    if (successfulGroups && successfulGroups.length > 0) {
+      prompt += `\n\n**✅ Successful Action Groups from Previous Iteration (Build on these strategies):**`;
+      
+      successfulGroups.forEach((group, index) => {
+        prompt += `\n\n**Successful Group ${index + 1}:**`;
+        prompt += `\n- Strategy/Reasoning: ${group.reasoning}`;
+        prompt += `\n- Confidence: ${group.confidence}`;
+        prompt += `\n- Actions executed: ${group.actions.length}`;
+        prompt += `\n- Actions:`;
+        group.actions.forEach((action, actionIndex) => {
+          const targetStr = typeof action.target === 'object' 
+            ? `(${action.target.x}, ${action.target.y})`
+            : JSON.stringify(action.target);
+          prompt += `\n  ${actionIndex + 1}. ${action.action} on ${targetStr} - ${action.reasoning}`;
+          prompt += `\n     ✅ Executed: ${action.success}, State Progressed: ${action.stateProgressed}`;
+        });
+        prompt += `\n- Before Screenshot: ${group.beforeScreenshot}`;
+        prompt += `\n- After Screenshot: ${group.afterScreenshot}`;
+        const actionRange = iterationNumber === 2 ? '3-5' : '6-10';
+        prompt += `\n\n**Your Task:** Generate 1 Action Group with ${actionRange} related actions that build on this successful strategy.`;
+      });
+    }
 
     // Add goal context
     prompt += `\n\n**Current Goal:** ${state.goal}`;
 
-    // Add previous actions context if available
-    if (state.previousActions.length > 0) {
-      prompt += `\n\n**Previous Actions Taken:**`;
-      state.previousActions.slice(-5).forEach((action, index) => {
-        prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
-      });
-      prompt += `\n\n**Note:** Avoid repeating these exact actions if they didn't work.`;
+    // PRIORITY 1: Add game-specific context from testingStrategy.instructions (MOST IMPORTANT)
+    if (state.metadata?.testingStrategy?.instructions) {
+      prompt += `\n\n**🎮 Game Context (IMPORTANT - Follow these instructions carefully):**\n${state.metadata.testingStrategy.instructions}`;
     }
 
-    // Add metadata context if available
+    // PRIORITY 1.5: Explicitly tell LLM to use pixel coordinates for all games
+    prompt += `\n\n**🎯 COORDINATE SYSTEM (CRITICAL): Use ABSOLUTE PIXEL coordinates for ALL games:**`;
+    prompt += `\n- **x**: X coordinate in pixels (0-based, left edge of screenshot is 0)`;
+    prompt += `\n- **y**: Y coordinate in pixels (0-based, top edge of screenshot is 0)`;
+    prompt += `\n- **IMPORTANT**: Provide coordinates for the CENTER of the clickable element`;
+    prompt += `\n- **IMPORTANT**: Measure carefully from the top-left corner (0,0) of the screenshot`;
+    prompt += `\n- **IMPORTANT**: Use specific pixel values (e.g., 400, 300) not percentages`;
+    prompt += `\n- **Examples**: Center of 800x600 screenshot = { x: 400, y: 300 }`;
+
+    // Add previous actions context with success/failure feedback
+    if (state.previousActions.length > 0) {
+      // Get last 20 actions for feedback (prioritize recent actions)
+      const recentActions = state.previousActions.slice(-20);
+      
+      // Separate successful and failed actions
+      const successfulActions = recentActions.filter(a => a.success && a.stateProgressed);
+      const failedActions = recentActions.filter(a => !a.success || !a.stateProgressed);
+      
+      // Show failed actions to avoid repeating
+      if (failedActions.length > 0) {
+        prompt += `\n\n**❌ Failed Actions (Avoid repeating these):**`;
+        failedActions.slice(-10).forEach((action, index) => {
+          const failureReason = !action.success 
+            ? 'execution failed' 
+            : 'execution succeeded but state did not progress';
+        prompt += `\n${index + 1}. ${action.action} on ${JSON.stringify(action.target)} - ${action.reasoning}`;
+          prompt += `\n   ❌ ${failureReason}. Do not repeat this exact action.`;
+      });
+        prompt += `\n\n**Strategy:** Avoid repeating these exact failed actions. Try different approaches or coordinates.`;
+      }
+      
+      // Summary of action outcomes
+      const totalActions = recentActions.length;
+      const successRate = successfulActions.length / totalActions;
+      prompt += `\n\n**Action Outcome Summary:**`;
+      prompt += `\n- Total actions: ${totalActions}`;
+      prompt += `\n- Successful (executed + state progressed): ${successfulActions.length}`;
+      prompt += `\n- Failed: ${failedActions.length}`;
+      prompt += `\n- Success rate: ${(successRate * 100).toFixed(1)}%`;
+      
+      if (successRate > 0.5) {
+        prompt += `\n\n**Note:** You're doing well! Continue building on successful patterns.`;
+      } else if (successRate > 0.2) {
+        prompt += `\n\n**Note:** Some actions are working. Focus on successful patterns and try variations.`;
+      } else {
+        prompt += `\n\n**Note:** Most actions are failing. Try completely different approaches or coordinates.`;
+      }
+    }
+
+    // PRIORITY 2: Add supplementary metadata context (if instructions not available or as additional context)
     if (state.metadata) {
-      if (state.metadata.expectedControls) {
+      // Only add expectedControls if instructions not available (to avoid duplication)
+      if (state.metadata.expectedControls && !state.metadata.testingStrategy?.instructions) {
         prompt += `\n\n**Expected Controls:** ${state.metadata.expectedControls}`;
       }
       if (state.metadata.genre) {
@@ -303,6 +485,7 @@ Respond with ONLY "YES" if state has progressed, or "NO" if state is the same or
 
     return prompt;
   }
+
 
   /**
    * Sanitize HTML content by removing scripts but preserving structure.

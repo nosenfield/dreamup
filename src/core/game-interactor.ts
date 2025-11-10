@@ -22,7 +22,8 @@ import { InputSchemaParser } from './input-schema-parser';
 import type { VisionAnalyzer } from '../vision/analyzer';
 import type { ScreenshotCapturer } from './screenshot-capturer';
 import type { StateAnalyzer } from './state-analyzer';
-import type { GameMetadata, ActionRecommendation } from '../types';
+import type { GameMetadata, ActionRecommendation, CapturedState } from '../types';
+import { StartDetector } from './start-detection';
 
 /**
  * Configuration for GameInteractor.
@@ -170,6 +171,8 @@ export class GameInteractor {
   ): Promise<void> {
     const startTime = Date.now();
     let keyIndex = 0;
+    let lastProgressUpdate = startTime;
+    const progressUpdateInterval = 5000; // Update every 5 seconds
 
     while (Date.now() - startTime < duration) {
       // Get next key to press (cycle through available keys)
@@ -180,12 +183,34 @@ export class GameInteractor {
         // Use Stagehand's keyPress() method (not keyboard.press())
         // Stagehand Page exposes keyPress directly on the page object
         await page.keyPress(key, { delay: 0 });
+        
+        // Log each key press as an action
+        this.logger.action('keypress', {
+          key,
+          keyIndex,
+          elapsed: Date.now() - startTime,
+        });
       } catch (error) {
         this.logger.warn('Key press failed, continuing simulation', {
           key,
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with next key rather than failing entire simulation
+      }
+
+      // Periodic progress updates
+      const now = Date.now();
+      if (now - lastProgressUpdate >= progressUpdateInterval) {
+        const elapsed = now - startTime;
+        const progress = Math.round((elapsed / duration) * 100);
+        this.logger.info('Gameplay simulation progress', {
+          elapsed,
+          duration,
+          progress: `${progress}%`,
+          keysPressed: keyIndex,
+          remaining: duration - elapsed,
+        });
+        lastProgressUpdate = now;
       }
 
       // Wait before next key press
@@ -199,11 +224,13 @@ export class GameInteractor {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    this.logger.debug('Keyboard simulation loop completed', {
+    this.logger.info('Keyboard simulation loop completed', {
       keysPressed: keyIndex,
       duration: Date.now() - startTime,
+      expectedDuration: duration,
     });
   }
+
 
   /**
    * Click at specific coordinates on the page.
@@ -223,20 +250,24 @@ export class GameInteractor {
    * ```
    */
   async clickAtCoordinates(page: AnyPage, x: number, y: number): Promise<void> {
+    // Round coordinates to integers
+    const roundedX = Math.round(x);
+    const roundedY = Math.round(y);
+
     // Validate coordinates
-    if (x < 0 || y < 0 || !Number.isInteger(x) || !Number.isInteger(y)) {
-      const error = new Error(`Invalid coordinates: x=${x}, y=${y}. Coordinates must be non-negative integers.`);
+    if (roundedX < 0 || roundedY < 0) {
+      const error = new Error(`Invalid coordinates: x=${roundedX}, y=${roundedY}. Coordinates must be non-negative integers.`);
       this.logger.error('Mouse click failed - invalid coordinates', {
-        x,
-        y,
+        x: roundedX,
+        y: roundedY,
         error: error.message,
       });
       throw error;
     }
 
     this.logger.info('Clicking at coordinates', {
-      x,
-      y,
+      x: roundedX,
+      y: roundedY,
       timeout: this.interactionTimeout,
     });
 
@@ -248,19 +279,19 @@ export class GameInteractor {
       // Use Stagehand's click(x, y) method
       // Stagehand Page exposes click directly with coordinates
       await withTimeout(
-        pageAny.click(x, y),
+        pageAny.click(roundedX, roundedY),
         this.interactionTimeout,
         `Mouse click timed out after ${this.interactionTimeout}ms`
       );
 
       this.logger.info('Mouse click completed', {
-        x,
-        y,
+        x: roundedX,
+        y: roundedY,
       });
     } catch (error) {
       this.logger.error('Mouse click failed', {
-        x,
-        y,
+        x: roundedX,
+        y: roundedY,
         error: error instanceof Error ? error.message : String(error),
         errorType: error instanceof Error ? error.constructor.name : typeof error,
       });
@@ -269,18 +300,15 @@ export class GameInteractor {
   }
 
   /**
-   * Find and click the start button using DOM selector, natural language, or vision fallback.
+   * Find and click the start button using multiple strategies.
    *
-   * Uses a three-strategy approach:
-   * 1. First tries direct DOM selection (fastest, most reliable for HTML buttons)
-   *    - Looks for common start/play button selectors
-   *    - Works for HTML elements above or below canvas
-   * 2. Then tries Stagehand's natural language command (`page.act("click start button")`)
-   * 3. Finally falls back to vision-based detection if both fail
-   *    - Takes a screenshot
-   *    - Uses VisionAnalyzer to find clickable elements
-   *    - Filters for "start" or "play" buttons
-   *    - Clicks at the highest confidence element (>= 0.7)
+   * Delegates to StartDetector which coordinates multiple strategies:
+   * 1. DOM selector strategy (fastest, most reliable)
+   * 2. Natural language strategy (Stagehand page.act())
+   * 3. Vision strategy (GPT-4 Vision element detection)
+   * 4. State analysis strategy (LLM-powered state analysis)
+   *
+   * Strategies are tried in order until one succeeds.
    *
    * @param page - The Stagehand page object
    * @param timeout - Optional timeout for the operation (default: interactionTimeout)
@@ -294,261 +322,18 @@ export class GameInteractor {
    * }
    * ```
    */
-  async findAndClickStart(page: AnyPage, timeout?: number): Promise<boolean> {
-    const operationTimeout = timeout ?? this.interactionTimeout;
-    const pageAny = page as any;
-
-    this.logger.info('Finding and clicking start button', {
-      timeout: operationTimeout,
-      hasVisionFallback: !!(this.visionAnalyzer && this.screenshotCapturer),
-    });
-
-    // Strategy 1: Try direct DOM selection (fastest, works for HTML elements)
-    // Three-tier approach: exact IDs -> attribute wildcards -> text-based fallback
-    // Note: :has-text() is case-insensitive by default (matches "Start", "START", "start")
-    const domSelectors = [
-      // Tier 1: Exact IDs (fast path for our game engine standard)
-      '#start-btn',
-      '#play-btn',
-      '#begin-btn',
-
-      // Tier 2: Attribute wildcards (broad coverage, case-insensitive with 'i' flag)
-      '[id*="start" i]',
-      '[id*="play" i]',
-      '[id*="begin" i]',
-      '[class*="start" i]',
-      '[class*="play" i]',
-      '[class*="begin" i]',
-      '[name*="start" i]',
-      '[name*="play" i]',
-      '[name*="begin" i]',
-      '[onclick*="start" i]',
-      '[onclick*="play" i]',
-      '[onclick*="begin" i]',
-
-      // Tier 3: Text-based fallback (case-insensitive, partial match)
-      'button:has-text("start")',
-      'button:has-text("play")',
-      'button:has-text("begin")',
-      'a:has-text("start")',
-      'a:has-text("play")',
-      'div[role="button"]:has-text("start")',
-      'div[role="button"]:has-text("play")',
-    ];
-
-    for (const selector of domSelectors) {
-      try {
-        // Try to find and click the element using standard page.click(selector)
-        const element = await pageAny.locator(selector).first();
-        if (element && (await element.isVisible({ timeout: 1000 }).catch(() => false))) {
-          await withTimeout(
-            element.click(),
-            operationTimeout,
-            `DOM selector click "${selector}" timed out after ${operationTimeout}ms`
-          );
-
-          this.logger.info('Start button found using DOM selector', {
-            selector,
-          });
-
-          // Wait for game to initialize after clicking start
-          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-          this.logger.debug('Post-click delay completed (DOM selector)', {
-            delayMs: TIMEOUTS.POST_START_DELAY,
-          });
-
-          return true;
-        }
-      } catch (error) {
-        this.logger.debug('DOM selector failed', {
-          selector,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Continue to next selector
-      }
-    }
-
-    // Strategy 2: Try natural language commands
-    const naturalLanguagePhrases = [
-      'click start button',
-      'click play button',
-      'press start',
-      'click begin game',
-    ];
-
-    for (const phrase of naturalLanguagePhrases) {
-      try {
-        if (typeof pageAny.act === 'function') {
-          await withTimeout(
-            pageAny.act(phrase),
-            operationTimeout,
-            `Natural language act "${phrase}" timed out after ${operationTimeout}ms`
-          );
-
-          this.logger.info('Start button found using natural language', {
-            phrase,
-          });
-
-          // Wait for game to initialize after clicking start
-          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-          this.logger.debug('Post-click delay completed (natural language)', {
-            delayMs: TIMEOUTS.POST_START_DELAY,
-          });
-
-          return true;
-        } else {
-          // page.act() doesn't exist, skip natural language
-          break;
-        }
-      } catch (error) {
-        this.logger.debug('Natural language command failed', {
-          phrase,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Continue to next phrase or fallback
-      }
-    }
-
-    // Strategy 3: Fallback to vision-based detection
-    if (this.visionAnalyzer && this.screenshotCapturer) {
-      this.logger.info('Falling back to vision-based start button detection', {});
-
-      try {
-        // Take screenshot for vision analysis
-        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
-        
-        // Find clickable elements using vision
-        const elements = await this.visionAnalyzer.findClickableElements(screenshot.path);
-
-        if (elements.length === 0) {
-          this.logger.warn('No clickable elements found in screenshot', {});
-          return false;
-        }
-
-        // Filter for start/play-related buttons
-        const startKeywords = ['start', 'play', 'begin', 'go'];
-        const startElements = elements.filter((element) => {
-          const labelLower = element.label.toLowerCase();
-          return (
-            startKeywords.some((keyword) => labelLower.includes(keyword)) &&
-            element.confidence >= 0.7
-          );
-        });
-
-        if (startElements.length === 0) {
-          this.logger.warn('No start/play buttons found in clickable elements', {
-            elementCount: elements.length,
-          });
-          return false;
-        }
-
-        // Select element with highest confidence
-        const bestElement = startElements.reduce((best, current) =>
-          current.confidence > best.confidence ? current : best
-        );
-
-        this.logger.info('Start button found using vision', {
-          label: bestElement.label,
-          coordinates: { x: bestElement.x, y: bestElement.y },
-          confidence: bestElement.confidence,
-        });
-
-        // Click at the coordinates
-        await this.clickAtCoordinates(page, bestElement.x, bestElement.y);
-
-        this.logger.info('Start button clicked successfully using vision', {
-          label: bestElement.label,
-        });
-
-        // Wait for game to initialize after clicking start
-        await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-        this.logger.debug('Post-click delay completed (vision)', {
-          delayMs: TIMEOUTS.POST_START_DELAY,
-        });
-
-        return true;
-      } catch (error) {
-        this.logger.warn('Vision-based start button detection failed', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return false;
-      }
-    }
-
-    // Strategy 3: LLM State Analysis (fallback when DOM and natural language fail)
-    if (this.stateAnalyzer && this.screenshotCapturer) {
-      try {
-        this.logger.info('DOM and natural language failed, using LLM state analysis');
-
-        // Capture HTML and screenshot for state analysis
-        // @ts-ignore - Code runs in browser context where document exists
-        const html = await (page as any).evaluate(() => document.documentElement.outerHTML);
-        const screenshot = await this.screenshotCapturer.capture(page, 'initial_load');
-
-        // Get sanitized HTML
-        const sanitizedHTML = this.stateAnalyzer.sanitizeHTML(html);
-
-        // Analyze state and get recommendation
-        const recommendation = await this.stateAnalyzer.analyzeAndRecommendAction({
-          html: sanitizedHTML,
-          screenshot: screenshot.path,
-          previousActions: [],
+  async findAndClickStart(page: AnyPage, timeout?: number, preStartScreenshotPath?: string): Promise<boolean> {
+    const detector = new StartDetector({
+      logger: this.logger,
+      timeout: timeout ?? this.interactionTimeout,
+      visionAnalyzer: this.visionAnalyzer,
+      screenshotCapturer: this.screenshotCapturer,
+      stateAnalyzer: this.stateAnalyzer,
           metadata: this.metadata,
-          goal: 'Find and click the start/play button to begin the game',
-        });
-
-        // Execute recommendation
-        const success = await this.executeRecommendation(page, recommendation);
-        
-        if (success) {
-          // Wait for game to initialize after clicking start
-          await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-          this.logger.debug('Post-click delay completed (state analysis)', {
-            delayMs: TIMEOUTS.POST_START_DELAY,
-          });
-          return true;
-        }
-
-        // Try alternatives if primary recommendation failed
-        if (recommendation.alternatives.length > 0) {
-          this.logger.info('Primary recommendation failed, trying alternatives', {
-            alternativeCount: recommendation.alternatives.length,
-          });
-
-          for (const alternative of recommendation.alternatives) {
-            const altSuccess = await this.executeRecommendation(page, {
-              action: alternative.action,
-              target: alternative.target,
-              reasoning: alternative.reasoning,
-              confidence: 0.5, // Lower confidence for alternatives
-              alternatives: [],
-            });
-
-            if (altSuccess) {
-              await new Promise(resolve => setTimeout(resolve, TIMEOUTS.POST_START_DELAY));
-              return true;
-            }
-          }
-        }
-
-        return false;
-      } catch (error) {
-        this.logger.warn('LLM state analysis failed', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return false;
-      }
-    }
-
-    // All strategies failed or fallback not available
-    this.logger.warn('Could not find start button', {
-      domSelectionFailed: true,
-      naturalLanguageFailed: true,
-      visionFallbackAvailable: !!(this.visionAnalyzer && this.screenshotCapturer),
-      stateAnalysisAvailable: !!(this.stateAnalyzer && this.screenshotCapturer),
     });
 
-    return false;
+    const result = await detector.findAndClickStart(page, preStartScreenshotPath);
+    return result.success;
   }
 
   /**
@@ -586,12 +371,17 @@ export class GameInteractor {
       if (recommendation.action === 'click') {
         if (typeof recommendation.target === 'object' && 'x' in recommendation.target && 'y' in recommendation.target) {
           const { x, y } = recommendation.target;
+          
+          // All games use absolute pixel coordinates
+          const roundedX = Math.round(x);
+          const roundedY = Math.round(y);
           this.logger.info('Executing click recommendation', {
-            coordinates: { x, y },
+            coordinates: { x: roundedX, y: roundedY },
             reasoning: recommendation.reasoning,
             confidence: recommendation.confidence,
+            coordinateType: 'pixel',
           });
-          await this.clickAtCoordinates(page, x, y);
+          await this.clickAtCoordinates(page, roundedX, roundedY);
           return true;
         } else {
           this.logger.warn('Invalid click recommendation target', {
@@ -634,6 +424,69 @@ export class GameInteractor {
       });
       return false;
     }
+  }
+
+  /**
+   * Execute an action recommendation (public wrapper).
+   * 
+   * Public wrapper for executeRecommendation used by adaptive QA loop.
+   * 
+   * @param page - The Stagehand page object
+   * @param recommendation - Action recommendation to execute
+   * @returns Promise that resolves to `true` if action executed successfully, `false` otherwise
+   */
+  async executeRecommendationPublic(
+    page: AnyPage,
+    recommendation: ActionRecommendation
+  ): Promise<boolean> {
+    return this.executeRecommendation(page, recommendation);
+  }
+
+  /**
+   * Capture current game state (HTML + screenshot).
+   * 
+   * Captures a snapshot of the current game state including sanitized HTML
+   * and a screenshot. Used for adaptive QA loops to track state progression.
+   * 
+   * @param page - The Stagehand page object
+   * @returns Promise that resolves to CapturedState
+   * @throws {Error} If screenshotCapturer or stateAnalyzer not available
+   * 
+   * @example
+   * ```typescript
+   * const state = await interactor.captureCurrentState(page);
+   * // Returns: { html: '...', screenshot: {...}, timestamp: 1234567890 }
+   * ```
+   */
+  async captureCurrentState(page: AnyPage): Promise<CapturedState> {
+    if (!this.screenshotCapturer) {
+      throw new Error('ScreenshotCapturer required for state capture');
+    }
+    
+    if (!this.stateAnalyzer) {
+      throw new Error('StateAnalyzer required for state capture');
+    }
+
+    this.logger.debug('Capturing current game state', {});
+
+    // Capture screenshot (use 'after_interaction' stage as placeholder)
+    // Pass metadata to capture() for canvas detection
+    const screenshot = await this.screenshotCapturer.capture(page, 'after_interaction', {
+      metadata: this.metadata,
+    });
+
+    // Capture and sanitize HTML using Stagehand's evaluate method
+    const html = await (page as any).evaluate(() => {
+      // @ts-ignore - Code runs in browser context where document exists
+      return document.documentElement.outerHTML;
+    }) as string;
+    const sanitizedHTML = this.stateAnalyzer.sanitizeHTML(html);
+
+    return {
+      html: sanitizedHTML,
+      screenshot,
+      timestamp: Date.now(),
+    };
   }
 
   /**
@@ -681,6 +534,15 @@ export class GameInteractor {
     if (!metadata) {
       this.logger.info('No metadata provided - using generic inputs', {});
       return this.simulateKeyboardInput(page, actualDuration);
+    }
+
+    // Check if game is mouse-only (clicker/idle games)
+    const inputType = metadata.inputSchema?.type;
+    if (inputType === 'mouse-only') {
+      this.logger.info('Detected mouse-only game - using click simulation', {
+        clickStrategy: metadata.testingStrategy?.clickStrategy,
+      });
+      return this.simulateMouseClicks(page, metadata, actualDuration);
     }
 
     // Parse metadata to extract actions and axes
@@ -804,6 +666,8 @@ export class GameInteractor {
   ): Promise<void> {
     const startTime = Date.now();
     let keyIndex = 0;
+    let lastProgressUpdate = startTime;
+    const progressUpdateInterval = 5000; // Update every 5 seconds
 
     while (Date.now() - startTime < duration) {
       // Get next key to press (cycle through provided keys)
@@ -813,12 +677,34 @@ export class GameInteractor {
       try {
         // Use Stagehand's keyPress() method
         await page.keyPress(key, { delay: 0 });
+        
+        // Log each key press as an action
+        this.logger.action('keypress', {
+          key,
+          keyIndex,
+          elapsed: Date.now() - startTime,
+        });
       } catch (error) {
         this.logger.warn('Key press failed, continuing simulation', {
           key,
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with next key rather than failing entire simulation
+      }
+
+      // Periodic progress updates
+      const now = Date.now();
+      if (now - lastProgressUpdate >= progressUpdateInterval) {
+        const elapsed = now - startTime;
+        const progress = Math.round((elapsed / duration) * 100);
+        this.logger.info('Gameplay simulation progress', {
+          elapsed,
+          duration,
+          progress: `${progress}%`,
+          keysPressed: keyIndex,
+          remaining: duration - elapsed,
+        });
+        lastProgressUpdate = now;
       }
 
       // Wait before next key press
@@ -832,9 +718,161 @@ export class GameInteractor {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    this.logger.debug('Metadata-driven keyboard simulation loop completed', {
+    this.logger.info('Metadata-driven keyboard simulation loop completed', {
       keysPressed: keyIndex,
       duration: Date.now() - startTime,
+      expectedDuration: duration,
+    });
+  }
+
+  /**
+   * Simulate mouse clicks for clicker/idle games.
+   *
+   * Uses metadata to determine click positions, frequency, and strategy.
+   * Supports random grid-based clicking for games with brick/tile grids.
+   *
+   * @param page - Stagehand Page object
+   * @param metadata - GameMetadata with testingStrategy and gridBounds
+   * @param duration - Duration in milliseconds
+   */
+  async simulateMouseClicks(
+    page: AnyPage,
+    metadata: GameMetadata,
+    duration: number
+  ): Promise<void> {
+    const pageAny = page as any;
+    const strategy = metadata.testingStrategy;
+    const clicksPerSecond = strategy?.clicksPerSecond ?? 2;
+    const gridBounds = strategy?.gridBounds;
+
+    this.logger.info('Starting mouse click simulation', {
+      duration,
+      clicksPerSecond,
+      clickStrategy: strategy?.clickStrategy,
+      hasGridBounds: !!gridBounds,
+    });
+
+    // Get viewport size for calculating click positions
+    const viewport = await pageAny.viewportSize();
+    if (!viewport) {
+      throw new Error('Failed to get viewport size');
+    }
+
+    // Calculate grid bounds from metadata or use defaults
+    const bounds = gridBounds ? {
+      x: viewport.width * gridBounds.xStart,
+      y: viewport.height * gridBounds.yStart,
+      width: viewport.width * gridBounds.width,
+      height: viewport.height * gridBounds.height,
+    } : {
+      // Default: center 60% x 80% of screen
+      x: viewport.width * 0.2,
+      y: viewport.height * 0.1,
+      width: viewport.width * 0.6,
+      height: viewport.height * 0.8,
+    };
+
+    this.logger.debug('Calculated click bounds', {
+      viewport: { width: viewport.width, height: viewport.height },
+      bounds,
+    });
+
+    const startTime = Date.now();
+    const delayBetweenClicks = 1000 / clicksPerSecond;
+    let clickCount = 0;
+
+    try {
+      await withTimeout(
+        this._performMouseClickSimulation(pageAny, bounds, duration, delayBetweenClicks),
+        this.interactionTimeout,
+        `Mouse click simulation timed out after ${this.interactionTimeout}ms`
+      );
+
+      this.logger.info('Mouse click simulation completed', {
+        duration: Date.now() - startTime,
+        clicksPerformed: Math.floor(duration / delayBetweenClicks),
+      });
+    } catch (error) {
+      this.logger.error('Mouse click simulation failed', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Internal method to perform mouse click simulation loop.
+   *
+   * @param page - Stagehand Page object (AnyPage type)
+   * @param bounds - Click area bounds { x, y, width, height }
+   * @param duration - Duration in milliseconds
+   * @param delayBetweenClicks - Delay between clicks in milliseconds
+   */
+  private async _performMouseClickSimulation(
+    page: any,
+    bounds: { x: number; y: number; width: number; height: number },
+    duration: number,
+    delayBetweenClicks: number
+  ): Promise<void> {
+    const startTime = Date.now();
+    let clickCount = 0;
+    let lastProgressUpdate = startTime;
+    const progressUpdateInterval = 5000; // Update every 5 seconds
+
+    while (Date.now() - startTime < duration) {
+      // Generate random position within bounds
+      const x = Math.floor(bounds.x + Math.random() * bounds.width);
+      const y = Math.floor(bounds.y + Math.random() * bounds.height);
+
+      try {
+        await this.clickAtCoordinates(page, x, y);
+        clickCount++;
+
+        // Log each click as an action
+        this.logger.action('click', {
+          coordinates: `(${x}, ${y})`,
+          clickIndex: clickCount,
+          elapsed: Date.now() - startTime,
+        });
+      } catch (error) {
+        this.logger.warn('Click failed, continuing simulation', {
+          position: { x, y },
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with next click rather than failing entire simulation
+      }
+
+      // Periodic progress updates
+      const now = Date.now();
+      if (now - lastProgressUpdate >= progressUpdateInterval) {
+        const elapsed = now - startTime;
+        const progress = Math.round((elapsed / duration) * 100);
+        this.logger.info('Gameplay simulation progress', {
+          elapsed,
+          duration,
+          progress: `${progress}%`,
+          clicksPerformed: clickCount,
+          remaining: duration - elapsed,
+        });
+        lastProgressUpdate = now;
+      }
+
+      // Wait before next click
+      const remainingTime = duration - (Date.now() - startTime);
+      if (remainingTime <= 0) {
+        break;
+      }
+
+      // Use smaller delay if we're near the end
+      const delay = Math.min(delayBetweenClicks, remainingTime);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    this.logger.info('Mouse click simulation loop completed', {
+      clicksPerformed: clickCount,
+      duration: Date.now() - startTime,
+      expectedDuration: duration,
     });
   }
 }

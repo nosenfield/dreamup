@@ -92,7 +92,7 @@ export class VisionAnalyzer {
    * @example
    * ```typescript
    * const result = await analyzer.analyzeScreenshots([
-   *   { id: '1', path: '/tmp/screenshot1.png', timestamp: Date.now(), stage: 'initial_load' },
+   *   { id: '1', path: '/tmp/screenshot1.png', timestamp: Date.now(), stage: 'pre_start' },
    *   { id: '2', path: '/tmp/screenshot2.png', timestamp: Date.now(), stage: 'after_interaction' },
    *   { id: '3', path: '/tmp/screenshot3.png', timestamp: Date.now(), stage: 'final_state' },
    * ], metadata);
@@ -123,6 +123,17 @@ export class VisionAnalyzer {
 
       // Build prompt with metadata context if available
       const prompt = buildGameAnalysisPrompt(metadata);
+
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt,
+        promptLength: prompt.length,
+        estimatedTokens: Math.ceil(prompt.length / 4),
+        promptType: 'game_analysis',
+        model: 'gpt-4-turbo',
+        screenshotCount: screenshots.length,
+        hasMetadata: !!metadata,
+      });
 
       // Build multi-modal prompt content
       const content = [
@@ -206,6 +217,16 @@ export class VisionAnalyzer {
       const base64 = Buffer.from(buffer).toString('base64');
       const imageDataUri = `data:image/png;base64,${base64}`;
 
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt: FIND_CLICKABLE_ELEMENTS_PROMPT,
+        promptLength: FIND_CLICKABLE_ELEMENTS_PROMPT.length,
+        estimatedTokens: Math.ceil(FIND_CLICKABLE_ELEMENTS_PROMPT.length / 4),
+        promptType: 'find_elements',
+        model: 'gpt-4o',
+        screenshotPath,
+      });
+
       // Build multi-modal prompt content
       const content = [
         {
@@ -222,7 +243,7 @@ export class VisionAnalyzer {
       // NOTE: AI SDK requires root schema to be an object, not an array
       // So we wrap the array in an object with an 'elements' property
       const result = await generateObject({
-        model: this.openai('gpt-4-turbo'),
+        model: this.openai('gpt-4o'),
         messages: [{ role: 'user' as const, content }],
         schema: z.object({
           elements: z.array(clickableElementSchema),
@@ -277,6 +298,16 @@ export class VisionAnalyzer {
       const buffer = await file.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
       const imageDataUri = `data:image/png;base64,${base64}`;
+
+      // Log prompt before sending to LLM
+      this.logger.debug('Sending prompt to LLM', {
+        prompt: DETECT_CRASH_PROMPT,
+        promptLength: DETECT_CRASH_PROMPT.length,
+        estimatedTokens: Math.ceil(DETECT_CRASH_PROMPT.length / 4),
+        promptType: 'detect_crash',
+        model: 'gpt-4-turbo',
+        screenshotPath,
+      });
 
       // Build multi-modal prompt content
       const content = [

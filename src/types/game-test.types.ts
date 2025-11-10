@@ -29,6 +29,9 @@ export interface GameTestRequest {
   /** Optional configuration overrides for this test */
   config?: Partial<TestConfig>;
   
+  /** Optional adaptive test configuration (enables iterative action loop) */
+  adaptiveConfig?: import('../types/config.types').AdaptiveTestConfig;
+  
   /** 
    * Optional comprehensive game metadata.
    * 
@@ -130,6 +133,15 @@ export interface TestMetadata {
   
   /** Optional number of tokens used in vision API calls */
   visionAnalysisTokens?: number;
+  
+  /** Optional action history from adaptive QA loop */
+  actionHistory?: Action[];
+  
+  /** Optional adaptive test configuration used */
+  adaptiveConfig?: import('../types/config.types').AdaptiveTestConfig;
+  
+  /** Optional estimated cost in USD for this test */
+  estimatedCost?: number;
 }
 
 /**
@@ -163,7 +175,7 @@ export interface Screenshot {
   timestamp: number;
   
   /** Stage of the test when the screenshot was taken */
-  stage: 'initial_load' | 'after_interaction' | 'final_state';
+  stage: 'pre_start' | 'post_start' | 'after_interaction' | 'final_state';
 }
 
 /**
@@ -233,13 +245,14 @@ export interface InputAxis {
  * - New format: `InputAction[]` or `InputAxis[]` (structured with key bindings)
  */
 export interface InputSchema {
-  /** Type of input schema: 'javascript' for executable JS snippets, 'semantic' for descriptions */
-  type: 'javascript' | 'semantic';
-  
-  /** 
+  /** Type of input schema: 'javascript' for executable JS snippets, 'semantic' for descriptions, 'mouse-only' for clicker games */
+  type: 'javascript' | 'semantic' | 'mouse-only';
+
+  /**
    * Content of the input schema.
    * - For 'javascript': Executable JavaScript snippet that defines input handling
    * - For 'semantic': Human-readable description of game controls
+   * - For 'mouse-only': Description of mouse interaction patterns
    */
   content: string;
   
@@ -377,6 +390,9 @@ export interface GameMetadata {
  * 
  * Represents a single action taken by the QA agent with context
  * for tracking action history and avoiding repetition.
+ * 
+ * Every action must have a known outcome (success/failure) and
+ * state progression result to provide meaningful feedback to the LLM.
  */
 export interface Action {
   /** Type of action performed */
@@ -390,6 +406,12 @@ export interface Action {
   
   /** Timestamp when the action was performed */
   timestamp: number;
+  
+  /** Whether the action executed successfully (true) or failed (false) */
+  success: boolean;
+  
+  /** Whether the game state progressed after this action (true) or remained unchanged (false) */
+  stateProgressed: boolean;
 }
 
 /**
@@ -458,5 +480,94 @@ export interface ActionRecommendation {
   
   /** Array of alternative actions if primary recommendation fails */
   alternatives: AlternativeAction[];
+}
+
+/**
+ * Array of action recommendations from LLM state analysis.
+ * 
+ * Represents 1-20 action recommendations to try in sequence.
+ * All actions will be attempted, not just the first successful one.
+ * This is useful for idle games that require many clicks to progress.
+ */
+export type ActionRecommendations = ActionRecommendation[];
+
+/**
+ * Action Group representing a strategy with multiple related actions.
+ * 
+ * Actions in a group share the same logical reasoning/strategy.
+ * Success is measured at the group level, not individual action level.
+ * 
+ * Groups are executed in confidence order within each iteration.
+ * State is assessed once per group (before first action vs after last action).
+ */
+export interface ActionGroup {
+  /** Shared reasoning/strategy description for all actions in this group */
+  reasoning: string;
+  
+  /** LLM confidence score (0-1) for this strategy */
+  confidence: number;
+  
+  /** Array of actions to execute in this group (1-10 depending on iteration) */
+  actions: ActionRecommendation[];
+  
+  /** Screenshot path before first action (added after execution) */
+  beforeScreenshot?: string;
+  
+  /** Screenshot path after last action (added after execution) */
+  afterScreenshot?: string;
+  
+  /** Whether the group was successful (added after assessment) */
+  success?: boolean;
+  
+  /** Whether state progressed after executing all actions (added after assessment) */
+  stateProgressed?: boolean;
+}
+
+/**
+ * Array of Action Groups.
+ * 
+ * Represents multiple strategies to try in an iteration.
+ * Groups are ordered by confidence and executed sequentially.
+ */
+export type ActionGroups = ActionGroup[];
+
+/**
+ * Successful Action Group data passed to next iteration.
+ * 
+ * Contains all information needed for LLM to generate related Action Groups
+ * that build on the successful strategy.
+ */
+export interface SuccessfulActionGroup {
+  /** Strategy description/reasoning */
+  reasoning: string;
+  
+  /** All actions that were executed (with outcomes) */
+  actions: Action[];
+  
+  /** Screenshot path before first action */
+  beforeScreenshot: string;
+  
+  /** Screenshot path after last action */
+  afterScreenshot: string;
+  
+  /** LLM confidence score for this strategy */
+  confidence: number;
+}
+
+/**
+ * Captured game state for adaptive QA loop.
+ * 
+ * Represents a snapshot of the game state at a point in time,
+ * including HTML structure and screenshot.
+ */
+export interface CapturedState {
+  /** Sanitized HTML content (scripts removed, structure preserved) */
+  html: string;
+  
+  /** File path to screenshot */
+  screenshot: Screenshot;
+  
+  /** Timestamp when state was captured */
+  timestamp: number;
 }
 

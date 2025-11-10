@@ -29,6 +29,11 @@ export type {
   GameState,
   AlternativeAction,
   ActionRecommendation,
+  ActionRecommendations,
+  ActionGroup,
+  ActionGroups,
+  SuccessfulActionGroup,
+  CapturedState,
 } from './game-test.types';
 
 // Export all configuration types
@@ -36,5 +41,6 @@ export type {
   FeatureFlags,
   Timeouts,
   Thresholds,
+  AdaptiveTestConfig,
 } from './config.types';
 
