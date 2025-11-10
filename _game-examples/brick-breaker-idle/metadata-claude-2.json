@@ -1,0 +1,56 @@
+{
+  "metadataVersion": "1.0.0",
+  "genre": "idle clicker",
+  "description": "An idle brick breaker game where players click on numbered bricks to destroy them and earn money. Money is used to purchase balls that automatically break bricks. The game features a grid of bricks (each showing a number indicating hits needed), a money display ($), a ball counter (0/50 BALLS), upgrade buttons (UPGRADES), and ball purchase buttons (yellow and pink circles).",
+  "expectedControls": "Mouse clicking on bricks to destroy them and on UI buttons (ball purchase, upgrades)",
+  "inputSchema": {
+    "type": "semantic",
+    "content": "This is a pure mouse-based idle clicker game. Players interact exclusively through clicking:\n\n1. PRIMARY MECHANIC - Click on numbered bricks in the central grid to damage/destroy them and earn money\n2. BALL PURCHASE - Click on colored circle buttons (top-left) to spend money on balls\n3. UPGRADES - Click the UPGRADES button (top area) to access permanent upgrades\n\nNo keyboard controls are used. All progression comes from clicking bricks and spending earned money on upgrades."
+  },
+  "loadingIndicators": [
+    {
+      "type": "element",
+      "pattern": "canvas",
+      "description": "Game renders on a canvas element",
+      "selector": "canvas"
+    },
+    {
+      "type": "text",
+      "pattern": "LEVEL",
+      "description": "Level indicator visible in UI"
+    },
+    {
+      "type": "text",
+      "pattern": "BALLS",
+      "description": "Ball counter (e.g., '0/50 BALLS') visible in UI"
+    },
+    {
+      "type": "text",
+      "pattern": "$",
+      "description": "Money counter with dollar sign visible"
+    }
+  ],
+  "successIndicators": [
+    {
+      "type": "score_change",
+      "description": "Money value (top-right, shows $5,715 in screenshot) should increase when bricks are clicked and destroyed"
+    },
+    {
+      "type": "animation",
+      "description": "Bricks should show visual feedback when clicked (number decreases, brick changes appearance, or brick disappears when destroyed)"
+    },
+    {
+      "type": "interaction_response",
+      "description": "Clicking on bricks should produce immediate visual response - brick highlights, number changes, or destruction animation"
+    },
+    {
+      "type": "element_visible",
+      "description": "Ball counter should update when balls are purchased (e.g., changing from '0/50 BALLS' to '1/50 BALLS')"
+    }
+  ],
+  "testingStrategy": {
+    "waitBeforeInteraction": 2000,
+    "interactionDuration": 45000,
+    "instructions": "CANVAS-BASED CLICK GAME - Use percentage coordinates (0.00-1.00 range) for all clicks.\n\n**CRITICAL GAMEPLAY MECHANICS:**\n1. **Brick Grid Location**: Center of screen, occupying roughly 20-80% width and 15-90% height\n2. **Brick Click Mechanic**: Each brick has a number (visible as '1' in screenshot). Click to reduce number and destroy brick when it reaches 0\n3. **Money System**: Destroying bricks earns money (shown as $5,715 in top-right)\n4. **Ball Purchase**: Yellow and pink circle buttons at top-left (around x: 0.05-0.15, y: 0.03-0.08) to buy balls with money\n5. **UPGRADES Button**: Located in top area (around x: 0.5-0.65, y: 0.02-0.05)\n\n**RECOMMENDED ACTION STRATEGY:**\n\nIteration 1 (Initial Exploration):\n- Try clicking on bricks in the center grid area (coordinates around x: 0.3-0.7, y: 0.3-0.7)\n- Try clicking on ball purchase buttons (yellow/pink circles at top-left)\n- Try clicking the UPGRADES button\n\nIteration 2+ (Building on Success):\n- If brick clicking was successful: Generate multiple click actions across the brick grid\n  Example coordinates for brick grid clicks: (0.35, 0.4), (0.5, 0.5), (0.65, 0.6), (0.4, 0.7), etc.\n- If ball purchase was successful: Repeat ball purchase button clicks to buy more balls\n- If UPGRADES was successful: Explore upgrade menu options\n\n**COORDINATE GUIDELINES (CRITICAL):**\n- ALL coordinates must be percentages: x and y values between 0.0 and 1.0\n- Brick grid safe zone: x: 0.2-0.8, y: 0.15-0.9\n- Avoid edges: x < 0.1, x > 0.9, y < 0.1, y > 0.95\n- For multiple brick clicks, spread coordinates across the grid (don't cluster in one spot)\n\n**SUCCESS PATTERNS TO RECOGNIZE:**\n- Money value increasing = bricks being destroyed successfully\n- Brick numbers decreasing or bricks disappearing = correct brick clicking\n- Ball counter changing = successful ball purchase\n- Visual feedback on clicks = game is responding correctly"
+  }
+}

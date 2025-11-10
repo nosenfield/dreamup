@@ -47,6 +47,6 @@
   "testingStrategy": {
     "waitBeforeInteraction": 2000,
     "interactionDuration": 45000,
-    "instructions": "Focus on clicking bricks in the central grid area to destroy them and earn money. The brick grid occupies the center portion of the screen. After earning enough money, click on the ball purchase buttons (yellow and pink circles at top-left) to buy balls. Clicking the UPGRADES button (top-right) may reveal additional upgrade options. Prioritize clicking on lower-numbered bricks as they are easier to destroy and provide immediate feedback."
+    "instructions": "Provide *PRECISE COORDINATES* for clicks. Focus on clicking bricks in the central grid area to destroy them and earn money. The brick grid occupies the center portion of the screen. After earning enough money, click on the ball purchase buttons (yellow and pink circles at top-left) to buy balls. Clicking the UPGRADES button (top-right) may reveal additional upgrade options. Prioritize clicking on lower-numbered bricks as they are easier to destroy and provide immediate feedback."
   }
 }
